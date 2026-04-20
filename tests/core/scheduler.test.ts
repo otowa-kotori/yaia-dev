@@ -40,7 +40,7 @@ describe("SpeedSortedScheduler", () => {
     expect(nextActor(sched, parts, { attrDefs })?.id).toBe("p2");
     // Buff p1 during round.
     p1.attrs.base[ATTR.SPEED] = 999;
-    p1.attrs.cache = null;
+    p1.attrs.cache = {};  // invalidate so getAttr re-reads the new base
     // Second pick this round: only p1 is un-acted, so it's p1 regardless.
     expect(nextActor(sched, parts, { attrDefs })?.id).toBe("p1");
   });
@@ -58,7 +58,7 @@ describe("SpeedSortedScheduler", () => {
 
     // Buff p1 so it outspeeds p2 for round 2.
     p1.attrs.base[ATTR.SPEED] = 999;
-    p1.attrs.cache = null;
+    p1.attrs.cache = {};  // invalidate so getAttr re-reads the new base
     expect(nextActor(sched, parts, { attrDefs })?.id).toBe("p1");
   });
 

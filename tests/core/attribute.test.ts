@@ -4,6 +4,8 @@ import {
   ATTR,
   createAttrSet,
   getAttr,
+  invalidateAttrs,
+  recomputeAttrs,
   removeModifiersBySource,
 } from "../../src/core/attribute";
 import type { AttrDef, AttrId, Modifier } from "../../src/core/content/types";
@@ -38,6 +40,8 @@ const mod = (
   value: number,
   sourceId = "test",
 ): Modifier => ({ stat: stat as AttrId, op, value, sourceId });
+
+// ---------- Stacking formula ----------
 
 describe("attribute stacking", () => {
   test("missing AttrDef value falls back to defaultBase", () => {
@@ -124,5 +128,108 @@ describe("attribute stacking", () => {
   test("unknown attr returns 0 when no AttrDef exists", () => {
     const s = createAttrSet();
     expect(getAttr(s, "attr.unknown", defs)).toBe(0);
+  });
+});
+
+// ---------- Per-stat dirty precision ----------
+
+describe("per-stat cache precision", () => {
+  test("addModifiers on stat A does not dirty stat B's cache entry", () => {
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    // Warm both stats.
+    getAttr(s, ATTR.MAX_HP, defs);
+    getAttr(s, ATTR.ATK, defs);
+    const atkKeyBefore = ATTR.ATK in s.cache;
+
+    // Add a modifier that only touches MAX_HP.
+    addModifiers(s, [mod(ATTR.MAX_HP, "flat", 50)]);
+
+    // MAX_HP must be evicted from cache.
+    expect(ATTR.MAX_HP in s.cache).toBe(false);
+    // ATK cache entry must still be present (not evicted).
+    expect(ATTR.ATK in s.cache).toBe(atkKeyBefore); // true
+    // ATK value must be unchanged without recompute.
+    expect(s.cache[ATTR.ATK]).toBe(10);
+  });
+
+  test("removeModifiersBySource only evicts stats referenced by removed mods", () => {
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    addModifiers(s, [
+      mod(ATTR.MAX_HP, "flat", 20, "gear"),
+      mod(ATTR.ATK, "flat", 5, "other"),
+    ]);
+    // Warm both.
+    getAttr(s, ATTR.MAX_HP, defs);
+    getAttr(s, ATTR.ATK, defs);
+
+    // Remove only the MAX_HP modifier.
+    removeModifiersBySource(s, "gear");
+
+    expect(ATTR.MAX_HP in s.cache).toBe(false);  // evicted
+    expect(ATTR.ATK in s.cache).toBe(true);       // untouched
+    expect(s.cache[ATTR.ATK]).toBe(15);           // still correct
+  });
+
+  test("modifier touching multiple stats only evicts those stats", () => {
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    addModifiers(s, [
+      mod(ATTR.MAX_HP, "flat", 20, "src"),
+      mod(ATTR.ATK, "flat", 5, "src"),
+    ]);
+    // Warm both, then remove.
+    getAttr(s, ATTR.MAX_HP, defs);
+    getAttr(s, ATTR.ATK, defs);
+    // Also warm CRIT_RATE which no mod touches.
+    getAttr(s, ATTR.CRIT_RATE, defs);
+
+    removeModifiersBySource(s, "src");
+
+    expect(ATTR.MAX_HP in s.cache).toBe(false);     // evicted
+    expect(ATTR.ATK in s.cache).toBe(false);         // evicted
+    expect(ATTR.CRIT_RATE in s.cache).toBe(true);    // untouched
+  });
+
+  test("getAttr recomputes only the dirty stat, not the whole set", () => {
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    // Warm ATK, leave MAX_HP dirty.
+    getAttr(s, ATTR.ATK, defs);
+
+    // Manually confirm MAX_HP is absent (dirty).
+    expect(ATTR.MAX_HP in s.cache).toBe(false);
+
+    // Reading MAX_HP computes it without disturbing ATK cache.
+    expect(getAttr(s, ATTR.MAX_HP, defs)).toBe(100);
+    expect(ATTR.MAX_HP in s.cache).toBe(true);
+    expect(s.cache[ATTR.ATK]).toBe(10); // still present
+  });
+
+  test("invalidateAttrs marks all stats dirty at once", () => {
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    getAttr(s, ATTR.MAX_HP, defs);
+    getAttr(s, ATTR.ATK, defs);
+    expect(Object.keys(s.cache).length).toBe(2);
+
+    invalidateAttrs(s);
+    expect(Object.keys(s.cache).length).toBe(0);
+
+    // Values still correct after recompute on demand.
+    expect(getAttr(s, ATTR.MAX_HP, defs)).toBe(100);
+    expect(getAttr(s, ATTR.ATK, defs)).toBe(10);
+  });
+
+  test("recomputeAttrs eagerly warms every known stat", () => {
+    const s = createAttrSet({ [ATTR.MAX_HP]: 200 });
+    addModifiers(s, [mod(ATTR.ATK, "flat", 3)]);
+    // cache is empty (dirty), no reads yet.
+    expect(Object.keys(s.cache).length).toBe(0);
+
+    recomputeAttrs(s, defs);
+
+    // All AttrDef keys should now be cached.
+    for (const id of Object.keys(defs)) {
+      expect(id in s.cache).toBe(true);
+    }
+    expect(s.cache[ATTR.MAX_HP]).toBe(200);
+    expect(s.cache[ATTR.ATK]).toBe(13);
   });
 });
