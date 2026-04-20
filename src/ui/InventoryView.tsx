@@ -1,21 +1,26 @@
-// Inventory panel — read-only listing of the hero's bags.
+// Inventory panel — grid-based slot view for the hero's bags.
+//
+// Layout: fixed-size cells in a CSS grid. The container clips with
+// `overflow: hidden` so any slots beyond the visible area are never rendered.
+// Each cell is a square (CELL_SIZE × CELL_SIZE px); the grid width is
+// COLS × CELL_SIZE + gap. No virtual scrolling needed for MVP bag sizes
+// (≤40 slots).
+//
+// Slot rendering:
+//   - null        → empty cell (dark, faint border)
+//   - stack entry → item abbreviation + qty badge (bottom-right)
+//   - gear entry  → item abbreviation in gold, optional affix count badge
 //
 // Read-only by design: the first inventory PR per roadmap explicitly asks
-// for a minimal list, no equip / drag / drop / use. Those land in later PRs
+// for a minimal view, no equip / drag / drop / use. Those land in later PRs
 // (equipment system, crafting). All we do here is render what's in state.
 //
 // Shows both bags the current save model has:
 //   - the hero's personal bag (state.inventories[heroId])
 //   - the shared bag (state.inventories["shared"])
-// Each bag prints its capacity and a numbered list of slots. Slot rendering:
-//   - null        → "· empty"  (faded)
-//   - stack entry → "<item name> ×<qty>"
-//   - gear entry  → "<item name>  [+rolled affix summary]"  (italic instanceId tail)
-//
-// Gear affix text is terse: `+5 atk`, `+3 str`. Flat only for now because
-// that's all ItemDef.roll produces; when we add pct affixes, extend
-// formatModifier to print `5% atk` etc. Same logic lives exactly once.
+// `BagGrid` renders a titled section for each.
 
+import { useState } from "react";
 import type { Modifier } from "../core/content/types";
 import { getContent } from "../core/content";
 import type {
@@ -28,6 +33,12 @@ import { SHARED_INVENTORY_KEY } from "../core/state";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 
+// ---------- Layout constants ----------
+
+const COLS = 5;
+const CELL_SIZE = 52; // px, including border
+const CELL_GAP = 4;   // px between cells
+
 export function InventoryView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
   const hero = s.getHero();
@@ -37,28 +48,27 @@ export function InventoryView({ store }: { store: GameStore }) {
   const shared = s.state.inventories[SHARED_INVENTORY_KEY] ?? null;
 
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
-        Inventory
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 8,
-        }}
-      >
-        <BagCard title={`${hero.name}'s Bag`} inv={personal} />
-        <BagCard title="Shared" inv={shared} />
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <BagGrid title={`${hero.name}'s Bag`} inv={personal} cols={COLS} />
+      <BagGrid title="Shared" inv={shared} cols={COLS} />
     </div>
   );
 }
 
-function BagCard({ title, inv }: { title: string; inv: Inventory | null }) {
+// ---------- BagGrid ----------
+
+function BagGrid({
+  title,
+  inv,
+  cols,
+}: {
+  title: string;
+  inv: Inventory | null;
+  cols: number;
+}) {
   if (!inv) {
     return (
-      <div style={cardStyle}>
+      <div style={sectionStyle}>
         <div style={headerStyle}>{title}</div>
         <div style={{ fontSize: 12, opacity: 0.5 }}>— no bag —</div>
       </div>
@@ -66,75 +76,190 @@ function BagCard({ title, inv }: { title: string; inv: Inventory | null }) {
   }
 
   const used = inv.slots.reduce((n, s) => (s === null ? n : n + 1), 0);
+  // Grid width: cols * cell + (cols-1) * gap
+  const gridWidth = cols * CELL_SIZE + (cols - 1) * CELL_GAP;
+  // Rows needed for capacity
+  const rows = Math.ceil(inv.capacity / cols);
 
   return (
-    <div style={cardStyle}>
+    <div style={sectionStyle}>
       <div style={headerStyle}>
         <span>{title}</span>
         <span style={{ opacity: 0.55, fontWeight: 400, fontSize: 11 }}>
           {used} / {inv.capacity}
         </span>
       </div>
+      {/* overflow:hidden clips any slot that falls outside the rendered area */}
       <div
         style={{
-          fontFamily: "ui-monospace, Menlo, monospace",
-          fontSize: 12,
-          maxHeight: 220,
-          overflow: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
+          display: "grid",
+          gridTemplateColumns: `repeat(${cols}, ${CELL_SIZE}px)`,
+          gridTemplateRows: `repeat(${rows}, ${CELL_SIZE}px)`,
+          gap: CELL_GAP,
+          width: gridWidth,
+          overflow: "hidden",
         }}
       >
         {inv.slots.map((slot, i) => (
-          <SlotRow key={i} index={i} slot={slot} />
+          <SlotCell key={i} slot={slot} index={i} />
         ))}
       </div>
     </div>
   );
 }
 
-function SlotRow({ index, slot }: { index: number; slot: InventorySlot }) {
-  const idx = String(index).padStart(2, "0");
+// ---------- SlotCell ----------
+
+function SlotCell({ slot, index }: { slot: InventorySlot; index: number }) {
+  const [hovered, setHovered] = useState(false);
+
+  const base: React.CSSProperties = {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    boxSizing: "border-box",
+    border: `1px solid ${slot === null ? "#2a2a2a" : "#444"}`,
+    borderRadius: 3,
+    background: slot === null ? "#191919" : hovered ? "#2e2e2e" : "#242424",
+    position: "relative",
+    cursor: slot !== null ? "pointer" : "default",
+    transition: "background 80ms",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    userSelect: "none",
+  };
+
   if (slot === null) {
+    return <div style={base} title={`slot ${index}`} />;
+  }
+
+  if (slot.kind === "stack") {
     return (
-      <div style={{ opacity: 0.35 }}>
-        {idx} · empty
-      </div>
+      <StackCell
+        style={base}
+        slot={slot}
+        hovered={hovered}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
     );
   }
-  if (slot.kind === "stack") {
-    return <StackRow index={idx} slot={slot} />;
-  }
-  return <GearRow index={idx} slot={slot} />;
+
+  return (
+    <GearCell
+      style={base}
+      slot={slot}
+      hovered={hovered}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    />
+  );
 }
 
-function StackRow({ index, slot }: { index: string; slot: StackEntry }) {
+// ---------- Stack cell ----------
+
+function StackCell({
+  style,
+  slot,
+  hovered,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  style: React.CSSProperties;
+  slot: StackEntry;
+  hovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
   const name = safeItemName(slot.itemId);
+  const abbr = itemAbbr(name);
+  const tooltip = `${name} ×${slot.qty}`;
+
   return (
-    <div>
-      <span style={{ opacity: 0.5 }}>{index}</span>{" "}
-      <span>{name}</span>{" "}
-      <span style={{ opacity: 0.7 }}>×{slot.qty}</span>
+    <div
+      style={style}
+      title={tooltip}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Item abbreviation */}
+      <span style={{ fontSize: 13, fontWeight: 600, color: "#9cb", opacity: hovered ? 1 : 0.9 }}>
+        {abbr}
+      </span>
+      {/* Qty badge — bottom-right */}
+      <span
+        style={{
+          position: "absolute",
+          bottom: 2,
+          right: 3,
+          fontSize: 10,
+          fontVariantNumeric: "tabular-nums",
+          opacity: 0.8,
+          color: "#ccc",
+          lineHeight: 1,
+        }}
+      >
+        {slot.qty}
+      </span>
     </div>
   );
 }
 
-function GearRow({ index, slot }: { index: string; slot: GearEntry }) {
+// ---------- Gear cell ----------
+
+function GearCell({
+  style,
+  slot,
+  hovered,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  style: React.CSSProperties;
+  slot: GearEntry;
+  hovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
   const name = safeItemName(slot.instance.itemId);
-  const affix = slot.instance.rolledMods.map(formatModifier).join(", ");
+  const abbr = itemAbbr(name);
+  const affixCount = slot.instance.rolledMods.length;
+  const affixSummary = slot.instance.rolledMods.map(formatModifier).join(", ");
   const tail = shortTail(slot.instance.instanceId);
+  const tooltip = `${name}${affixSummary ? `  [${affixSummary}]` : ""}  ${tail}`;
+
   return (
-    <div>
-      <span style={{ opacity: 0.5 }}>{index}</span>{" "}
-      <span style={{ color: "#d8c878" }}>{name}</span>
-      {affix ? (
-        <span style={{ opacity: 0.75 }}> [{affix}]</span>
-      ) : null}
-      <span style={{ opacity: 0.35, fontStyle: "italic" }}> {tail}</span>
+    <div
+      style={style}
+      title={tooltip}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Item abbreviation in gear gold */}
+      <span style={{ fontSize: 13, fontWeight: 600, color: "#d8c878", opacity: hovered ? 1 : 0.9 }}>
+        {abbr}
+      </span>
+      {/* Affix count badge — bottom-right */}
+      {affixCount > 0 && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: 2,
+            right: 3,
+            fontSize: 10,
+            opacity: 0.7,
+            color: "#d8c878",
+            lineHeight: 1,
+          }}
+        >
+          +{affixCount}
+        </span>
+      )}
     </div>
   );
 }
+
+// ---------- Helpers ----------
 
 /** ItemDef lookup; fall back to the raw id if content was hot-reloaded away.
  *  (Not strictly needed under the alpha "throw loud" rule, but this is pure
@@ -142,6 +267,19 @@ function GearRow({ index, slot }: { index: string; slot: GearEntry }) {
 function safeItemName(itemId: string): string {
   const def = getContent().items[itemId];
   return def?.name ?? itemId;
+}
+
+/** Short 2–3 char abbreviation for display inside a cell.
+ *  E.g. "Copper Ore" → "CO", "Iron Sword" → "IS", "Ruby" → "Ru" */
+function itemAbbr(name: string): string {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) {
+    const w = words[0]!;
+    return w.length <= 3 ? w : w.slice(0, 2);
+  }
+  // Multi-word: take first letter of first two words, uppercase
+  return (words[0]![0]! + words[1]![0]!).toUpperCase();
 }
 
 function formatModifier(m: Modifier): string {
@@ -172,7 +310,9 @@ function shortTail(instanceId: string): string {
   return `#${instanceId.slice(-6)}`;
 }
 
-const cardStyle: React.CSSProperties = {
+// ---------- Styles ----------
+
+const sectionStyle: React.CSSProperties = {
   padding: 10,
   background: "#222",
   borderRadius: 4,
@@ -182,6 +322,6 @@ const headerStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   fontWeight: 600,
-  marginBottom: 6,
+  marginBottom: 8,
   fontSize: 13,
 };

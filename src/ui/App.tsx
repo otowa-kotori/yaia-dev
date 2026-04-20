@@ -1,9 +1,23 @@
-import { useMemo } from "react";
+// App shell — multi-tab layout.
+//
+// Tabs:
+//   0: 地图 & 战斗  — StageSelector + Controls + BattleView
+//   1: 背包         — InventoryView (grid)
+//   2: 经验总览      — XpOverview (level / attrs / skills)
+//   3: 设置         — speed selector + clear save
+//
+// Tab state is purely local to this component; it does not touch core or
+// the store. The store is created once (useMemo), shared to all children.
+
+import { useMemo, useState } from "react";
 import { buildDefaultContent } from "../content";
 import { createGameStore } from "./store";
 import { BattleView } from "./BattleView";
 import { InventoryView } from "./InventoryView";
+import { XpOverview } from "./XpOverview";
 import { useStore } from "./useStore";
+
+// ---------- Container ----------
 
 const containerStyle: React.CSSProperties = {
   fontFamily: "system-ui, sans-serif",
@@ -16,18 +30,108 @@ const containerStyle: React.CSSProperties = {
   minHeight: "60vh",
 };
 
+// ---------- Tab definitions ----------
+
+type TabId = "map" | "inventory" | "xp" | "settings";
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: "map",       label: "地图 & 战斗" },
+  { id: "inventory", label: "背包" },
+  { id: "xp",        label: "经验总览" },
+  { id: "settings",  label: "设置" },
+];
+
+// ---------- App ----------
+
 export function App() {
   const store = useMemo(() => createGameStore({ content: buildDefaultContent() }), []);
-  const { store: s } = useStore(store);
+  const [activeTab, setActiveTab] = useState<TabId>("map");
+
   return (
     <div style={containerStyle}>
-      <h1 style={{ margin: "0 0 16px", fontSize: 20, color: "#fff" }}>
-        Combat Skeleton
+      <h1 style={{ margin: "0 0 12px", fontSize: 20, color: "#fff" }}>
+        YAIA
       </h1>
-      <StageSelector store={s} />
-      <Controls store={s} />
-      <BattleView store={s} />
-      <InventoryView store={s} />
+      <TabBar activeTab={activeTab} onSelect={setActiveTab} />
+      <TabPanel activeTab={activeTab} store={store} />
+    </div>
+  );
+}
+
+// ---------- TabBar ----------
+
+function TabBar({
+  activeTab,
+  onSelect,
+}: {
+  activeTab: TabId;
+  onSelect: (id: TabId) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 2,
+        borderBottom: "1px solid #333",
+        marginBottom: 16,
+      }}
+    >
+      {TABS.map((t) => {
+        const active = t.id === activeTab;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onSelect(t.id)}
+            style={{
+              padding: "7px 14px",
+              fontSize: 13,
+              border: "none",
+              borderBottom: active ? "2px solid #4a9" : "2px solid transparent",
+              background: "transparent",
+              color: active ? "#fff" : "#999",
+              cursor: active ? "default" : "pointer",
+              fontFamily: "inherit",
+              marginBottom: -1, // overlap the container border-bottom
+              transition: "color 100ms",
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- TabPanel ----------
+
+function TabPanel({
+  activeTab,
+  store,
+}: {
+  activeTab: TabId;
+  store: ReturnType<typeof createGameStore>;
+}) {
+  switch (activeTab) {
+    case "map":
+      return <MapTab store={store} />;
+    case "inventory":
+      return <InventoryView store={store} />;
+    case "xp":
+      return <XpOverview store={store} />;
+    case "settings":
+      return <SettingsTab store={store} />;
+  }
+}
+
+// ---------- Map & Combat tab ----------
+
+function MapTab({ store }: { store: ReturnType<typeof createGameStore> }) {
+  return (
+    <div>
+      <StageSelector store={store} />
+      <Controls store={store} />
+      <BattleView store={store} />
     </div>
   );
 }
@@ -38,7 +142,7 @@ function StageSelector({ store }: { store: ReturnType<typeof createGameStore> })
   const current = s.stageId;
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-      <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>stage:</span>
+      <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>关卡:</span>
       {stageIds.map((id) => (
         <button
           key={id}
@@ -55,7 +159,6 @@ function StageSelector({ store }: { store: ReturnType<typeof createGameStore> })
 function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
   const { store: s } = useStore(store);
   const running = s.isRunning();
-  const speed = s.getSpeedMultiplier();
   const hasStage = s.stageId !== null;
 
   // List resource node actor ids currently in this stage so the user can
@@ -85,7 +188,7 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
             disabled={!hasStage}
             style={btnStyle(false)}
           >
-            fight
+            战斗
           </button>
           {nodeIds.map((id) => (
             <button
@@ -93,39 +196,66 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
               onClick={() => s.startGather(id)}
               style={btnStyle(false)}
             >
-              mine {shortId(id)}
+              采集 {shortId(id)}
             </button>
           ))}
         </>
       ) : (
         <button onClick={() => s.stopActivity()} style={btnStyle(false)}>
-          stop
+          停止
         </button>
       )}
-      <span style={{ opacity: 0.6, fontSize: 12 }}>speed:</span>
-      {[0, 1, 2, 5].map((m) => (
-        <button
-          key={m}
-          onClick={() => s.setSpeedMultiplier(m)}
-          style={btnStyle(speed === m, true)}
-        >
-          {m === 0 ? "pause" : `${m}x`}
-        </button>
-      ))}
-      <span style={{ flex: 1 }} />
-      <button
-        onClick={() => {
-          if (confirm("Clear save and reset? This cannot be undone.")) {
-            void s.clearSaveAndReset();
-          }
-        }}
-        style={{ ...btnStyle(false, true), borderColor: "#733" }}
-      >
-        clear save
-      </button>
     </div>
   );
 }
+
+// ---------- Settings tab ----------
+
+function SettingsTab({ store }: { store: ReturnType<typeof createGameStore> }) {
+  const { store: s } = useStore(store);
+  const speed = s.getSpeedMultiplier();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Speed */}
+      <div style={{ background: "#222", borderRadius: 4, padding: 10 }}>
+        <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
+          速度
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[0, 1, 2, 5].map((m) => (
+            <button
+              key={m}
+              onClick={() => s.setSpeedMultiplier(m)}
+              style={btnStyle(speed === m, true)}
+            >
+              {m === 0 ? "暂停" : `${m}x`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Danger zone */}
+      <div style={{ background: "#222", borderRadius: 4, padding: 10 }}>
+        <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
+          危险区域
+        </div>
+        <button
+          onClick={() => {
+            if (confirm("清除存档并重置？此操作不可撤销。")) {
+              void s.clearSaveAndReset();
+            }
+          }}
+          style={{ ...btnStyle(false, true), borderColor: "#733", color: "#f88" }}
+        >
+          清除存档
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Shared helpers ----------
 
 function shortId(id: string): string {
   const parts = id.split(".");
@@ -142,5 +272,6 @@ function btnStyle(active: boolean, small = false): React.CSSProperties {
     color: "#fff",
     cursor: active ? "default" : "pointer",
     opacity: active && !small ? 0.6 : 1,
+    fontFamily: "inherit",
   };
 }
