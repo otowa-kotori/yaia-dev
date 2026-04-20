@@ -60,6 +60,25 @@ export interface ItemDef {
   slot?: string;
   /** Modifiers this item grants when equipped. */
   modifiers?: Modifier[];
+  /**
+   * If present, every created GearInstance rolls one Modifier per entry
+   * using [min, max] inclusive. Only meaningful for stackable=false items;
+   * ignored for stackables (they have no per-copy state).
+   * See core/item/factory.ts for the actual roll logic.
+   *
+   * MVP: every entry is always rolled. If/when we need per-affix probability
+   * or rarity tiers, add `chance?: number` and `rarity?` here.
+   */
+  roll?: {
+    mods: {
+      stat: AttrId;
+      op: ModifierOp;
+      min: number;
+      max: number;
+      /** Default true — attribute affixes round to integers. */
+      integer?: boolean;
+    }[];
+  };
   tags?: string[];
 }
 

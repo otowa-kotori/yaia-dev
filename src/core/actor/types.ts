@@ -31,6 +31,7 @@ import type {
 } from "../state/types";
 import type { SkillId } from "../content/types";
 import type { FormulaRef } from "../formula/types";
+import type { GearInstance } from "../item/types";
 
 /** Team / side within a battle. Transient — not persisted. */
 export type Side = "player" | "enemy" | "neutral";
@@ -82,8 +83,9 @@ export interface PlayerCharacter extends Character {
   /** Hard level cap for this character. */
   maxLevel: number;
   skills: Record<SkillId, SkillProgress>;
-  /** Slot -> itemId or null. (persisted) */
-  equipped: Record<string, string | null>;
+  /** Slot -> equipped GearInstance (or null for empty slot). Each instance
+   *  carries its own rolledMods; see ../item/types.ts. (persisted) */
+  equipped: Record<string, GearInstance | null>;
   /** Unlocked talent ids. (persisted) */
   talents: string[];
   /** What this character is currently doing. null = idle. (persisted) */

@@ -5,8 +5,14 @@
 // stripped by the serializer and reconstructed by rebuildCharacterDerived
 // on load. See CLAUDE.md "persisted actor fields" for the canonical list.
 //
-// Why strip rather than include: derived fields depend on content. If an
-// item/effect is hot-replaced between saves, a serialized modifier stack
+// Inventory & equipment (since save v2):
+//   - Inventory lives on GameState.inventories as { capacity, slots } grids.
+//     Slots are a union of StackEntry | GearEntry | null; all plain data.
+//   - PlayerCharacter.equipped stores GearInstance objects (not bare itemIds),
+//     so per-copy state (instanceId, rolledMods, …) persists directly.
+//
+// Why strip derived rather than include: derived fields depend on content.
+// If an item/effect is hot-replaced between saves, a serialized modifier stack
 // can diverge from what the current content implies. Rebuilding keeps
 // "content is truth" intact.
 //

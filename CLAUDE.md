@@ -2,6 +2,16 @@
 
 Project-specific conventions for Claude. Read before editing code.
 
+## Orientation
+
+- Architecture overview: `docs/architecture.md` (layering / Actor hierarchy / save rules / invariants).
+- Current progress & TODOs: `docs/roadmap.md`.
+- Read both before touching code — do NOT grep the codebase blindly to infer architecture.
+
+## Tools
+
+- Use `fd` to find files and `rg` to search contents. Do NOT use `find` or `grep`.
+
 ## Comments
 
 - **When refactoring, do NOT silently delete existing comments.** Comments document intent and tradeoffs that often aren't obvious from the new code. If a comment is stale, update it; if it's wrong, mark it wrong and explain why; if it's truly obsolete, call that out in the diff summary so the user can confirm. Default to preservation.

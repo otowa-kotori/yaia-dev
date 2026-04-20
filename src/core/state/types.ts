@@ -13,6 +13,11 @@ import type { SkillId } from "../content/types";
 import type { Actor } from "../actor/types";
 import type { Battle } from "../combat/battle";
 import type { StageSession } from "../stage/types";
+import type { Inventory, StackEntry } from "../inventory/types";
+import {
+  DEFAULT_SHARED_INVENTORY_CAPACITY,
+  createInventory,
+} from "../inventory";
 
 // ---------- Active effects ----------
 
@@ -24,11 +29,10 @@ export interface ActiveEffect {
 }
 
 // ---------- Inventory ----------
-
-export interface ItemStack {
-  itemId: string;
-  qty: number;
-}
+//
+// Legacy name kept for callers that only care about stack entries. New code
+// should use StackEntry directly. Inventory itself lives in ../inventory.
+export type ItemStack = StackEntry;
 
 // ---------- Per-skill progress ----------
 
@@ -82,8 +86,11 @@ export interface GameState {
    *  leaveStage()s the current session first. Null when the player is not
    *  in any stage. */
   currentStage: StageSession | null;
-  /** Inventories keyed by charId OR the literal "shared" key. */
-  inventories: Record<string, ItemStack[]>;
+  /** Inventories keyed by charId OR the literal "shared" key. Fixed-capacity
+   *  grid: each Inventory has a `capacity` and a dense `slots` array whose
+   *  indices are stable across mutations (null = empty). See
+   *  ../inventory/types.ts. */
+  inventories: Record<string, Inventory>;
   worldActivities: WorldActivityState[];
   /** Generic counters / unlock flags / quest progress. */
   flags: Record<string, number>;
@@ -104,7 +111,9 @@ export function createEmptyState(seed: number, version: number): GameState {
     actors: [],
     battles: [],
     currentStage: null,
-    inventories: { [SHARED_INVENTORY_KEY]: [] },
+    inventories: {
+      [SHARED_INVENTORY_KEY]: createInventory(DEFAULT_SHARED_INVENTORY_CAPACITY),
+    },
     worldActivities: [],
     flags: {},
     settings: { speedMultiplier: 1 },

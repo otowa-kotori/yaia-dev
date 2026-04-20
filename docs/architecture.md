@@ -40,6 +40,19 @@ Actor                     任何世界实体
 
 Stage **不管战斗流程**——它只管 actor 生命周期。
 
+### 背包与装备
+
+物品分两类：
+
+- **Stackable**（材料类）：只有 `{ itemId, qty }`，多次获取会合并到同一格。
+- **Non-stackable**（装备类）：每件一个 `GearInstance`，带 `instanceId + rolledMods`。**所有** gear 必经 `core/item/createGearInstance(itemId, { rng })` —— 怪物掉落 / 合成产出 / dev 赠送共用这一个创生口子，保证 `ctx.rng` 驱动的属性 roll 可重放。
+
+`ItemDef.roll` 声明词缀规则（`stat/op/min/max/integer?`），工厂按 rng 生成 `rolledMods`；`ItemDef.modifiers` 仍是该装备的基线加成。两者在 `rebuildCharacterDerived` 里合并，`sourceId` 带 `instanceId` 便于精准撤销。
+
+背包是固定位置网格：`Inventory { capacity, slots: (StackEntry | GearEntry | null)[] }`，索引稳定（空格 = null）。同一包可任意混放 stack 和 gear。`state.inventories` 以 `charId` 或 `"shared"` 键分包，每角色一主包 + 全局共享包。`addStack` 遇同 itemId 合并、`addGear` 始终占新空格、满则抛（alpha）。
+
+装备直接内联存在 `PlayerCharacter.equipped: Record<slot, GearInstance | null>`（不引用独立 instance 表）—— 单一所有权：要么在 bag 里，要么在身上。
+
 ### Activity（活动）
 
 玩家在当前 stage 做的事。是 Tickable，挂在引擎上。
@@ -98,6 +111,7 @@ UI → Store → Core
              ├─ tick, rng, events        （底层，无依赖）
              ├─ content, formula         （内容定义 + 求值）
              ├─ attribute                （ATTR 常量 + 堆叠）
+             ├─ item, inventory          （GearInstance + 固定位置网格）
              ├─ actor                    （类型 + factory + 派生重建）
              ├─ effect, ability          （GAS 管线）
              ├─ intent, combat           （scheduler + battle）

@@ -12,15 +12,17 @@
 // can remove the right stack via removeModifiersBySource.
 
 import type { EffectDef, AttrDef, ItemId } from "../content/types";
-import { getEffect, getSkill } from "../content/registry";
+import { getEffect, getItem, getSkill } from "../content/registry";
 import { evalFormula, type FormulaContext } from "../formula";
 import type { Rng } from "../rng";
 import type { GameEventBus } from "../events";
-import type { ActiveEffect, GameState, ItemStack } from "../state/types";
+import type { ActiveEffect, GameState } from "../state/types";
 import type { Character, PlayerCharacter } from "../actor";
 import { getAttr, isPlayer } from "../actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../attribute";
 import { grantCharacterXp, grantSkillXp } from "../progression";
+import { addStack, addGear } from "../inventory";
+import { createGearInstance } from "../item";
 
 export interface EffectContext {
   state: GameState;
@@ -131,7 +133,7 @@ function applyRewards(
 
   if (rewards.items?.length) {
     for (const { itemId, qty } of rewards.items) {
-      addItemToInventory(ctx.state, charId, itemId, qty);
+      addItemToInventory(ctx, charId, itemId, qty);
       ctx.bus.emit("loot", { charId, itemId, qty });
     }
   }
@@ -148,18 +150,35 @@ function applyRewards(
   }
 }
 
+// Dispatch into the per-item-class inventory API:
+//   - stackable items merge into an existing stack or claim a new slot.
+//   - non-stackable (gear) items run through createGearInstance(qty times) so
+//     every copy gets its own instanceId + rolled affixes. The same rng used
+//     everywhere for gameplay randomness feeds the roll, keeping save-state
+//     determinism intact.
+//
+// Policy: the per-char inventory must already exist (created on hero spawn /
+// after load). No silent fallback; missing inventory is a bug — throw.
 function addItemToInventory(
-  state: GameState,
+  ctx: EffectContext,
   charId: string,
   itemId: ItemId,
   qty: number,
 ): void {
-  const inv = (state.inventories[charId] ??= []);
-  const existing = inv.find((s: ItemStack) => s.itemId === itemId);
-  if (existing) {
-    existing.qty += qty;
-  } else {
-    inv.push({ itemId, qty });
+  const inv = ctx.state.inventories[charId];
+  if (!inv) {
+    throw new Error(
+      `addItemToInventory: no inventory for charId "${charId}". Hero spawn should have created one.`,
+    );
+  }
+  const def = getItem(itemId);
+  if (def.stackable) {
+    addStack(inv, itemId, qty);
+    return;
+  }
+  for (let i = 0; i < qty; i++) {
+    const gear = createGearInstance(itemId, { rng: ctx.rng });
+    addGear(inv, gear);
   }
 }
 

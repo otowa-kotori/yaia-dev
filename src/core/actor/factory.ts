@@ -148,16 +148,24 @@ export function rebuildCharacterDerived(
   c.attrs.modifiers = [];
   invalidateAttrs(c.attrs);
 
-  // 2) Equipped-item modifiers (players only).
+  // 2) Equipped-item modifiers (players only). Each slot holds a GearInstance
+  //    whose final modifier set is the ItemDef baseline (def.modifiers) plus
+  //    per-instance rolledMods. sourceId is tagged with instanceId so we can
+  //    revoke one specific piece of gear cleanly in the future.
   if (c.kind === "player") {
     const pc = c as PlayerCharacter;
-    for (const [slot, itemId] of Object.entries(pc.equipped)) {
-      if (!itemId) continue;
-      const item = safeGetItem(itemId);
-      if (!item?.modifiers) continue;
+    for (const [slot, gear] of Object.entries(pc.equipped)) {
+      if (!gear) continue;
+      // Alpha policy: missing content blows up loudly rather than silently
+      // equipping a no-op item.
+      const def = getItem(gear.itemId);
+      const baseline = def.modifiers ?? [];
+      const rolled = gear.rolledMods ?? [];
+      if (baseline.length === 0 && rolled.length === 0) continue;
+      const source = `equip:${slot}:${gear.instanceId}`;
       addModifiers(
         c.attrs,
-        item.modifiers.map((m) => ({ ...m, sourceId: `equip:${slot}` })),
+        [...baseline, ...rolled].map((m) => ({ ...m, sourceId: source })),
       );
     }
   }
@@ -205,13 +213,9 @@ export function getAttr(
 
 // ---------- Internal ----------
 
-function safeGetItem(id: string) {
-  try {
-    return getItem(id);
-  } catch {
-    return undefined;
-  }
-}
+// NOTE: safeGetItem was removed — equipped now carries a GearInstance whose
+// itemId must resolve. Alpha policy: throw loudly (via getItem) rather than
+// silently treating missing content as "no modifiers".
 
 function safeGetEffect(id: string) {
   try {

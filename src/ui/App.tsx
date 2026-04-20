@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { buildDefaultContent } from "../content";
 import { createGameStore } from "./store";
 import { BattleView } from "./BattleView";
+import { InventoryView } from "./InventoryView";
 import { useStore } from "./useStore";
 
 const containerStyle: React.CSSProperties = {
@@ -26,6 +27,7 @@ export function App() {
       <StageSelector store={s} />
       <Controls store={s} />
       <BattleView store={s} />
+      <InventoryView store={s} />
     </div>
   );
 }

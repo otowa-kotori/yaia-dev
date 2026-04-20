@@ -56,6 +56,10 @@ import {
   type SaveAdapter,
 } from "../core/save";
 import {
+  createInventory,
+  DEFAULT_CHAR_INVENTORY_CAPACITY,
+} from "../core/inventory";
+import {
   basicAttack,
   copperMine,
   defaultCharXpCurve,
@@ -211,6 +215,13 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
         attrDefs,
       });
       state.actors.push(hero);
+      // A fresh hero needs a personal inventory grid. The shared bag is
+      // created by createEmptyState; per-char bags live at state.inventories[heroId].
+      if (!state.inventories[hero.id]) {
+        state.inventories[hero.id] = createInventory(
+          DEFAULT_CHAR_INVENTORY_CAPACITY,
+        );
+      }
     }
     return hero;
   }

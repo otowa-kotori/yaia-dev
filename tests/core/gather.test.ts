@@ -10,6 +10,11 @@ import { createRng } from "../../src/core/rng";
 import { createGameEventBus } from "../../src/core/events";
 import { createEmptyState } from "../../src/core/state";
 import {
+  countItem,
+  createInventory,
+  DEFAULT_CHAR_INVENTORY_CAPACITY,
+} from "../../src/core/inventory";
+import {
   attrDefs,
   loadFixtureContent,
   makePlayer,
@@ -27,6 +32,8 @@ function setup() {
 
   const hero = makePlayer({ id: "hero", abilities: [] });
   state.actors.push(hero);
+  // Hero spawned directly (no store path) — give it its personal inventory bag.
+  state.inventories[hero.id] = createInventory(DEFAULT_CHAR_INVENTORY_CAPACITY);
 
   const ctxProvider = () => ({
     state,
@@ -77,9 +84,7 @@ describe("GatherActivity + Stage", () => {
     expect(sp.xp).toBeGreaterThan(0);
 
     const inv = state.inventories[hero.id]!;
-    const ore = inv.find((s) => s.itemId === testOreItem.id);
-    expect(ore).toBeDefined();
-    expect(ore!.qty).toBeGreaterThan(0);
+    expect(countItem(inv, testOreItem.id)).toBeGreaterThan(0);
   });
 
   test("stopRequested halts the activity", () => {

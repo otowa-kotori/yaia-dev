@@ -9,8 +9,18 @@
 // Until migrations exist, mismatched versions throw; the caller (Store) is
 // expected to surface a "can't read save, reset?" affordance to the user
 // rather than silently wiping progress.
+//
+// Version history:
+//   v1 → v2 (alpha, intentionally incompatible, no migration):
+//     - inventories: Record<string, ItemStack[]>
+//       → Record<string, { capacity, slots: (StackEntry | GearEntry | null)[] }>
+//     - PlayerCharacter.equipped: Record<string, string | null>
+//       → Record<string, GearInstance | null>
+//     v1 saves will fail the structural checks in deserialize and the Store
+//     falls back to a fresh state. Acceptable for alpha; write a real
+//     migration the next time we change a shipped save shape.
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** A migration transforms serialized save data from `fromVersion` to
  *  `fromVersion + 1`. Migrations operate on the parsed JSON object to keep

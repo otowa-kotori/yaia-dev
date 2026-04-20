@@ -13,7 +13,8 @@ import {
 } from "../../src/core/actor";
 import { ATTR } from "../../src/core/attribute";
 import { resetContent, patchContent } from "../../src/core/content";
-import type { ItemDef, ItemId } from "../../src/core/content/types";
+import type { ItemDef, ItemId, Modifier } from "../../src/core/content/types";
+import type { GearInstance } from "../../src/core/item";
 import {
   attrDefs,
   basicAttackAbility,
@@ -31,6 +32,13 @@ const copperSword: ItemDef = {
     { stat: ATTR.ATK, op: "flat", value: 5, sourceId: "" },
   ],
 };
+
+function makeSwordInstance(
+  instanceId = "gear.test.sword1",
+  rolledMods: Modifier[] = [],
+): GearInstance {
+  return { instanceId, itemId: copperSword.id, rolledMods };
+}
 
 describe("actor hierarchy", () => {
   beforeEach(() => {
@@ -101,7 +109,7 @@ describe("actor hierarchy", () => {
     });
     expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(10);
 
-    pc.equipped = { weapon: copperSword.id };
+    pc.equipped = { weapon: makeSwordInstance() };
     rebuildCharacterDerived(pc, attrDefs);
 
     expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(15);
@@ -112,7 +120,7 @@ describe("actor hierarchy", () => {
       id: "p",
       name: "p",
       baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
-      equipped: { weapon: copperSword.id },
+      equipped: { weapon: makeSwordInstance() },
       attrDefs,
       xpCurve: testXpCurve,
     });
@@ -138,5 +146,23 @@ describe("actor hierarchy", () => {
     pc.attrs.base[ATTR.MAX_HP] = 80;
     rebuildCharacterDerived(pc, attrDefs);
     expect(pc.currentHp).toBe(80);
+  });
+
+  test("equipped GearInstance contributes def.modifiers + rolledMods", () => {
+    const pc = createPlayerCharacter({
+      id: "p",
+      name: "p",
+      baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
+      attrDefs,
+      xpCurve: testXpCurve,
+    });
+    // def.modifiers grants +5 ATK; rolledMods piles on an additional +3.
+    pc.equipped = {
+      weapon: makeSwordInstance("gear.test.rolled", [
+        { stat: ATTR.ATK, op: "flat", value: 3, sourceId: "gear.roll" },
+      ]),
+    };
+    rebuildCharacterDerived(pc, attrDefs);
+    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(18);
   });
 });
