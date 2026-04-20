@@ -1,10 +1,21 @@
-// Battle view: lists participants with HP bars + tail of battle log.
-// Purely presentational — reads from Store, dispatches nothing.
+// Scene view — the main "what's happening right now" panel.
+// Shows the hero card always, plus either:
+//   - the current battle participants, if a CombatActivity is fighting;
+//   - the resource node being gathered, if a GatherActivity is running;
+//   - the stage's actor roster, if we're in a stage but idle.
+//
+// Pure presentation — reads from Store, dispatches nothing.
 
 import type { Character, PlayerCharacter } from "../core/actor";
-import { getAttr, isCharacter, isPlayer } from "../core/actor";
+import { getAttr, isCharacter, isEnemy, isResourceNode } from "../core/actor";
 import { ATTR } from "../core/attribute";
 import { xpProgressToNextLevel } from "../core/progression";
+import {
+  ACTIVITY_COMBAT_KIND,
+  ACTIVITY_GATHER_KIND,
+  type CombatActivity,
+  type GatherActivity,
+} from "../core/activity";
 import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
@@ -16,46 +27,162 @@ export function BattleView({ store }: { store: GameStore }) {
   const activity = s.activity;
   const hero = s.getHero();
 
-  // Always show hero (so XP/level is visible even when idle).
   const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
 
-  const battle =
-    activity && activity.currentBattleId
-      ? s.state.battles.find((b) => b.id === activity.currentBattleId) ?? null
-      : null;
-
-  if (!activity || !battle) {
+  if (!s.stageId) {
     return (
       <div>
         {heroRow}
-        <div style={{ opacity: 0.6, fontSize: 14, marginTop: 12 }}>
-          {activity && activity.phase === "recovering"
-            ? "Recovering from defeat..."
-            : activity && activity.phase === "waveDelay"
-            ? "Next wave incoming..."
-            : 'Idle. Click "start grinding" to begin.'}
-        </div>
+        <Idle msg="Pick a stage to begin." />
+      </div>
+    );
+  }
+
+  // Combat view
+  if (activity?.kind === ACTIVITY_COMBAT_KIND) {
+    return (
+      <div>
+        {heroRow}
+        <CombatPanel activity={activity} store={s} />
+      </div>
+    );
+  }
+
+  // Gather view
+  if (activity?.kind === ACTIVITY_GATHER_KIND) {
+    return (
+      <div>
+        {heroRow}
+        <GatherPanel activity={activity} store={s} />
+      </div>
+    );
+  }
+
+  // In a stage but not doing anything — show the roster.
+  return (
+    <div>
+      {heroRow}
+      <StageRoster store={s} />
+    </div>
+  );
+}
+
+function Idle({ msg }: { msg: string }) {
+  return (
+    <div style={{ opacity: 0.6, fontSize: 14, marginTop: 12 }}>{msg}</div>
+  );
+}
+
+function CombatPanel({
+  activity,
+  store,
+}: {
+  activity: CombatActivity;
+  store: GameStore;
+}) {
+  const battle =
+    activity.currentBattleId
+      ? store.state.battles.find((b) => b.id === activity.currentBattleId) ??
+        null
+      : null;
+  const phaseLabel =
+    activity.phase === "recovering"
+      ? "Recovering from defeat..."
+      : activity.phase === "waitingForEnemies"
+      ? "Waiting for enemies to respawn..."
+      : activity.phase === "fighting"
+      ? "In combat"
+      : "Stopped";
+
+  if (!battle) {
+    return (
+      <div>
+        <Idle msg={phaseLabel} />
+        <StageRoster store={store} />
       </div>
     );
   }
 
   const participants = battle.participantIds
-    .map((id) => s.state.actors.find((a) => a.id === id))
+    .map((id) => store.state.actors.find((a) => a.id === id))
     .filter((a): a is Character => a !== undefined && isCharacter(a));
-  const enemies = participants.filter((p) => !isPlayer(p));
+  const enemies = participants.filter(isEnemy);
 
   return (
     <div>
-      {heroRow}
       <div style={{ marginTop: 12 }}>
         <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
-          Wave {activity.waveIndex} — Enemies
+          Enemies
         </div>
         {enemies.map((a) => (
           <ActorRow key={a.id} actor={a} />
         ))}
       </div>
       <LogTail log={battle.log} />
+    </div>
+  );
+}
+
+function GatherPanel({
+  activity,
+  store,
+}: {
+  activity: GatherActivity;
+  store: GameStore;
+}) {
+  const node = store.state.actors.find((a) => a.id === activity.nodeId);
+  const def = node && isResourceNode(node) ? node : null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
+        Gathering
+      </div>
+      <div style={{ padding: 8, background: "#222", borderRadius: 4 }}>
+        <div style={{ fontWeight: 600 }}>{def?.name ?? activity.nodeId}</div>
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+          swings: {activity.swingsCompleted} · progress {activity.progressTicks}
+          tick(s)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StageRoster({ store }: { store: GameStore }) {
+  const stage = store.state.currentStage;
+  if (!stage) return null;
+  const roster = stage.spawnedActorIds
+    .map((id) => store.state.actors.find((a) => a.id === id))
+    .filter((a): a is NonNullable<typeof a> => a !== undefined);
+  if (roster.length === 0) {
+    return <Idle msg="Stage is empty — waiting for a spawn..." />;
+  }
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
+        In this stage
+      </div>
+      {roster.map((a) => {
+        if (isCharacter(a)) return <ActorRow key={a.id} actor={a} />;
+        return (
+          <div
+            key={a.id}
+            style={{
+              marginBottom: 6,
+              padding: 8,
+              background: "#222",
+              borderRadius: 4,
+              fontSize: 12,
+              opacity: 0.85,
+            }}
+          >
+            <span style={{ fontWeight: 500 }}>{a.name}</span>
+            <span style={{ float: "right", opacity: 0.6 }}>
+              {a.kind.replace("_", " ")}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -72,14 +199,19 @@ function HeroCard({
   const dead = hero.currentHp <= 0;
   const xp = xpProgressToNextLevel(hero.level, hero.exp, hero.xpCurve);
 
-  const statusLabel =
-    activity?.phase === "recovering"
-      ? "recovering"
-      : activity?.phase === "waveDelay"
-      ? "next wave..."
-      : activity?.phase === "fighting"
-      ? "in combat"
-      : "idle";
+  let statusLabel = "idle";
+  if (activity?.kind === ACTIVITY_COMBAT_KIND) {
+    statusLabel =
+      activity.phase === "fighting"
+        ? "in combat"
+        : activity.phase === "recovering"
+        ? "recovering"
+        : activity.phase === "waitingForEnemies"
+        ? "waiting"
+        : "idle";
+  } else if (activity?.kind === ACTIVITY_GATHER_KIND) {
+    statusLabel = "gathering";
+  }
 
   return (
     <div

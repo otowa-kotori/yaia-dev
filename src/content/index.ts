@@ -8,9 +8,15 @@ import type {
   AttrDef,
   EffectDef,
   EffectId,
+  ItemDef,
+  ItemId,
   MonsterDef,
   MonsterId,
   ContentDb,
+  ResourceNodeDef,
+  ResourceNodeId,
+  SkillDef,
+  SkillId,
   StageDef,
   StageId,
 } from "../core/content";
@@ -118,6 +124,43 @@ export const slime: MonsterDef = {
   xpReward: 10,
 };
 
+// ---------- Items ----------
+
+export const copperOre: ItemDef = {
+  id: "item.ore.copper" as ItemId,
+  name: "Copper Ore",
+  stackable: true,
+  tags: ["ore"],
+};
+
+// ---------- Skills ----------
+
+/** Skill XP curve: same shape as char curve but a bit steeper so leveling a
+ *  skill feels distinct from leveling character. Tuning pass later. */
+export const defaultSkillXpCurve: FormulaRef = {
+  kind: "exp_curve_v1",
+  base: 15,
+  growth: 1.15,
+};
+
+export const miningSkill: SkillDef = {
+  id: "skill.mining" as SkillId,
+  name: "Mining",
+  xpCurve: defaultSkillXpCurve,
+  maxLevel: 99,
+};
+
+// ---------- Resource Nodes ----------
+
+export const copperVein: ResourceNodeDef = {
+  id: "node.copper_vein" as ResourceNodeId,
+  name: "Copper Vein",
+  skill: miningSkill.id,
+  swingTicks: 10,
+  xpPerSwing: 4,
+  drops: [{ itemId: copperOre.id, chance: 1, minQty: 1, maxQty: 1 }],
+};
+
 // ---------- Stages ----------
 
 export const forestLv1: StageDef = {
@@ -129,6 +172,14 @@ export const forestLv1: StageDef = {
   waveIntervalTicks: 20,
 };
 
+/** A mining-only stage. One copper vein spawns at enter. */
+export const copperMine: StageDef = {
+  id: "stage.mine.copper" as StageId,
+  name: "Copper Mine",
+  mode: "solo",
+  resourceNodes: [copperVein.id],
+};
+
 // ---------- Default DB ----------
 
 export function buildDefaultContent(): ContentDb {
@@ -138,6 +189,12 @@ export function buildDefaultContent(): ContentDb {
     effects: { [strikeEffect.id]: strikeEffect },
     abilities: { [basicAttack.id]: basicAttack },
     monsters: { [slime.id]: slime },
-    stages: { [forestLv1.id]: forestLv1 },
+    stages: {
+      [forestLv1.id]: forestLv1,
+      [copperMine.id]: copperMine,
+    },
+    items: { [copperOre.id]: copperOre },
+    skills: { [miningSkill.id]: miningSkill },
+    resourceNodes: { [copperVein.id]: copperVein },
   };
 }

@@ -12,6 +12,7 @@
 import type { SkillId } from "../content/types";
 import type { Actor } from "../actor/types";
 import type { Battle } from "../combat/battle";
+import type { StageSession } from "../stage/types";
 
 // ---------- Active effects ----------
 
@@ -77,6 +78,10 @@ export interface GameState {
   /** Active battles indexed by id. Battle is plain data so it round-trips
    *  through the save file. Activities reference battles by id. */
   battles: Battle[];
+  /** The scene the player is currently in. At most one — switching stages
+   *  leaveStage()s the current session first. Null when the player is not
+   *  in any stage. */
+  currentStage: StageSession | null;
   /** Inventories keyed by charId OR the literal "shared" key. */
   inventories: Record<string, ItemStack[]>;
   worldActivities: WorldActivityState[];
@@ -98,6 +103,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     tick: 0,
     actors: [],
     battles: [],
+    currentStage: null,
     inventories: { [SHARED_INVENTORY_KEY]: [] },
     worldActivities: [],
     flags: {},

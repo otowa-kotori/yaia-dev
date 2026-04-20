@@ -14,8 +14,7 @@
 // ./migrations.ts.
 
 import type { GameState } from "../state/types";
-import type { Actor, Character, PlayerCharacter } from "../actor";
-import { isCharacter, rebuildCharacterDerived } from "../actor";
+import { isCharacter, isEnemy, isPlayer, rebuildCharacterDerived } from "../actor";
 import type { AttrDef } from "../content/types";
 import { getMonster } from "../content/registry";
 import { SAVE_VERSION, migrations } from "./migrations";
@@ -29,17 +28,17 @@ export function serialize(state: GameState): string {
   // and keeps the code simple; revisit if serialization ever shows up hot.
   const clone = JSON.parse(JSON.stringify(state)) as GameState;
 
-  // Strip derived fields from characters.
+  // Strip derived fields from characters. Non-character actors
+  // (ResourceNode etc) have no derived fields and are copied verbatim.
   for (const a of clone.actors) {
-    if (!isCharacter(a as Actor)) continue;
-    const c = a as Character;
+    if (!isCharacter(a)) continue;
     // attrs.modifiers and attrs.cache are derived from equipped gear +
     // active effects. Base values ARE source of truth and are kept.
-    c.attrs.modifiers = [];
-    c.attrs.cache = null;
+    a.attrs.modifiers = [];
+    a.attrs.cache = null;
     // Runtime abilities list is derived (from knownAbilities for players,
     // MonsterDef for enemies). Blanked here; rebuilt on load.
-    c.abilities = [];
+    a.abilities = [];
   }
 
   return JSON.stringify({ version: SAVE_VERSION, state: clone });
@@ -89,25 +88,22 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
 
   const state = data as unknown as GameState;
 
-  // Rebuild derived state on every character.
+  // Rebuild derived state on every character. Non-character actors pass
+  // through untouched.
   for (const a of state.actors) {
-    if (!isCharacter(a as Actor)) continue;
-    // For enemies, rebuildCharacterDerived expects abilities to already be
-    // populated (from MonsterDef). Re-derive them now.
-    const c = a as Character;
-    if (c.kind === "enemy") {
+    if (isEnemy(a)) {
       // Pull monster def abilities back in from content — ids, not the
       // derived runtime list. `getMonster` throws if the def has been
       // removed since the save was written, which is the correct alpha
       // behaviour (surface the broken reference rather than silently
       // producing a toothless enemy).
-      const mdef = getMonster((c as unknown as { defId: string }).defId);
-      c.abilities = mdef.abilities.slice() as unknown as typeof c.abilities;
-    } else if (c.kind === "player") {
-      const pc = c as PlayerCharacter;
-      pc.abilities = pc.knownAbilities.slice();
+      const mdef = getMonster(a.defId);
+      a.abilities = mdef.abilities.slice() as typeof a.abilities;
+      rebuildCharacterDerived(a, opts.attrDefs);
+    } else if (isPlayer(a)) {
+      a.abilities = a.knownAbilities.slice();
+      rebuildCharacterDerived(a, opts.attrDefs);
     }
-    rebuildCharacterDerived(c, opts.attrDefs);
   }
 
   return state;

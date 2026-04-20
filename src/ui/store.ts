@@ -1,20 +1,27 @@
 // Minimal bridge between game-core and React UI.
 //
 // Responsibilities:
-// - Own the TickEngine, bus, rng, state, and live combat activity (if any).
+// - Own the TickEngine, bus, rng, state, stage controller, and activity.
 // - Expose a trivial subscribe(callback) API for UI.
 // - Publish a "revision number" that bumps every UI-visible mutation, so React
 //   can re-render without deep equality checks.
 // - Persist state: autosave on a throttle + on important events, load on
 //   startup.
 //
-// Save integration notes:
-// - The state is the source of truth. Activity is a Tickable that lives in
-//   memory; on save, we record the character's activity pointer (stageId +
-//   phase + wave + lastTransitionTick) inside PlayerCharacter.activity, so on
-//   load we can re-create the runtime activity bound to the persisted Battle.
-// - Rng state is synced into state.rngState every tick so saves always
-//   contain an up-to-date rng snapshot without special handling.
+// Player flow:
+//   enterStage(stageId)  — leave any current stage, install a new
+//                          StageController Tickable, spawn the initial pop.
+//   startFight()         — install a CombatActivity bound to current stage.
+//   startGather(nodeId)  — install a GatherActivity bound to that node.
+//   stopActivity()       — signal current activity to wind down.
+//   leaveStage()         — drop stage controller and despawn everything.
+//
+// Save integration:
+//   - state is the source of truth.
+//   - Stage session lives in state.currentStage; controller is re-instantiated
+//     from it on load.
+//   - Activity is a runtime Tickable; persisted form is PC.activity (kind +
+//     resume data).
 
 import { createTickEngine, TICK_MS } from "../core/tick";
 import { createGameEventBus } from "../core/events";
@@ -23,30 +30,58 @@ import { createEmptyState, type GameState } from "../core/state";
 import { setContent, type ContentDb } from "../core/content";
 import {
   ACTIVITY_COMBAT_KIND,
+  ACTIVITY_GATHER_KIND,
   createCombatActivity,
+  createGatherActivity,
   type CombatActivity,
   type CombatActivityPhase,
+  type GatherActivity,
 } from "../core/activity";
-import { createPlayerCharacter, getAttr, type PlayerCharacter } from "../core/actor";
+import {
+  createPlayerCharacter,
+  getAttr,
+  type PlayerCharacter,
+} from "../core/actor";
 import { ATTR } from "../core/attribute";
 import { registerBuiltinIntents } from "../core/intent";
+import {
+  enterStage as enterStageCore,
+  leaveStage as leaveStageCore,
+  type StageController,
+} from "../core/stage";
 import {
   deserialize,
   LocalStorageSaveAdapter,
   serialize,
   type SaveAdapter,
 } from "../core/save";
-import { basicAttack, defaultCharXpCurve, forestLv1 } from "../content";
+import {
+  basicAttack,
+  copperMine,
+  defaultCharXpCurve,
+  forestLv1,
+} from "../content";
 
 const SAVE_KEY = "yaia:save";
 const AUTOSAVE_INTERVAL_MS = 10_000;
 
 export interface GameStore {
   readonly state: GameState;
-  readonly activity: CombatActivity | null;
+  readonly activity: CombatActivity | GatherActivity | null;
+  /** Stage the player is currently in (echoes state.currentStage.stageId). */
+  readonly stageId: string | null;
   subscribe(cb: () => void): () => void;
   getRevision(): number;
-  startDemoBattle(): void;
+  /** Ids of all stages available in the content db. */
+  listStageIds(): string[];
+  /** Switch stages. Stops current activity, leaves current stage, enters new. */
+  enterStage(stageId: string): void;
+  leaveStage(): void;
+  /** Start a fight in the current stage. */
+  startFight(): void;
+  /** Start gathering a specific resource node in the current stage. */
+  startGather(nodeId: string): void;
+  /** Stop whatever activity is running. */
   stopActivity(): void;
   clearSaveAndReset(): Promise<void>;
   getHero(): PlayerCharacter | null;
@@ -59,22 +94,23 @@ export interface GameStore {
 export interface CreateGameStoreOptions {
   content: ContentDb;
   seed?: number;
-  /** Override save backend. Default: LocalStorageSaveAdapter. */
   saveAdapter?: SaveAdapter;
   /** If true, attempt to load on startup. Default: true. */
   autoLoad?: boolean;
 }
 
-// ---------- Serialized activity pointer ----------
-// Shape of the `data` blob stored on PlayerCharacter.activity when the char
-// is currently grinding a stage. Sparse by design — only what's needed to
-// resume.
+// ---------- Serialized activity pointers ----------
+
 interface CombatActivityData extends Record<string, unknown> {
-  stageId: string;
   phase: CombatActivityPhase;
-  waveIndex: number;
-  lastTransitionTick: number;
   currentBattleId: string | null;
+  lastTransitionTick: number;
+}
+
+interface GatherActivityData extends Record<string, unknown> {
+  nodeId: string;
+  progressTicks: number;
+  swingsCompleted: number;
 }
 
 export function createGameStore(opts: CreateGameStoreOptions): GameStore {
@@ -89,11 +125,11 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   const bus = createGameEventBus();
   let rng = createRng(seed);
   const engine = createTickEngine({ initialSpeedMultiplier: 1 });
-  let activity: CombatActivity | null = null;
+  let activity: CombatActivity | GatherActivity | null = null;
+  let stageController: StageController | null = null;
   let revision = 0;
   const subs = new Set<() => void>();
 
-  // --- autosave plumbing ---
   let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSaveAt = 0;
 
@@ -110,8 +146,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       void adapter.save(SAVE_KEY, payload);
       lastSaveAt = Date.now();
     } catch (e) {
-      // Don't let a save crash the game loop. Surface to devtools so it's
-      // visible during dev.
       console.error("save failed:", e);
     }
   }
@@ -127,7 +161,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   }
 
   function persistSoon(): void {
-    // Important event: don't wait for the tail of the throttle.
     if (pendingSaveTimer !== null) {
       clearTimeout(pendingSaveTimer);
       pendingSaveTimer = null;
@@ -135,7 +168,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     persistNow();
   }
 
-  // Tick observer: bump revision + write an autosave periodically.
   engine.register({
     id: "__ui_notifier",
     tick: () => {
@@ -150,13 +182,10 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     notify();
     persistSoon();
   });
+  bus.on("loot", notify);
   bus.on("activityComplete", () => {
     activity = null;
-    // Clear the persisted activity pointer on the hero so it doesn't try to
-    // resume a stopped activity on next load.
-    const hero = state.actors.find((a) => a.kind === "player") as
-      | PlayerCharacter
-      | undefined;
+    const hero = getHeroInternal();
     if (hero) hero.activity = null;
     notify();
     persistSoon();
@@ -164,10 +193,15 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   const stopLoop = engine.start();
 
+  // ---------- Helpers ----------
+
+  function getHeroInternal(): PlayerCharacter | null {
+    const h = state.actors.find((a) => a.kind === "player");
+    return h ? (h as PlayerCharacter) : null;
+  }
+
   function ensureHero(): PlayerCharacter {
-    let hero = state.actors.find((a) => a.kind === "player") as
-      | PlayerCharacter
-      | undefined;
+    let hero = getHeroInternal();
     if (!hero) {
       hero = createPlayerCharacter({
         id: "hero.1",
@@ -181,52 +215,116 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     return hero;
   }
 
-  /** Write the live activity's resume pointer onto the hero. Called whenever
-   *  the activity is installed/modified so an autosave captures current
-   *  progress without a separate sync step. */
-  function syncActivityPointer(): void {
-    const hero = state.actors.find((a) => a.kind === "player") as
-      | PlayerCharacter
-      | undefined;
-    if (!hero) return;
-    if (!activity || activity.phase === "stopped") {
-      hero.activity = null;
-      return;
-    }
-    const data: CombatActivityData = {
-      stageId: activity.stageId,
-      phase: activity.phase,
-      waveIndex: activity.waveIndex,
-      lastTransitionTick: activity.lastTransitionTick,
-      currentBattleId: activity.currentBattleId,
-    };
-    hero.activity = {
-      kind: ACTIVITY_COMBAT_KIND,
-      startedAtTick: activity.startedAtTick,
-      data,
+  function buildCtx() {
+    return {
+      state,
+      bus,
+      rng,
+      attrDefs,
+      currentTick: engine.currentTick,
     };
   }
 
-  /** Start a new grind. If an activity is already running, do nothing. */
-  function startDemoBattle(): void {
-    if (activity && activity.phase !== "stopped") return;
+  /** Flip a running activity into "done" and pull it off the engine. */
+  function stopRunningActivity(): void {
+    if (!activity) return;
+    if (activity.kind === ACTIVITY_COMBAT_KIND) activity.phase = "stopped";
+    else if (activity.kind === ACTIVITY_GATHER_KIND) activity.stopRequested = true;
+    engine.unregister(activity.id);
+    activity = null;
+    const hero = getHeroInternal();
+    if (hero) hero.activity = null;
+  }
 
+  function syncActivityPointer(): void {
+    const hero = getHeroInternal();
+    if (!hero) return;
+    if (!activity) {
+      hero.activity = null;
+      return;
+    }
+    if (activity.kind === ACTIVITY_COMBAT_KIND) {
+      if (activity.phase === "stopped") {
+        hero.activity = null;
+        return;
+      }
+      const data: CombatActivityData = {
+        phase: activity.phase,
+        currentBattleId: activity.currentBattleId,
+        lastTransitionTick: activity.lastTransitionTick,
+      };
+      hero.activity = {
+        kind: ACTIVITY_COMBAT_KIND,
+        startedAtTick: activity.startedAtTick,
+        data,
+      };
+    } else if (activity.kind === ACTIVITY_GATHER_KIND) {
+      if (activity.stopRequested) {
+        hero.activity = null;
+        return;
+      }
+      const data: GatherActivityData = {
+        nodeId: activity.nodeId,
+        progressTicks: activity.progressTicks,
+        swingsCompleted: activity.swingsCompleted,
+      };
+      hero.activity = {
+        kind: ACTIVITY_GATHER_KIND,
+        startedAtTick: activity.startedAtTick,
+        data,
+      };
+    }
+  }
+
+  // ---------- Stage ----------
+
+  function enterStage(stageId: string): void {
+    // Stop any activity + leave current stage first.
+    stopRunningActivity();
+    if (stageController) {
+      engine.unregister(stageController.id);
+      leaveStageCore(buildCtx());
+      stageController = null;
+    }
+
+    ensureHero();
+    stageController = enterStageCore({
+      stageId,
+      ctxProvider: buildCtx,
+    });
+    engine.register(stageController);
+    notify();
+    persistSoon();
+  }
+
+  function leaveStage(): void {
+    stopRunningActivity();
+    if (stageController) {
+      engine.unregister(stageController.id);
+      leaveStageCore(buildCtx());
+      stageController = null;
+    }
+    notify();
+    persistSoon();
+  }
+
+  // ---------- Activities ----------
+
+  function startFight(): void {
+    if (!state.currentStage) {
+      console.warn("startFight: not in a stage");
+      return;
+    }
+    stopRunningActivity();
     const hero = ensureHero();
-    hero.activeEffects = [];
-    hero.cooldowns = {};
     hero.currentHp = getAttr(hero, ATTR.MAX_HP, attrDefs);
     hero.currentMp = getAttr(hero, ATTR.MAX_MP, attrDefs);
+    hero.activeEffects = [];
+    hero.cooldowns = {};
 
     activity = createCombatActivity({
       ownerCharacterId: hero.id,
-      stageId: forestLv1.id,
-      ctxProvider: () => ({
-        state,
-        bus,
-        rng,
-        attrDefs,
-        currentTick: engine.currentTick,
-      }),
+      ctxProvider: buildCtx,
       actionDelayTicks: 8,
       recoverHpPctPerTick: 0.02,
     });
@@ -236,39 +334,67 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     persistSoon();
   }
 
-  /** Rebuild an activity after loading a save that had one in-flight. */
-  function rehydrateActivity(): void {
-    const hero = state.actors.find((a) => a.kind === "player") as
-      | PlayerCharacter
-      | undefined;
-    if (!hero || !hero.activity) return;
-    if (hero.activity.kind !== ACTIVITY_COMBAT_KIND) return;
-    const data = hero.activity.data as CombatActivityData;
-
-    activity = createCombatActivity({
+  function startGather(nodeId: string): void {
+    if (!state.currentStage) {
+      console.warn("startGather: not in a stage");
+      return;
+    }
+    stopRunningActivity();
+    const hero = ensureHero();
+    activity = createGatherActivity({
       ownerCharacterId: hero.id,
-      stageId: data.stageId,
-      ctxProvider: () => ({
-        state,
-        bus,
-        rng,
-        attrDefs,
-        currentTick: engine.currentTick,
-      }),
-      actionDelayTicks: 8,
-      recoverHpPctPerTick: 0.02,
-      resume: {
-        phase: data.phase,
-        waveIndex: data.waveIndex,
-        lastTransitionTick: data.lastTransitionTick,
-        currentBattleId: data.currentBattleId,
-      },
+      nodeId,
+      ctxProvider: buildCtx,
     });
-    if (activity.phase !== "stopped") engine.register(activity);
+    engine.register(activity);
+    syncActivityPointer();
     notify();
+    persistSoon();
   }
 
-  /** Load from save if one exists. Returns true if a save was loaded. */
+  // ---------- Rehydrate after load ----------
+
+  /** Rebuild the stage controller from a persisted session. */
+  function rehydrateStage(): void {
+    if (!state.currentStage) return;
+    stageController = enterStageCore({
+      stageId: state.currentStage.stageId,
+      ctxProvider: buildCtx,
+      resume: true,
+    });
+    engine.register(stageController);
+  }
+
+  /** Rebuild an activity after loading a save that had one in-flight. */
+  function rehydrateActivity(): void {
+    const hero = getHeroInternal();
+    if (!hero || !hero.activity) return;
+    if (hero.activity.kind === ACTIVITY_COMBAT_KIND) {
+      const data = hero.activity.data as CombatActivityData;
+      activity = createCombatActivity({
+        ownerCharacterId: hero.id,
+        ctxProvider: buildCtx,
+        actionDelayTicks: 8,
+        recoverHpPctPerTick: 0.02,
+        resume: {
+          phase: data.phase,
+          currentBattleId: data.currentBattleId,
+          lastTransitionTick: data.lastTransitionTick,
+        },
+      });
+      if (activity.phase !== "stopped") engine.register(activity);
+    } else if (hero.activity.kind === ACTIVITY_GATHER_KIND) {
+      const data = hero.activity.data as GatherActivityData;
+      activity = createGatherActivity({
+        ownerCharacterId: hero.id,
+        nodeId: data.nodeId,
+        ctxProvider: buildCtx,
+        resume: { progressTicks: data.progressTicks },
+      });
+      engine.register(activity);
+    }
+  }
+
   async function tryLoad(): Promise<boolean> {
     try {
       const raw = await adapter.load(SAVE_KEY);
@@ -277,6 +403,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       state = loaded;
       rng = restoreRng(loaded.rngState);
       engine.setTick(loaded.tick);
+      rehydrateStage();
       rehydrateActivity();
       notify();
       return true;
@@ -286,6 +413,8 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     }
   }
 
+  // ---------- Public API ----------
+
   const store: GameStore = {
     get state() {
       return state;
@@ -293,28 +422,31 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     get activity() {
       return activity;
     },
+    get stageId() {
+      return state.currentStage?.stageId ?? null;
+    },
     subscribe(cb) {
       subs.add(cb);
       return () => subs.delete(cb);
     },
     getRevision: () => revision,
-    getHero: () => {
-      const h = state.actors.find((a) => a.kind === "player");
-      return h ? (h as PlayerCharacter) : null;
-    },
-    startDemoBattle,
+    listStageIds: () => Object.keys(opts.content.stages),
+    enterStage,
+    leaveStage,
+    startFight,
+    startGather,
+    getHero: getHeroInternal,
     stopActivity() {
-      if (activity) {
-        activity.stopRequested = true;
-        syncActivityPointer();
-      }
+      stopRunningActivity();
       notify();
       persistSoon();
     },
     async clearSaveAndReset() {
-      // Stop anything in flight, wipe state + save slot.
-      if (activity) activity.phase = "stopped";
-      activity = null;
+      stopRunningActivity();
+      if (stageController) {
+        engine.unregister(stageController.id);
+        stageController = null;
+      }
       for (const t of engine.listTickables()) {
         if (t.id !== "__ui_notifier") engine.unregister(t.id);
       }
@@ -328,7 +460,12 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       await adapter.remove(SAVE_KEY);
       notify();
     },
-    isRunning: () => activity !== null && activity.phase !== "stopped",
+    isRunning(): boolean {
+      if (!activity) return false;
+      if (activity.kind === ACTIVITY_COMBAT_KIND) return activity.phase !== "stopped";
+      if (activity.kind === ACTIVITY_GATHER_KIND) return !activity.stopRequested;
+      return false;
+    },
     setSpeedMultiplier(m) {
       engine.speedMultiplier = m;
       notify();
@@ -343,7 +480,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   if (typeof window !== "undefined") {
     (window as unknown as { __game: GameStore }).__game = store;
-    // Best-effort save on tab close.
     window.addEventListener("beforeunload", () => {
       try {
         persistNow();
@@ -354,8 +490,18 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   }
 
   if (opts.autoLoad !== false) {
-    void tryLoad();
+    void tryLoad().then((loaded) => {
+      // If there was no save, pre-populate a new game with the hero + the
+      // default starting stage so the UI isn't empty.
+      if (!loaded) {
+        ensureHero();
+        enterStage(forestLv1.id);
+      }
+    });
   }
+
+  // Silence "unused" warnings for imports only referenced above.
+  void copperMine;
 
   return store;
 }

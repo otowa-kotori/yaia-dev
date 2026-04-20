@@ -7,8 +7,12 @@ import type {
   AttrId,
   EffectDef,
   EffectId,
+  ItemDef,
+  ItemId,
   MonsterDef,
   MonsterId,
+  ResourceNodeDef,
+  ResourceNodeId,
   SkillDef,
   SkillId,
   StageDef,
@@ -151,6 +155,23 @@ export const miningSkill: SkillDef = {
   maxLevel: 99,
 };
 
+// ---------- Common fixture items + resource nodes ----------
+
+export const testOreItem: ItemDef = {
+  id: "item.ore.test" as ItemId,
+  name: "Test Ore",
+  stackable: true,
+};
+
+export const testVein: ResourceNodeDef = {
+  id: "node.test_vein" as ResourceNodeId,
+  name: "Test Vein",
+  skill: miningSkill.id,
+  swingTicks: 3,
+  xpPerSwing: 4,
+  drops: [{ itemId: testOreItem.id, chance: 1, minQty: 1, maxQty: 2 }],
+};
+
 // ---------- Common fixture stages ----------
 
 export const forestStage: StageDef = {
@@ -160,6 +181,13 @@ export const forestStage: StageDef = {
   monsters: [slimeMonster.id],
   waveSize: 1,
   waveIntervalTicks: 5,
+};
+
+export const mineStage: StageDef = {
+  id: "stage.mine.test" as StageId,
+  name: "Test Mine",
+  mode: "solo",
+  resourceNodes: [testVein.id],
 };
 
 // ---------- Loader ----------
@@ -186,8 +214,15 @@ export function loadFixtureContent(): ContentDb {
     skills: {
       [miningSkill.id]: miningSkill,
     },
+    items: {
+      [testOreItem.id]: testOreItem,
+    },
+    resourceNodes: {
+      [testVein.id]: testVein,
+    },
     stages: {
       [forestStage.id]: forestStage,
+      [mineStage.id]: mineStage,
     },
   };
   setContent(db);

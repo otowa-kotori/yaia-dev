@@ -25,8 +25,10 @@ import type {
   Character,
   Enemy,
   PlayerCharacter,
+  ResourceNode,
   Side,
 } from "./types";
+import type { ResourceNodeDef } from "../content/types";
 
 // ---------- PlayerCharacter factory ----------
 
@@ -107,6 +109,25 @@ export function createEnemy(opts: CreateEnemyOptions): Enemy {
   e.currentHp = getAttrFromSet(e.attrs, ATTR.MAX_HP, opts.attrDefs);
   e.currentMp = getAttrFromSet(e.attrs, ATTR.MAX_MP, opts.attrDefs);
   return e;
+}
+
+// ---------- ResourceNode factory ----------
+
+export interface CreateResourceNodeOptions {
+  /** Stable world-unique id (e.g. "node.copper_vein.1"). */
+  instanceId: string;
+  def: ResourceNodeDef;
+}
+
+export function createResourceNode(
+  opts: CreateResourceNodeOptions,
+): ResourceNode {
+  return {
+    id: opts.instanceId,
+    name: opts.def.name,
+    kind: "resource_node",
+    defId: opts.def.id,
+  };
 }
 
 // ---------- Derived-state rebuild ----------

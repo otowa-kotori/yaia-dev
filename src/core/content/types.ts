@@ -13,6 +13,7 @@ import type { FormulaRef } from "../formula/types";
 // ---------- Branded ID types ----------
 // Brands are compile-time only; at runtime they're plain strings.
 
+export type ResourceNodeId = string & { readonly __brand: "ResourceNodeId" };
 export type ItemId = string & { readonly __brand: "ItemId" };
 export type MonsterId = string & { readonly __brand: "MonsterId" };
 export type AbilityId = string & { readonly __brand: "AbilityId" };
@@ -142,18 +143,26 @@ export interface SkillDef {
 
 export type StageMode = "solo" | "party";
 
+/** Scene manifest. A Stage can contain any mix of combat waves and
+ *  resource nodes; which of those the player actually engages with is
+ *  decided by the Activity they start. */
 export interface StageDef {
   id: StageId;
   name: string;
   mode: StageMode;
-  /** Monsters that may spawn. A wave picks uniformly at random from this list. */
-  monsters: MonsterId[];
-  /** How many enemies spawn per wave. MVP: 1. */
+  // ---------- Combat aspect (optional) ----------
+  /** Monster pool. A combat-capable stage pulls waves from this list. */
+  monsters?: MonsterId[];
+  /** How many enemies spawn per wave. Default 1. */
   waveSize?: number;
   /** Ticks between a wave being cleared and the next wave spawning. */
   waveIntervalTicks?: number;
   /** Which skill's XP this stage grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
+  // ---------- Gather aspect (optional) ----------
+  /** Resource node instances to spawn at stage enter. Each entry becomes one
+   *  ResourceNode actor; use the same nodeDefId twice to get two veins. */
+  resourceNodes?: ResourceNodeId[];
 }
 
 // ---------- Recipes ----------
@@ -171,6 +180,31 @@ export interface RecipeDef {
   outputs: { itemId: ItemId; qty: number }[];
   /** XP gained per production. */
   xpReward: number;
+}
+
+// ---------- ResourceNodes (life skill harvest sites) ----------
+
+export interface ResourceNodeDrop {
+  itemId: ItemId;
+  /** Probability of this entry rolling a hit on a swing. */
+  chance: number;
+  minQty: number;
+  maxQty: number;
+}
+
+export interface ResourceNodeDef {
+  id: ResourceNodeId;
+  name: string;
+  /** Skill trained by gathering here. */
+  skill: SkillId;
+  /** Minimum skill level to interact. Default: 1 (no gate). */
+  requiredLevel?: number;
+  /** Ticks per swing. Fixed at MVP; future: formula based on skill / tool. */
+  swingTicks: number;
+  /** Loot table rolled on every successful swing. */
+  drops: ResourceNodeDrop[];
+  /** Skill XP granted per swing. */
+  xpPerSwing: number;
 }
 
 // ---------- Talents ----------
@@ -198,6 +232,7 @@ export interface ContentDb {
   recipes: Readonly<Record<string, RecipeDef>>;
   talents: Readonly<Record<string, TalentDef>>;
   attributes: Readonly<Record<string, AttrDef>>;
+  resourceNodes: Readonly<Record<string, ResourceNodeDef>>;
   /** Formulas referenced by other content (xp curves, damage, etc). */
   formulas: Readonly<Record<string, FormulaRef>>;
 }
@@ -214,6 +249,7 @@ export function emptyContentDb(): ContentDb {
     recipes: {},
     talents: {},
     attributes: {},
+    resourceNodes: {},
     formulas: {},
   };
 }

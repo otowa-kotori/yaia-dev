@@ -23,7 +23,7 @@ import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
 import type { Character } from "../actor";
-import { isAlive, isEnemy, isPlayer } from "../actor";
+import { isAlive, isCharacter, isEnemy, isPlayer } from "../actor";
 import { tryUseAbility, type CastResult } from "../ability";
 import { tickActiveEffects } from "../effect";
 import {
@@ -268,11 +268,11 @@ export function resolveParticipants(
 ): Character[] {
   // The order returned MUST be stable across calls because the scheduler
   // uses participant array index as a tie-break. Preserve participantIds order.
+  // Non-character actors (ResourceNode etc) are silently ignored — they
+  // can't be in a battle even if their id accidentally shows up.
   const byId = new Map<string, Character>();
   for (const a of state.actors) {
-    // Only characters participate in battles (Actor root has no HP).
-    // All current actor kinds are characters; narrow when more kinds appear.
-    byId.set(a.id, a as Character);
+    if (isCharacter(a)) byId.set(a.id, a);
   }
   const out: Character[] = [];
   for (const id of battle.participantIds) {

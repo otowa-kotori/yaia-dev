@@ -26,6 +26,10 @@ export function patchContent(partial: Partial<ContentDb>): void {
     recipes: { ...current.recipes, ...(partial.recipes ?? {}) },
     talents: { ...current.talents, ...(partial.talents ?? {}) },
     attributes: { ...current.attributes, ...(partial.attributes ?? {}) },
+    resourceNodes: {
+      ...current.resourceNodes,
+      ...(partial.resourceNodes ?? {}),
+    },
     formulas: { ...current.formulas, ...(partial.formulas ?? {}) },
   };
 }
@@ -80,6 +84,11 @@ export function getTalent(id: string) {
 export function getAttr(id: string) {
   const v = current.attributes[id];
   if (!v) throw new Error(`content: no attribute "${id}"`);
+  return v;
+}
+export function getResourceNode(id: string) {
+  const v = current.resourceNodes[id];
+  if (!v) throw new Error(`content: no resourceNode "${id}"`);
   return v;
 }
 export function getFormula(id: string) {
