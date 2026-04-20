@@ -14,3 +14,6 @@ export * as attribute from "./attribute";
 export * as actor from "./actor";
 export * as effect from "./effect";
 export * as ability from "./ability";
+export * as combat from "./combat";
+export * as intent from "./intent";
+export * as activity from "./activity";
