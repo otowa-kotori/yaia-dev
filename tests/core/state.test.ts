@@ -9,6 +9,7 @@ describe("state", () => {
     expect(s.rngState).toBe(12345);
     expect(s.tick).toBe(0);
     expect(s.actors).toEqual([]);
+    expect(s.battles).toEqual([]);
     expect(s.inventories[SHARED_INVENTORY_KEY]).toEqual([]);
     expect(s.worldActivities).toEqual([]);
     expect(s.flags).toEqual({});

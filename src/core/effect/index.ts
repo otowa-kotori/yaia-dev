@@ -19,7 +19,7 @@ import type { GameEventBus } from "../events";
 import type { ActiveEffect, GameState, ItemStack } from "../state/types";
 import type { Character, PlayerCharacter } from "../actor";
 import { getAttr, isPlayer } from "../actor";
-import { addModifiers, removeModifiersBySource } from "../attribute";
+import { addModifiers, ATTR, removeModifiersBySource } from "../attribute";
 import { grantCharacterXp, grantSkillXp } from "../progression";
 
 export interface EffectContext {
@@ -109,7 +109,7 @@ function applyInstantPulse(
       amount: magnitude,
     });
   } else if (mode === "heal" && magnitude > 0) {
-    const maxHp = getAttr(target, "attr.max_hp", ctx.attrDefs);
+    const maxHp = getAttr(target, ATTR.MAX_HP, ctx.attrDefs);
     target.currentHp = Math.min(maxHp, target.currentHp + magnitude);
   }
 
@@ -168,22 +168,26 @@ function buildFormulaContext(
   target: Character,
   attrDefs: Readonly<Record<string, AttrDef>>,
 ): FormulaContext {
-  // Variables available to formulas. Source-side attrs are raw names ("atk", "def");
-  // target-side are prefixed with "target_" so authors can read both.
+  // Variables available to formulas. Names here are part of the FORMULA
+  // DATA CONTRACT — designers reference them by string in content JSON
+  // (e.g. `{ kind: "linear", xVar: "target_def" }`). Treat these names as
+  // stable; renaming is a content migration, not a refactor. Source-side
+  // attrs are raw names ("atk", "def"); target-side are prefixed with
+  // "target_" so authors can read both.
   return {
     vars: {
-      atk: getAttr(source, "attr.atk", attrDefs),
-      def: getAttr(target, "attr.def", attrDefs),
-      source_atk: getAttr(source, "attr.atk", attrDefs),
-      source_int: getAttr(source, "attr.int", attrDefs),
-      source_str: getAttr(source, "attr.str", attrDefs),
-      source_dex: getAttr(source, "attr.dex", attrDefs),
-      source_wis: getAttr(source, "attr.wis", attrDefs),
-      source_max_hp: getAttr(source, "attr.max_hp", attrDefs),
+      atk: getAttr(source, ATTR.ATK, attrDefs),
+      def: getAttr(target, ATTR.DEF, attrDefs),
+      source_atk: getAttr(source, ATTR.ATK, attrDefs),
+      source_int: getAttr(source, ATTR.INT, attrDefs),
+      source_str: getAttr(source, ATTR.STR, attrDefs),
+      source_dex: getAttr(source, ATTR.DEX, attrDefs),
+      source_wis: getAttr(source, ATTR.WIS, attrDefs),
+      source_max_hp: getAttr(source, ATTR.MAX_HP, attrDefs),
       source_current_hp: source.currentHp,
-      target_max_hp: getAttr(target, "attr.max_hp", attrDefs),
+      target_max_hp: getAttr(target, ATTR.MAX_HP, attrDefs),
       target_current_hp: target.currentHp,
-      target_def: getAttr(target, "attr.def", attrDefs),
+      target_def: getAttr(target, ATTR.DEF, attrDefs),
     },
   };
 }

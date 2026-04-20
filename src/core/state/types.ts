@@ -11,6 +11,7 @@
 
 import type { SkillId } from "../content/types";
 import type { Actor } from "../actor/types";
+import type { Battle } from "../combat/battle";
 
 // ---------- Active effects ----------
 
@@ -73,6 +74,9 @@ export interface GameState {
    * contain copies of the actors they fight with.
    */
   actors: Actor[];
+  /** Active battles indexed by id. Battle is plain data so it round-trips
+   *  through the save file. Activities reference battles by id. */
+  battles: Battle[];
   /** Inventories keyed by charId OR the literal "shared" key. */
   inventories: Record<string, ItemStack[]>;
   worldActivities: WorldActivityState[];
@@ -93,6 +97,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     rngState: seed >>> 0,
     tick: 0,
     actors: [],
+    battles: [],
     inventories: { [SHARED_INVENTORY_KEY]: [] },
     worldActivities: [],
     flags: {},

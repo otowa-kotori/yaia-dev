@@ -3,6 +3,7 @@
 
 import type { Character, PlayerCharacter } from "../core/actor";
 import { getAttr, isCharacter, isPlayer } from "../core/actor";
+import { ATTR } from "../core/attribute";
 import { xpProgressToNextLevel } from "../core/progression";
 import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
@@ -18,7 +19,12 @@ export function BattleView({ store }: { store: GameStore }) {
   // Always show hero (so XP/level is visible even when idle).
   const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
 
-  if (!activity || !activity.currentBattle) {
+  const battle =
+    activity && activity.currentBattleId
+      ? s.state.battles.find((b) => b.id === activity.currentBattleId) ?? null
+      : null;
+
+  if (!activity || !battle) {
     return (
       <div>
         {heroRow}
@@ -33,7 +39,6 @@ export function BattleView({ store }: { store: GameStore }) {
     );
   }
 
-  const battle = activity.currentBattle;
   const participants = battle.participantIds
     .map((id) => s.state.actors.find((a) => a.id === id))
     .filter((a): a is Character => a !== undefined && isCharacter(a));
@@ -62,7 +67,7 @@ function HeroCard({
   hero: PlayerCharacter;
   activity: GameStore["activity"];
 }) {
-  const maxHp = Math.max(1, getAttr(hero, "attr.max_hp", ATTR_DEFS));
+  const maxHp = Math.max(1, getAttr(hero, ATTR.MAX_HP, ATTR_DEFS));
   const hpPct = Math.max(0, Math.min(1, hero.currentHp / maxHp));
   const dead = hero.currentHp <= 0;
   const xp = xpProgressToNextLevel(hero.level, hero.exp, hero.xpCurve);
@@ -111,7 +116,7 @@ function HeroCard({
 }
 
 function ActorRow({ actor }: { actor: Character }) {
-  const maxHp = Math.max(1, getAttr(actor, "attr.max_hp", ATTR_DEFS));
+  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP, ATTR_DEFS));
   const hpPct = Math.max(0, Math.min(1, actor.currentHp / maxHp));
   const dead = actor.currentHp <= 0;
   return (

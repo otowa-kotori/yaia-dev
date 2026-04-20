@@ -28,10 +28,12 @@ import { tryUseAbility, type CastResult } from "../ability";
 import { tickActiveEffects } from "../effect";
 import {
   createSpeedSortedScheduler,
+  nextActor as schedulerNextActor,
+  onActionResolved as schedulerOnActionResolved,
   type SchedulerContext,
-  type TurnScheduler,
+  type SchedulerState,
 } from "./scheduler";
-import { RandomAttackIntent, type Intent } from "../intent";
+import { INTENT, resolveIntent } from "../intent";
 
 // ---------- Types ----------
 
@@ -52,7 +54,7 @@ export interface Battle {
   mode: StageMode;
   /** All actors involved. IDs only — resolved against GameState.actors. */
   participantIds: string[];
-  scheduler: TurnScheduler;
+  scheduler: SchedulerState;
   /** Ticks accumulated since the last action resolved. */
   ticksSinceLastAction: number;
   /** Ticks of inaction before the next actor is served. Controls visible pacing. */
@@ -60,18 +62,16 @@ export interface Battle {
   outcome: BattleOutcome;
   /** Ring-free append-only log. Callers trim when they ship logs to the UI. */
   log: BattleLogEntry[];
-  /** Per-actor default Intent. Falls back to RandomAttackIntent. */
-  intents: Record<string, Intent>;
+  /** Per-actor intent id. Looked up in the intent registry at dispatch time.
+   *  Actors missing here fall back to INTENT.RANDOM_ATTACK. */
+  intents: Record<string, string>;
   /** Tick at which the battle started. */
   startedAtTick: number;
   /** Tick at which the battle ended (set once outcome != "ongoing"). */
   endedAtTick: number | null;
-  /** Optional callback fired exactly once per participant death. Used by
-   *  CombatActivity to grant XP/loot to the killer. */
-  onDeath?: (victim: Character, ctx: TickBattleContext) => void;
-  /** Internal: ids already reported via onDeath, so we don't double-fire.
-   *  Plain array (not Set) to keep Battle JSON-serializable for the runtime
-   *  debug dump, even though Battle itself is not part of the save file. */
+  /** Internal: ids already reported as dead, so we don't double-emit kill
+   *  events or let the activity layer double-grant rewards. Plain array (not
+   *  Set) to keep Battle JSON-serializable so it can live in GameState. */
   deathsReported: string[];
 }
 
@@ -79,11 +79,10 @@ export interface CreateBattleOptions {
   id: string;
   mode: StageMode;
   participantIds: string[];
-  scheduler?: TurnScheduler;
+  scheduler?: SchedulerState;
   actionDelayTicks?: number;
-  intents?: Record<string, Intent>;
+  intents?: Record<string, string>;
   startedAtTick: number;
-  onDeath?: (victim: Character, ctx: TickBattleContext) => void;
 }
 
 export function createBattle(opts: CreateBattleOptions): Battle {
@@ -105,7 +104,6 @@ export function createBattle(opts: CreateBattleOptions): Battle {
     intents: opts.intents ?? {},
     startedAtTick: opts.startedAtTick,
     endedAtTick: null,
-    onDeath: opts.onDeath,
     deathsReported: [],
   };
 }
@@ -140,7 +138,7 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
 
   const participants = resolveParticipants(battle, ctx.state);
   const schedCtx: SchedulerContext = { attrDefs: ctx.attrDefs };
-  const actor = battle.scheduler.nextActor(participants, schedCtx);
+  const actor = schedulerNextActor(battle.scheduler, participants, schedCtx);
 
   if (!actor) {
     // No one can act — terminate in whatever state we're in.
@@ -165,7 +163,8 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
   }
 
   // Decide intent → validate + dispatch.
-  const intent = battle.intents[actor.id] ?? RandomAttackIntent;
+  const intentId = battle.intents[actor.id] ?? INTENT.RANDOM_ATTACK;
+  const intent = resolveIntent(intentId);
   const plan = intent(actor, { participants, rng: ctx.rng });
 
   if (!plan) {
@@ -175,7 +174,7 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
       actorId: actor.id,
       note: "no valid plan",
     });
-    battle.scheduler.onActionResolved?.(actor);
+    schedulerOnActionResolved(battle.scheduler, actor);
     maybeTerminate(battle, ctx);
     return;
   }
@@ -215,7 +214,7 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
     }
   }
 
-  battle.scheduler.onActionResolved?.(actor);
+  battle.scheduler && schedulerOnActionResolved(battle.scheduler, actor);
   maybeTerminate(battle, ctx);
 }
 
@@ -253,8 +252,12 @@ function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
   // kill event: we don't always know who delivered the final blow cleanly
   // (AoE, DoT). Emit with attackerId = "" for now; callers that care can
   // correlate to the most recent `damage` event.
+  //
+  // Per-kill rewards are handled by listeners on the bus (e.g. the active
+  // CombatActivity subscribes to 'kill' events and grants XP). Keeping this
+  // out of Battle itself avoids non-serializable callbacks on the Battle
+  // struct — Battle now lives in GameState and must be plain data.
   ctx.bus.emit("kill", { attackerId: "", victimId: victim.id });
-  battle.onDeath?.(victim, ctx);
 }
 
 // ---------- Resolution ----------

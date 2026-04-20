@@ -25,6 +25,7 @@ import {
   type PlayerCharacter,
 } from "../../src/core/actor";
 import type { FormulaRef } from "../../src/core/formula";
+import { registerBuiltinIntents } from "../../src/core/intent";
 
 // ---------- Shared attribute definitions ----------
 
@@ -190,6 +191,8 @@ export function loadFixtureContent(): ContentDb {
     },
   };
   setContent(db);
+  // Tests relying on Battle dispatching intents need the registry populated.
+  registerBuiltinIntents();
   return db;
 }
 

@@ -9,6 +9,18 @@
 // and expose the Intent type so content can register more. A future
 // PriorityListIntent can read a rules table from content data without
 // changing Battle or tryUseAbility.
+//
+// Registry model (added for save-file support):
+//   - Intents are functions. Functions can't be JSON-serialized, so Battle
+//     can't store them directly if we want battles to live in GameState.
+//   - Resolution is via a module-level registry keyed by string ID. Battle
+//     stores `intents: Record<actorId, intentId>`; at action time, the
+//     dispatcher looks up the function by id.
+//   - Registration happens once at boot (see `registerBuiltinIntents`).
+//     Fallback on unknown id throws — alpha-stage loudness.
+//   - A PlayerCharacter with a custom AI could store its own intent id on
+//     the actor (future: `actor.intent: string`). For MVP we install the
+//     same intent id on every participant and done.
 
 import type { Character } from "../actor";
 import { isAlive } from "../actor";
@@ -31,6 +43,44 @@ export interface IntentAction {
 }
 
 export type Intent = (actor: Character, ctx: IntentContext) => IntentAction | null;
+
+// ---------- Canonical intent IDs ----------
+
+export const INTENT = {
+  /** RandomAttackIntent — default auto-attack. */
+  RANDOM_ATTACK: "intent.random_attack",
+} as const;
+
+// ---------- Registry ----------
+//
+// Module-level map of id -> Intent function. Populated by
+// `registerBuiltinIntents()` on boot. Third-party or content-defined intents
+// can `registerIntent(id, fn)` to add more.
+//
+// Kept private; callers resolve via `resolveIntent(id)` which throws on
+// unknown ids (alpha-stage: fail loudly).
+
+const INTENT_REGISTRY = new Map<string, Intent>();
+
+export function registerIntent(id: string, fn: Intent): void {
+  INTENT_REGISTRY.set(id, fn);
+}
+
+export function resolveIntent(id: string): Intent {
+  const fn = INTENT_REGISTRY.get(id);
+  if (!fn) throw new Error(`intent: unknown id "${id}"`);
+  return fn;
+}
+
+/** Returns true if an intent with this id is registered. */
+export function hasIntent(id: string): boolean {
+  return INTENT_REGISTRY.has(id);
+}
+
+/** Test / dev hook. Clears the registry. */
+export function resetIntents(): void {
+  INTENT_REGISTRY.clear();
+}
 
 // ---------- Helpers ----------
 
@@ -71,3 +121,11 @@ export const RandomAttackIntent: Intent = (actor, ctx) => {
   const target = ctx.rng.pick(enemies);
   return { abilityId, targets: [target] };
 };
+
+// ---------- Boot ----------
+
+/** Install the built-in intents. Call once from game boot. Safe to call more
+ *  than once (idempotent overwrite). */
+export function registerBuiltinIntents(): void {
+  registerIntent(INTENT.RANDOM_ATTACK, RandomAttackIntent);
+}

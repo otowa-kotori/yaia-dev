@@ -1,111 +1,146 @@
 // Turn scheduler.
 //
-// The TurnScheduler interface hides the "who acts next" decision behind an
-// abstraction so Combat itself is agnostic to turn-based vs ATB vs speed-
-// weighted models. Default implementation: SpeedSortedScheduler — a classic
-// JRPG "one action per unit per round, ordered by speed desc" model.
+// The scheduler hides the "who acts next" decision behind an abstraction so
+// Combat itself is agnostic to turn-based vs ATB vs speed-weighted models.
+// Default implementation: SpeedSortedScheduler — a classic JRPG "one action
+// per unit per round, ordered by speed desc" model.
 //
 // Duration units throughout combat are ticks — scheduler does NOT expose a
 // "round" concept externally. If it needs to reshuffle every round that's an
 // internal detail.
+//
+// JSON-safety: schedulers are plain DATA, not objects with method closures.
+// A `SchedulerState` carries the state; a pure function (dispatched by
+// `kind`) advances it. This split lets Battle live inside GameState and
+// round-trip through a save file.
+//
+// Adding a new scheduler kind:
+//   1. Extend the SchedulerState union with a new shape.
+//   2. Add a case in nextActor() below.
+//
+// No runtime registration table — switch-dispatch keeps the set of
+// implementations visible at a glance. Upgrade to a registry when
+// third-party mods need to add schedulers.
 
 import type { AttrDef } from "../content/types";
 import type { Character } from "../actor";
 import { getAttr, isAlive } from "../actor";
+import { ATTR } from "../attribute";
 
-/** Input to scheduler. Scheduler is stateless in its interface; state lives
- *  in the object returned by createScheduler().  */
+/** Input to scheduler dispatchers. Schedulers are stateless in their function
+ *  interface; the live state lives in the SchedulerState passed in. */
 export interface SchedulerContext {
   attrDefs: Readonly<Record<string, AttrDef>>;
 }
 
-/** Live scheduler state. Implementations can extend this as needed. */
-export interface TurnScheduler {
-  readonly kind: string;
-  /**
-   * Return the next actor to act, or null if no one can currently act
-   * (e.g. round boundary reached and battle already over). Implementations
-   * MUST skip dead participants. May mutate internal state (e.g. advance the
-   * current-round pointer).
-   */
-  nextActor(
-    participants: readonly Character[],
-    ctx: SchedulerContext,
-  ): Character | null;
-
-  /** Called after an action resolves, in case the scheduler wants to advance
-   *  its internal pointer. For SpeedSortedScheduler this is a no-op because
-   *  nextActor itself advances. */
-  onActionResolved?(actor: Character): void;
-}
-
 // ---------- SpeedSortedScheduler ----------
 //
-// Classic JRPG ordering:
-//   * At the start of each round, all alive participants are listed in
-//     descending Speed order (ties broken by participant index for stability).
-//   * nextActor walks that list in order, skipping corpses (participants who
-//     died mid-round don't get to act).
-//   * When the list is exhausted, a new round is built from the current
-//     participant slice.
+// Classic JRPG ordering, re-evaluated on every call:
+//   * nextActor picks, among alive participants who have NOT yet acted this
+//     round, the one with the highest current Speed. Ties broken by
+//     participant-list index for determinism.
+//   * That actor is marked as having acted (stored in `actedThisRound`) and
+//     returned.
+//   * When every alive participant has acted, the round ends — `actedThisRound`
+//     is cleared and the next call picks from the full alive set again.
 //
-// The scheduler does not "own" the participant list; it's re-passed each
-// call so the caller can add/remove units (e.g. summons) freely. Ordering
-// is recomputed per round, so a speed buff that lands mid-round takes
-// effect next round.
+// Re-evaluating each call (rather than freezing a per-round order) means a
+// speed buff applied DURING a round takes effect on the very next action,
+// not the next round. This matches player expectations for buffs like "next
+// turn: +speed".
 
-interface SpeedSortedState extends TurnScheduler {
-  readonly kind: "speed_sorted";
-  /** Ordered ids for the current round. */
-  order: string[];
-  /** Index into `order` of the next actor to serve. */
-  cursor: number;
+export interface SpeedSortedSchedulerState {
+  kind: "speed_sorted";
+  /** Actor ids that have already acted in the current round. Cleared when a
+   *  round ends. */
+  actedThisRound: string[];
 }
 
-export function createSpeedSortedScheduler(): TurnScheduler {
-  const state: SpeedSortedState = {
-    kind: "speed_sorted",
-    order: [],
-    cursor: 0,
-    nextActor(participants, ctx) {
-      return nextActorSpeedSorted(state, participants, ctx);
-    },
-  };
-  return state;
+export type SchedulerState = SpeedSortedSchedulerState;
+
+export function createSpeedSortedScheduler(): SpeedSortedSchedulerState {
+  return { kind: "speed_sorted", actedThisRound: [] };
 }
 
-function nextActorSpeedSorted(
-  state: SpeedSortedState,
+/**
+ * Return the next actor to act, or null if no one can currently act.
+ * Mutates `state`. Dispatchers MUST skip dead participants.
+ */
+export function nextActor(
+  state: SchedulerState,
   participants: readonly Character[],
   ctx: SchedulerContext,
 ): Character | null {
-  const byId = new Map(participants.map((p) => [p.id, p]));
+  switch (state.kind) {
+    case "speed_sorted":
+      return nextActorSpeedSorted(state, participants, ctx);
+  }
+}
 
-  // Walk the current round's remaining slots; skip dead / missing participants.
-  while (state.cursor < state.order.length) {
-    const id = state.order[state.cursor++]!;
-    const p = byId.get(id);
-    if (p && isAlive(p)) return p;
+/** Called after an action resolves, in case the scheduler wants to advance
+ *  its internal pointer. For SpeedSortedScheduler this is a no-op because
+ *  nextActor already marks the actor as acted before returning. Kept for
+ *  symmetry with future ATB-style schedulers that bank progress per-actor. */
+export function onActionResolved(
+  _state: SchedulerState,
+  _actor: Character,
+): void {
+  /* no-op */
+}
+
+// ---------- SpeedSorted impl ----------
+
+function nextActorSpeedSorted(
+  state: SpeedSortedSchedulerState,
+  participants: readonly Character[],
+  ctx: SchedulerContext,
+): Character | null {
+  // Step 1: drop acted-this-round ids that no longer correspond to alive
+  // participants (e.g. actor died after acting — shouldn't affect logic, but
+  // keeps the set tidy and avoids unbounded growth across reshuffles).
+  {
+    const aliveIds = new Set(participants.filter(isAlive).map((p) => p.id));
+    if (state.actedThisRound.some((id) => !aliveIds.has(id))) {
+      state.actedThisRound = state.actedThisRound.filter((id) => aliveIds.has(id));
+    }
   }
 
-  // Round ended. Build a new one from alive participants, sorted by speed desc.
-  const alive = participants.filter(isAlive);
-  if (alive.length === 0) return null;
+  // Step 2: candidates = alive AND not yet acted.
+  const acted = new Set(state.actedThisRound);
+  let candidates = participants.filter((p) => isAlive(p) && !acted.has(p.id));
 
-  // Stable sort: annotate with original index so ties fall in participant order.
-  const annotated = alive.map((c, i) => ({
-    c,
-    speed: getAttr(c, "attr.speed", ctx.attrDefs),
-    i,
-  }));
-  annotated.sort((a, b) => {
-    if (b.speed !== a.speed) return b.speed - a.speed;
-    return a.i - b.i;
-  });
+  // Round over — reset and try again with the full alive set.
+  if (candidates.length === 0) {
+    state.actedThisRound = [];
+    candidates = participants.filter(isAlive);
+    if (candidates.length === 0) return null;
+  }
 
-  state.order = annotated.map((x) => x.c.id);
-  state.cursor = 0;
+  // Step 3: pick the fastest, ties broken by participant-list index.
+  // Build index map from the original participants order for stable tie-break.
+  const indexOf = new Map<string, number>();
+  for (let i = 0; i < participants.length; i++) {
+    indexOf.set(participants[i]!.id, i);
+  }
 
-  // Serve the head of the new round.
-  return nextActorSpeedSorted(state, participants, ctx);
+  let bestIdx = -1;
+  let bestSpeed = -Infinity;
+  let bestOrder = Infinity;
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    const speed = getAttr(c, ATTR.SPEED, ctx.attrDefs);
+    const order = indexOf.get(c.id) ?? i;
+    if (
+      speed > bestSpeed ||
+      (speed === bestSpeed && order < bestOrder)
+    ) {
+      bestSpeed = speed;
+      bestOrder = order;
+      bestIdx = i;
+    }
+  }
+
+  const chosen = candidates[bestIdx]!;
+  state.actedThisRound.push(chosen.id);
+  return chosen;
 }

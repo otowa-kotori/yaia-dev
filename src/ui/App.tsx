@@ -63,6 +63,17 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
           {m === 0 ? "pause" : `${m}x`}
         </button>
       ))}
+      <span style={{ flex: 1 }} />
+      <button
+        onClick={() => {
+          if (confirm("Clear save and reset? This cannot be undone.")) {
+            void s.clearSaveAndReset();
+          }
+        }}
+        style={{ ...btnStyle(false, true), borderColor: "#733" }}
+      >
+        clear save
+      </button>
     </div>
   );
 }

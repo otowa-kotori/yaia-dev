@@ -15,12 +15,28 @@
 //   stopped     — terminal; tick engine auto-unregisters via isDone().
 //
 // Battle lifetime:
-//   A fresh Battle instance is created per wave. The previous Battle's
-//   deathsReported and log are discarded (we don't need them across waves).
-//   The owner character is reused across waves; its currentHp / cooldowns /
-//   activeEffects carry over. Enemies spawn on demand via createEnemy and
-//   are pushed into GameState.actors. When a wave is cleared, defeated
-//   enemies are removed from state.actors.
+//   A fresh Battle instance is created per wave and pushed into
+//   GameState.battles. The previous Battle's deathsReported and log are
+//   discarded (we don't need them across waves). The owner character is
+//   reused across waves; its currentHp / cooldowns / activeEffects carry
+//   over. Enemies spawn on demand via createEnemy and are pushed into
+//   GameState.actors. When a wave is cleared, defeated enemies are removed
+//   from state.actors.
+//
+// Kill rewards:
+//   The activity subscribes to the 'kill' event on the bus at construction
+//   time. Each kill triggers an instant reward Effect on the hero — this
+//   flows through applyEffect, so loot, XP, crit bonuses, etc. share one
+//   codepath. The subscription is torn down when the activity transitions
+//   to 'stopped'.
+//
+// Save/load:
+//   The activity is a runtime-only Tickable; it is NOT persisted directly.
+//   What persists is the PlayerCharacter.activity field (kind + data)
+//   holding the stageId + phase + lastTransitionTick. On load, store code
+//   calls createCombatActivity again with the saved stageId, and the
+//   battle (which IS persisted via GameState.battles) resumes naturally
+//   because the activity looks it up by id.
 
 import {
   createEnemy,
@@ -31,10 +47,9 @@ import {
   type Enemy,
   type PlayerCharacter,
 } from "../actor";
-import type { AttrDef, StageDef } from "../content/types";
+import { ATTR } from "../attribute";
+import type { StageDef } from "../content/types";
 import { getMonster, getStage } from "../content/registry";
-import type { GameEventBus } from "../events";
-import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
 import {
   createBattle,
@@ -42,6 +57,7 @@ import {
   type Battle,
   type TickBattleContext,
 } from "../combat";
+import { INTENT } from "../intent";
 import { applyEffect, type EffectContext } from "../effect";
 import type { CharacterActivity, ActivityContext } from "./types";
 
@@ -59,6 +75,14 @@ export interface CombatActivityOptions {
   waveIntervalTicks?: number;
   /** actionDelayTicks passed to each Battle. Default 8 (0.8s per turn). */
   actionDelayTicks?: number;
+  /** Pre-set initial phase / wave index / battle id. Used on load-from-save
+   *  to resume an in-progress activity. Defaults spawn a fresh wave. */
+  resume?: {
+    phase: CombatActivityPhase;
+    waveIndex: number;
+    lastTransitionTick: number;
+    currentBattleId: string | null;
+  };
 }
 
 export type CombatActivityPhase =
@@ -71,7 +95,8 @@ export interface CombatActivity extends CharacterActivity {
   readonly kind: typeof ACTIVITY_COMBAT_KIND;
   readonly stageId: string;
   phase: CombatActivityPhase;
-  currentBattle: Battle | null;
+  /** Id of the current Battle in GameState.battles, if any. */
+  currentBattleId: string | null;
   /** Monotonically increasing wave counter; starts at 1 for the first wave. */
   waveIndex: number;
   /** Tick at which the last wave ended — used to time waveDelay / recovery. */
@@ -91,17 +116,19 @@ export function createCombatActivity(opts: CombatActivityOptions): CombatActivit
 
   const id = `combat:${opts.ownerCharacterId}:${opts.stageId}`;
 
-  // Spawn first wave at start.
+  const initialCtx = opts.ctxProvider();
+  const resume = opts.resume;
+
   const activity: CombatActivity = {
     id,
     kind: ACTIVITY_COMBAT_KIND,
-    startedAtTick: opts.ctxProvider().currentTick,
+    startedAtTick: initialCtx.currentTick,
     ownerCharacterId: opts.ownerCharacterId,
     stageId: opts.stageId,
-    phase: "fighting",
-    currentBattle: null,
-    waveIndex: 0,
-    lastTransitionTick: opts.ctxProvider().currentTick,
+    phase: resume?.phase ?? "fighting",
+    currentBattleId: resume?.currentBattleId ?? null,
+    waveIndex: resume?.waveIndex ?? 0,
+    lastTransitionTick: resume?.lastTransitionTick ?? initialCtx.currentTick,
     stopRequested: false,
 
     tick() {
@@ -118,10 +145,20 @@ export function createCombatActivity(opts: CombatActivityOptions): CombatActivit
     },
   };
 
-  // Spawn the first wave immediately so subscribers see a populated battle.
-  {
-    const ctx = opts.ctxProvider();
-    spawnNextWave(activity, stage, ctx, {
+  // Subscribe to 'kill' events for the lifetime of the activity so we can
+  // grant rewards to the hero. Torn down in enterStopped().
+  const disposeKill = initialCtx.bus.on("kill", (payload) => {
+    if (activity.phase === "stopped") return;
+    onParticipantKilled(activity, payload.victimId, opts.ctxProvider());
+  });
+  // Stash the disposer on the activity so enterStopped can invoke it.
+  (activity as unknown as { __disposeKill: () => void }).__disposeKill =
+    disposeKill;
+
+  // If we're not resuming, spawn the first wave immediately so subscribers
+  // see a populated battle.
+  if (!resume) {
+    spawnNextWave(activity, stage, initialCtx, {
       actionDelayTicks: actionDelay,
     });
   }
@@ -160,11 +197,11 @@ function stepPhase(
 
 function stepFighting(
   activity: CombatActivity,
-  stage: StageDef,
+  _stage: StageDef,
   ctx: ActivityContext,
-  params: StepParams,
+  _params: StepParams,
 ): void {
-  const battle = activity.currentBattle;
+  const battle = lookupBattle(activity, ctx.state);
   if (!battle) {
     // Shouldn't happen — fighting without a battle means setup logic broke.
     enterStopped(activity, ctx);
@@ -184,11 +221,12 @@ function stepFighting(
 
   if (battle.outcome === "ongoing") return;
 
-  // Wave resolved. Clean up defeated enemies.
+  // Wave resolved. Clean up defeated enemies + the concluded battle record.
   removeDefeatedEnemies(battle, ctx.state);
+  removeBattle(ctx.state, battle.id);
 
   const hero = findHero(activity, ctx.state);
-  activity.currentBattle = null;
+  activity.currentBattleId = null;
   activity.lastTransitionTick = ctx.currentTick;
 
   if (activity.stopRequested) {
@@ -233,7 +271,7 @@ function stepRecovering(
     return;
   }
 
-  const maxHp = getAttr(hero, "attr.max_hp", ctx.attrDefs);
+  const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
   if (maxHp <= 0) {
     enterStopped(activity, ctx);
     return;
@@ -288,16 +326,23 @@ function spawnNextWave(
     enemyIds.push(instanceId);
   }
 
+  // All participants get RANDOM_ATTACK by default. Explicit per-actor intents
+  // (boss scripts, tactical AIs) slot in via the intents map.
+  const intents: Record<string, string> = {};
+  intents[hero.id] = INTENT.RANDOM_ATTACK;
+  for (const eid of enemyIds) intents[eid] = INTENT.RANDOM_ATTACK;
+
   const battle = createBattle({
     id: `battle.${activity.id}.w${activity.waveIndex}`,
     mode: stage.mode,
     participantIds: [hero.id, ...enemyIds],
     actionDelayTicks: params.actionDelayTicks,
     startedAtTick: ctx.currentTick,
-    onDeath: (victim, bctx) => onParticipantDeath(victim, bctx, hero),
+    intents,
   });
 
-  activity.currentBattle = battle;
+  ctx.state.battles.push(battle);
+  activity.currentBattleId = battle.id;
   activity.phase = "fighting";
   activity.lastTransitionTick = ctx.currentTick;
 }
@@ -312,22 +357,38 @@ function removeDefeatedEnemies(battle: Battle, state: GameState): void {
   });
 }
 
-// ---------- Death rewards ----------
+function removeBattle(state: GameState, battleId: string): void {
+  state.battles = state.battles.filter((b) => b.id !== battleId);
+}
 
-/** When an enemy dies, grant the hero its xpReward by synthesizing an
- *  instant Effect and running it through the normal Effect pipeline. This
- *  keeps XP / loot / items flowing through ONE codepath (applyEffect), so
- *  future features — crit rewards, loot drops, conditional bonuses — plug
- *  in without another grant-foo helper. */
-function onParticipantDeath(
-  victim: Character,
-  bctx: TickBattleContext,
-  hero: PlayerCharacter,
+// ---------- Kill rewards ----------
+
+/** When an enemy participating in this activity's current battle dies, grant
+ *  the hero its xpReward by synthesizing an instant Effect and running it
+ *  through the normal Effect pipeline. This keeps XP / loot / items flowing
+ *  through ONE codepath (applyEffect), so future features — crit rewards,
+ *  loot drops, conditional bonuses — plug in without another grant-foo
+ *  helper. */
+function onParticipantKilled(
+  activity: CombatActivity,
+  victimId: string,
+  ctx: ActivityContext,
 ): void {
-  if (!isEnemy(victim)) return; // only enemy deaths reward the hero
+  // Only grant for kills in THIS activity's current battle; other bus
+  // listeners might run for other activities.
+  const battle = lookupBattle(activity, ctx.state);
+  if (!battle) return;
+  if (!battle.participantIds.includes(victimId)) return;
+
+  const victim = ctx.state.actors.find((a) => a.id === victimId) as
+    | Character
+    | undefined;
+  if (!victim || !isEnemy(victim)) return;
+
+  const hero = findHero(activity, ctx.state);
+  if (!hero) return;
 
   const enemy = victim as Enemy;
-  // Content is the source of truth; missing defs should throw loudly.
   const def = getMonster(enemy.defId);
   const xpReward = def.xpReward;
   if (xpReward <= 0) return;
@@ -341,11 +402,11 @@ function onParticipantDeath(
   };
 
   const ectx: EffectContext = {
-    state: bctx.state,
-    bus: bctx.bus,
-    rng: bctx.rng,
-    attrDefs: bctx.attrDefs,
-    currentTick: bctx.currentTick,
+    state: ctx.state,
+    bus: ctx.bus,
+    rng: ctx.rng,
+    attrDefs: ctx.attrDefs,
+    currentTick: ctx.currentTick,
   };
   applyEffect(rewardEffect, victim, hero, ectx);
 }
@@ -361,11 +422,21 @@ function findHero(
   return a;
 }
 
+function lookupBattle(activity: CombatActivity, state: GameState): Battle | null {
+  if (!activity.currentBattleId) return null;
+  return state.battles.find((b) => b.id === activity.currentBattleId) ?? null;
+}
+
 function enterStopped(activity: CombatActivity, ctx: ActivityContext): void {
   activity.phase = "stopped";
-  activity.currentBattle = null;
+  activity.currentBattleId = null;
   const hero = findHero(activity, ctx.state);
   if (hero) hero.activity = null;
+  // Tear down the 'kill' subscription to avoid leaking listeners across
+  // repeated start/stop cycles.
+  const dispose = (activity as unknown as { __disposeKill?: () => void })
+    .__disposeKill;
+  if (dispose) dispose();
   ctx.bus.emit("activityComplete", {
     charId: activity.ownerCharacterId,
     kind: ACTIVITY_COMBAT_KIND,

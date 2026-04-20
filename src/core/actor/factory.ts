@@ -15,6 +15,7 @@ import { getEffect, getItem } from "../content/registry";
 import type { FormulaRef } from "../formula/types";
 import {
   addModifiers,
+  ATTR,
   createAttrSet,
   getAttr as getAttrFromSet,
   invalidateAttrs,
@@ -69,8 +70,8 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     side: "player",
   };
   rebuildCharacterDerived(pc, opts.attrDefs);
-  pc.currentHp = getAttrFromSet(pc.attrs, "attr.max_hp", opts.attrDefs);
-  pc.currentMp = getAttrFromSet(pc.attrs, "attr.max_mp", opts.attrDefs);
+  pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, opts.attrDefs);
+  pc.currentMp = getAttrFromSet(pc.attrs, ATTR.MAX_MP, opts.attrDefs);
   return pc;
 }
 
@@ -103,8 +104,8 @@ export function createEnemy(opts: CreateEnemyOptions): Enemy {
     side: opts.side ?? "enemy",
   };
   rebuildCharacterDerived(e, opts.attrDefs);
-  e.currentHp = getAttrFromSet(e.attrs, "attr.max_hp", opts.attrDefs);
-  e.currentMp = getAttrFromSet(e.attrs, "attr.max_mp", opts.attrDefs);
+  e.currentHp = getAttrFromSet(e.attrs, ATTR.MAX_HP, opts.attrDefs);
+  e.currentMp = getAttrFromSet(e.attrs, ATTR.MAX_MP, opts.attrDefs);
   return e;
 }
 
@@ -163,8 +164,8 @@ export function rebuildCharacterDerived(
   }
 
   // 5) Cache is now dirty (invalidateAttrs above did it); clamp HP/MP.
-  const maxHp = getAttrFromSet(c.attrs, "attr.max_hp", attrDefs);
-  const maxMp = getAttrFromSet(c.attrs, "attr.max_mp", attrDefs);
+  const maxHp = getAttrFromSet(c.attrs, ATTR.MAX_HP, attrDefs);
+  const maxMp = getAttrFromSet(c.attrs, ATTR.MAX_MP, attrDefs);
   if (c.currentHp > maxHp) c.currentHp = maxHp;
   if (c.currentHp < 0) c.currentHp = 0;
   if (c.currentMp > maxMp) c.currentMp = maxMp;
