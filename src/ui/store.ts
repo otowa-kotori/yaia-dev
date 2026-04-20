@@ -1,13 +1,10 @@
 // Minimal bridge between game-core and React UI.
 //
 // Responsibilities:
-// - Own the TickEngine, bus, rng, state, and live battle (if any).
+// - Own the TickEngine, bus, rng, state, and live combat activity (if any).
 // - Expose a trivial subscribe(callback) API for UI.
 // - Publish a "revision number" that bumps every UI-visible mutation, so React
 //   can re-render without deep equality checks.
-//
-// Intentionally NOT a Redux-style immutable store. Mutations happen in place
-// inside core; Store just notifies.
 
 import { createTickEngine, TICK_MS } from "../core/tick";
 import { createGameEventBus } from "../core/events";
@@ -15,25 +12,20 @@ import { createRng } from "../core/rng";
 import { createEmptyState, type GameState } from "../core/state";
 import { setContent, type ContentDb } from "../core/content";
 import {
-  createBattle,
-  type Battle,
-  type TickBattleContext,
-} from "../core/combat";
-import { createCombatActivity } from "../core/activity";
-import {
-  createEnemy,
-  createPlayerCharacter,
-  type PlayerCharacter,
-  type Enemy,
-} from "../core/actor";
-import { basicAttack, slime } from "../content";
+  createCombatActivity,
+  type CombatActivity,
+} from "../core/activity";
+import { createPlayerCharacter, getAttr, type PlayerCharacter } from "../core/actor";
+import { basicAttack, defaultCharXpCurve, forestLv1 } from "../content";
 
 export interface GameStore {
   readonly state: GameState;
-  readonly battle: Battle | null;
+  readonly activity: CombatActivity | null;
   subscribe(cb: () => void): () => void;
   getRevision(): number;
   startDemoBattle(): void;
+  stopActivity(): void;
+  getHero(): PlayerCharacter | null;
   isRunning(): boolean;
   setSpeedMultiplier(mul: number): void;
   getSpeedMultiplier(): number;
@@ -53,7 +45,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   const bus = createGameEventBus();
   const rng = createRng(seed);
   const engine = createTickEngine({ initialSpeedMultiplier: 1 });
-  let battle: Battle | null = null;
+  let activity: CombatActivity | null = null;
   let revision = 0;
   const subs = new Set<() => void>();
 
@@ -64,94 +56,86 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     for (const cb of [...subs]) cb();
   }
 
-  // Notify every time engine steps so the UI reflects current HPs. For MVP
-  // we subscribe a "tick observer" tickable that bumps revision AFTER the rest
-  // of the tickables have executed.
-  engine.register({
-    id: "__ui_notifier",
-    tick: () => notify(),
-  });
+  // One UI-notifier tickable; runs every logic tick so HP bars / logs stay
+  // fresh. Registered first so it runs before domain tickables, but since we
+  // notify at end-of-tick that ordering doesn't matter for correctness.
+  engine.register({ id: "__ui_notifier", tick: () => notify() });
 
-  // Also bump on specific domain events so the UI can refresh mid-tick logs.
+  // Also bump on specific domain events so the UI can refresh mid-tick.
   bus.on("damage", notify);
   bus.on("kill", notify);
+  bus.on("levelup", notify);
   bus.on("activityComplete", () => {
-    battle = null;
+    activity = null;
     notify();
   });
 
   const stopLoop = engine.start();
 
+  const attrDefs = opts.content.attributes;
+
+  function ensureHero(): PlayerCharacter {
+    let hero = state.actors.find((a) => a.kind === "player") as
+      | PlayerCharacter
+      | undefined;
+    if (!hero) {
+      hero = createPlayerCharacter({
+        id: "hero.1",
+        name: "Hero",
+        xpCurve: defaultCharXpCurve,
+        knownAbilities: [basicAttack.id],
+        attrDefs,
+      });
+      state.actors.push(hero);
+    }
+    return hero;
+  }
+
   const store: GameStore = {
     state,
-    get battle() {
-      return battle;
+    get activity() {
+      return activity;
     },
     subscribe(cb) {
       subs.add(cb);
       return () => subs.delete(cb);
     },
     getRevision: () => revision,
+    getHero: () => {
+      const h = state.actors.find((a) => a.kind === "player");
+      return h ? (h as PlayerCharacter) : null;
+    },
     startDemoBattle() {
-      if (battle && battle.outcome === "ongoing") return;
+      if (activity && activity.phase !== "stopped") return;
 
-      // Clean up any leftover dead-body actors so the "demo" is fresh.
-      state.actors = state.actors.filter((a) => {
-        if (a.kind === "enemy") return false;
-        return true;
-      });
+      const hero = ensureHero();
+      // Heal the hero between sessions — only ever up to their actual maxHp.
+      hero.activeEffects = [];
+      hero.cooldowns = {};
+      hero.currentHp = getAttr(hero, "attr.max_hp", attrDefs);
+      hero.currentMp = getAttr(hero, "attr.max_mp", attrDefs);
 
-      // Reuse or create a single hero for the session.
-      const attrDefs = opts.content.attributes;
-      let hero = state.actors.find((a) => a.kind === "player") as
-        | PlayerCharacter
-        | undefined;
-      if (!hero) {
-        hero = createPlayerCharacter({
-          id: "hero.1",
-          name: "Hero",
-          knownAbilities: [basicAttack.id],
-          attrDefs,
-        });
-        state.actors.push(hero);
-      } else {
-        // Full-heal between demo battles.
-        hero.currentHp = 999;
-        hero.currentMp = 999;
-        hero.activeEffects = [];
-        hero.cooldowns = {};
-      }
-
-      const enemy: Enemy = createEnemy({
-        instanceId: `enemy.slime.${engine.currentTick}`,
-        def: slime,
-        attrDefs,
-      });
-      state.actors.push(enemy);
-
-      battle = createBattle({
-        id: `battle.${engine.currentTick}`,
-        mode: "solo",
-        participantIds: [hero.id, enemy.id],
-        actionDelayTicks: 8, // 800ms per action -> readable pacing
-        startedAtTick: engine.currentTick,
-      });
-
-      const activity = createCombatActivity({
+      activity = createCombatActivity({
         ownerCharacterId: hero.id,
-        battle,
-        ctxProvider: (): TickBattleContext => ({
+        stageId: forestLv1.id,
+        ctxProvider: () => ({
           state,
           bus,
           rng,
           attrDefs,
           currentTick: engine.currentTick,
         }),
+        actionDelayTicks: 8,
+        recoverHpPctPerTick: 0.02,
       });
       engine.register(activity);
       notify();
     },
-    isRunning: () => battle !== null && battle.outcome === "ongoing",
+    stopActivity() {
+      if (activity) activity.stopRequested = true;
+      notify();
+    },
+    isRunning: () => activity !== null && activity.phase !== "stopped",
     setSpeedMultiplier(m) {
       engine.speedMultiplier = m;
       notify();
@@ -163,7 +147,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     },
   };
 
-  // Expose for debugging in the browser devtools.
   if (typeof window !== "undefined") {
     (window as unknown as { __game: GameStore }).__game = store;
   }

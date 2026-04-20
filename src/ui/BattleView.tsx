@@ -1,53 +1,111 @@
 // Battle view: lists participants with HP bars + tail of battle log.
 // Purely presentational — reads from Store, dispatches nothing.
 
-import type { Character } from "../core/actor";
-import { getAttr, isCharacter } from "../core/actor";
+import type { Character, PlayerCharacter } from "../core/actor";
+import { getAttr, isCharacter, isPlayer } from "../core/actor";
+import { xpProgressToNextLevel } from "../core/progression";
 import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 
-// Cache the content attr defs once; UI only needs read access.
 const ATTR_DEFS = buildDefaultContent().attributes;
 
 export function BattleView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const battle = s.battle;
+  const activity = s.activity;
+  const hero = s.getHero();
 
-  if (!battle) {
+  // Always show hero (so XP/level is visible even when idle).
+  const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
+
+  if (!activity || !activity.currentBattle) {
     return (
-      <div style={{ opacity: 0.6, fontSize: 14 }}>
-        No active battle. Click "start battle" to begin.
+      <div>
+        {heroRow}
+        <div style={{ opacity: 0.6, fontSize: 14, marginTop: 12 }}>
+          {activity && activity.phase === "recovering"
+            ? "Recovering from defeat..."
+            : activity && activity.phase === "waveDelay"
+            ? "Next wave incoming..."
+            : 'Idle. Click "start grinding" to begin.'}
+        </div>
       </div>
     );
   }
 
+  const battle = activity.currentBattle;
   const participants = battle.participantIds
     .map((id) => s.state.actors.find((a) => a.id === id))
     .filter((a): a is Character => a !== undefined && isCharacter(a));
-
-  const players = participants.filter((p) => p.kind === "player");
-  const enemies = participants.filter((p) => p.kind === "enemy");
+  const enemies = participants.filter((p) => !isPlayer(p));
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 24, marginBottom: 16 }}>
-        <Column title="Players" actors={players} />
-        <Column title="Enemies" actors={enemies} />
+      {heroRow}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
+          Wave {activity.waveIndex} — Enemies
+        </div>
+        {enemies.map((a) => (
+          <ActorRow key={a.id} actor={a} />
+        ))}
       </div>
-      <OutcomeBadge outcome={battle.outcome} />
       <LogTail log={battle.log} />
     </div>
   );
 }
 
-function Column({ title, actors }: { title: string; actors: Character[] }) {
+function HeroCard({
+  hero,
+  activity,
+}: {
+  hero: PlayerCharacter;
+  activity: GameStore["activity"];
+}) {
+  const maxHp = Math.max(1, getAttr(hero, "attr.max_hp", ATTR_DEFS));
+  const hpPct = Math.max(0, Math.min(1, hero.currentHp / maxHp));
+  const dead = hero.currentHp <= 0;
+  const xp = xpProgressToNextLevel(hero.level, hero.exp, hero.xpCurve);
+
+  const statusLabel =
+    activity?.phase === "recovering"
+      ? "recovering"
+      : activity?.phase === "waveDelay"
+      ? "next wave..."
+      : activity?.phase === "fighting"
+      ? "in combat"
+      : "idle";
+
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>{title}</div>
-      {actors.map((a) => (
-        <ActorRow key={a.id} actor={a} />
-      ))}
+    <div
+      style={{
+        padding: 10,
+        background: "#222",
+        borderRadius: 4,
+        opacity: dead ? 0.45 : 1,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontWeight: 600 }}>
+          {hero.name} · Lv {hero.level}
+          {dead ? " (KO)" : ""}
+        </span>
+        <span style={{ fontSize: 12, opacity: 0.7 }}>{statusLabel}</span>
+      </div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 6 }}>
+        <div style={{ flex: 1 }}>
+          <Bar pct={hpPct} color="#4a7" />
+          <div style={{ fontSize: 11, marginTop: 2, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
+            HP {Math.round(hero.currentHp)} / {Math.round(maxHp)}
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Bar pct={xp.pct} color="#59c" />
+          <div style={{ fontSize: 11, marginTop: 2, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
+            XP {hero.exp} / {xp.cost || "—"}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -59,7 +117,7 @@ function ActorRow({ actor }: { actor: Character }) {
   return (
     <div
       style={{
-        marginBottom: 8,
+        marginBottom: 6,
         padding: 8,
         background: "#222",
         borderRadius: 4,
@@ -67,73 +125,66 @@ function ActorRow({ actor }: { actor: Character }) {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ fontWeight: 600 }}>
+        <span style={{ fontWeight: 500 }}>
           {actor.name}
           {dead ? " (KO)" : ""}
         </span>
-        <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 13 }}>
+        <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 12 }}>
           {Math.round(actor.currentHp)} / {Math.round(maxHp)}
         </span>
       </div>
-      <div
-        style={{
-          marginTop: 4,
-          height: 8,
-          background: "#111",
-          borderRadius: 2,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${hpPct * 100}%`,
-            background: actor.kind === "player" ? "#4a7" : "#c44",
-            transition: "width 100ms linear",
-          }}
-        />
+      <div style={{ marginTop: 4 }}>
+        <Bar pct={hpPct} color="#c44" />
       </div>
     </div>
   );
 }
 
-function OutcomeBadge({ outcome }: { outcome: string }) {
-  if (outcome === "ongoing") return null;
-  const colors: Record<string, string> = {
-    players_won: "#4a7",
-    enemies_won: "#c44",
-    draw: "#aa4",
-  };
+function Bar({ pct, color }: { pct: number; color: string }) {
   return (
     <div
       style={{
-        display: "inline-block",
-        padding: "4px 10px",
-        marginBottom: 8,
-        background: colors[outcome] ?? "#666",
-        color: "#111",
-        fontSize: 12,
-        fontWeight: 600,
-        borderRadius: 4,
+        height: 6,
+        background: "#111",
+        borderRadius: 2,
+        overflow: "hidden",
       }}
     >
-      {outcome.replace("_", " ")}
+      <div
+        style={{
+          height: "100%",
+          width: `${pct * 100}%`,
+          background: color,
+          transition: "width 100ms linear",
+        }}
+      />
     </div>
   );
 }
 
-function LogTail({ log }: { log: { tick: number; kind: string; actorId?: string; abilityId?: string; magnitudes?: number[]; note?: string }[] }) {
+function LogTail({
+  log,
+}: {
+  log: {
+    tick: number;
+    kind: string;
+    actorId?: string;
+    abilityId?: string;
+    magnitudes?: number[];
+    note?: string;
+  }[];
+}) {
   const tail = log.slice(-8);
   return (
     <div
       style={{
-        marginTop: 8,
+        marginTop: 12,
         padding: 8,
         background: "#111",
         borderRadius: 4,
         fontSize: 12,
         fontFamily: "ui-monospace, Menlo, monospace",
-        maxHeight: 200,
+        maxHeight: 180,
         overflow: "auto",
       }}
     >

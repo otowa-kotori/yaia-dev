@@ -19,6 +19,7 @@ import {
   basicAttackAbility,
   loadFixtureContent,
   slimeMonster,
+  testXpCurve,
 } from "../fixtures/content";
 
 const copperSword: ItemDef = {
@@ -45,6 +46,7 @@ describe("actor hierarchy", () => {
       knownAbilities: [basicAttackAbility.id],
       baseAttrs: { [ATTR.ATK]: 7, [ATTR.MAX_HP]: 120 },
       attrDefs,
+      xpCurve: testXpCurve,
     });
     expect(pc.kind).toBe("player");
     expect(pc.level).toBe(1);
@@ -71,6 +73,7 @@ describe("actor hierarchy", () => {
       id: "p",
       name: "p",
       attrDefs,
+      xpCurve: testXpCurve,
     });
     const en: Enemy = createEnemy({
       instanceId: "e1",
@@ -94,6 +97,7 @@ describe("actor hierarchy", () => {
       name: "p",
       baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
       attrDefs,
+      xpCurve: testXpCurve,
     });
     expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(10);
 
@@ -110,6 +114,7 @@ describe("actor hierarchy", () => {
       baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
       equipped: { weapon: copperSword.id },
       attrDefs,
+      xpCurve: testXpCurve,
     });
     const after1 = getAttr(pc, ATTR.ATK, attrDefs);
     rebuildCharacterDerived(pc, attrDefs);
@@ -125,6 +130,7 @@ describe("actor hierarchy", () => {
       name: "p",
       baseAttrs: { [ATTR.MAX_HP]: 200 },
       attrDefs,
+      xpCurve: testXpCurve,
     });
     expect(pc.currentHp).toBe(200);
 

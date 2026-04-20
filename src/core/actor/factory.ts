@@ -12,6 +12,7 @@
 
 import type { AbilityId, AttrDef, MonsterDef } from "../content/types";
 import { getEffect, getItem } from "../content/registry";
+import type { FormulaRef } from "../formula/types";
 import {
   addModifiers,
   createAttrSet,
@@ -33,6 +34,9 @@ export interface CreatePlayerOptions {
   name: string;
   level?: number;
   exp?: number;
+  /** XP curve this character levels up with. Required — no fallback. */
+  xpCurve: FormulaRef;
+  maxLevel?: number;
   baseAttrs?: AttrSet["base"];
   /** Abilities the player has learned. First entry becomes default attack. */
   knownAbilities?: AbilityId[];
@@ -49,6 +53,8 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     kind: "player",
     level: opts.level ?? 1,
     exp: opts.exp ?? 0,
+    xpCurve: opts.xpCurve,
+    maxLevel: opts.maxLevel ?? 99,
     skills: opts.skills ?? ({} as PlayerCharacter["skills"]),
     equipped: opts.equipped ?? {},
     talents: opts.talents ?? [],

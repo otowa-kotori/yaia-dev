@@ -146,8 +146,12 @@ export interface StageDef {
   id: StageId;
   name: string;
   mode: StageMode;
-  /** Monsters that spawn (rotated per battle, MVP = list). */
+  /** Monsters that may spawn. A wave picks uniformly at random from this list. */
   monsters: MonsterId[];
+  /** How many enemies spawn per wave. MVP: 1. */
+  waveSize?: number;
+  /** Ticks between a wave being cleared and the next wave spawning. */
+  waveIntervalTicks?: number;
   /** Which skill's XP this stage grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
 }

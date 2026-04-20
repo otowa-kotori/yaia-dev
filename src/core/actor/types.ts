@@ -28,6 +28,7 @@ import type {
   SkillProgress,
 } from "../state/types";
 import type { SkillId } from "../content/types";
+import type { FormulaRef } from "../formula/types";
 
 /** Team / side within a battle. Transient — not persisted. */
 export type Side = "player" | "enemy" | "neutral";
@@ -73,6 +74,11 @@ export interface PlayerCharacter extends Character {
   kind: "player";
   level: number;
   exp: number;
+  /** Formula giving XP required to reach a given level for this character.
+   *  Per-character so class / special growths can vary. */
+  xpCurve: FormulaRef;
+  /** Hard level cap for this character. */
+  maxLevel: number;
   skills: Record<SkillId, SkillProgress>;
   /** Slot -> itemId or null. (persisted) */
   equipped: Record<string, string | null>;

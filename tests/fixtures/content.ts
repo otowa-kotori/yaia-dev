@@ -9,6 +9,10 @@ import type {
   EffectId,
   MonsterDef,
   MonsterId,
+  SkillDef,
+  SkillId,
+  StageDef,
+  StageId,
 } from "../../src/core/content/types";
 import { createGameEventBus } from "../../src/core/events";
 import type { GameEventBus } from "../../src/core/events";
@@ -20,6 +24,7 @@ import {
   type Enemy,
   type PlayerCharacter,
 } from "../../src/core/actor";
+import type { FormulaRef } from "../../src/core/formula";
 
 // ---------- Shared attribute definitions ----------
 
@@ -130,6 +135,32 @@ export const slimeMonster: MonsterDef = {
   xpReward: 10,
 };
 
+// ---------- Common fixture skills ----------
+
+export const testXpCurve: FormulaRef = {
+  kind: "exp_curve_v1",
+  base: 10,
+  growth: 1.2,
+};
+
+export const miningSkill: SkillDef = {
+  id: "skill.mining" as SkillId,
+  name: "Mining",
+  xpCurve: testXpCurve,
+  maxLevel: 99,
+};
+
+// ---------- Common fixture stages ----------
+
+export const forestStage: StageDef = {
+  id: "stage.forest.test" as StageId,
+  name: "Test Forest",
+  mode: "solo",
+  monsters: [slimeMonster.id],
+  waveSize: 1,
+  waveIntervalTicks: 5,
+};
+
 // ---------- Loader ----------
 
 export function loadFixtureContent(): ContentDb {
@@ -150,6 +181,12 @@ export function loadFixtureContent(): ContentDb {
     },
     monsters: {
       [slimeMonster.id]: slimeMonster,
+    },
+    skills: {
+      [miningSkill.id]: miningSkill,
+    },
+    stages: {
+      [forestStage.id]: forestStage,
     },
   };
   setContent(db);
@@ -197,6 +234,7 @@ export function makePlayer(overrides: {
   speed?: number;
   maxHp?: number;
   maxMp?: number;
+  xpCurve?: FormulaRef;
 }): PlayerCharacter {
   const base: Partial<Record<AttrId, number>> = {
     [ATTR.MAX_HP]: overrides.maxHp ?? 100,
@@ -208,6 +246,7 @@ export function makePlayer(overrides: {
   const pc = createPlayerCharacter({
     id: overrides.id,
     name: overrides.id,
+    xpCurve: overrides.xpCurve ?? testXpCurve,
     baseAttrs: base as Record<string, number>,
     knownAbilities: overrides.abilities as unknown as AbilityId[],
     attrDefs,

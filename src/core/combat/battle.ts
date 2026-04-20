@@ -66,6 +66,13 @@ export interface Battle {
   startedAtTick: number;
   /** Tick at which the battle ended (set once outcome != "ongoing"). */
   endedAtTick: number | null;
+  /** Optional callback fired exactly once per participant death. Used by
+   *  CombatActivity to grant XP/loot to the killer. */
+  onDeath?: (victim: Character, ctx: TickBattleContext) => void;
+  /** Internal: ids already reported via onDeath, so we don't double-fire.
+   *  Plain array (not Set) to keep Battle JSON-serializable for the runtime
+   *  debug dump, even though Battle itself is not part of the save file. */
+  deathsReported: string[];
 }
 
 export interface CreateBattleOptions {
@@ -76,6 +83,7 @@ export interface CreateBattleOptions {
   actionDelayTicks?: number;
   intents?: Record<string, Intent>;
   startedAtTick: number;
+  onDeath?: (victim: Character, ctx: TickBattleContext) => void;
 }
 
 export function createBattle(opts: CreateBattleOptions): Battle {
@@ -97,6 +105,8 @@ export function createBattle(opts: CreateBattleOptions): Battle {
     intents: opts.intents ?? {},
     startedAtTick: opts.startedAtTick,
     endedAtTick: null,
+    onDeath: opts.onDeath,
+    deathsReported: [],
   };
 }
 
@@ -200,7 +210,7 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
 
   // Emit deaths for any participant who died from this action.
   for (const p of participants) {
-    if (!isAlive(p) && !deathLogged(battle, p.id)) {
+    if (!isAlive(p) && !battle.deathsReported.includes(p.id)) {
       emitDeath(battle, p, ctx);
     }
   }
@@ -234,6 +244,7 @@ function maybeTerminate(battle: Battle, ctx: TickBattleContext): void {
 }
 
 function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
+  battle.deathsReported.push(victim.id);
   battle.log.push({
     tick: ctx.currentTick,
     kind: "death",
@@ -243,17 +254,7 @@ function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
   // (AoE, DoT). Emit with attackerId = "" for now; callers that care can
   // correlate to the most recent `damage` event.
   ctx.bus.emit("kill", { attackerId: "", victimId: victim.id });
-}
-
-function deathLogged(battle: Battle, actorId: string): boolean {
-  for (let i = battle.log.length - 1; i >= 0; i--) {
-    const e = battle.log[i]!;
-    if (e.kind === "death" && e.actorId === actorId) return true;
-    // Short-circuit: deaths always come from the current or previous action
-    // window, no need to walk the whole log.
-    if (battle.log.length - i > 20) break;
-  }
-  return false;
+  battle.onDeath?.(victim, ctx);
 }
 
 // ---------- Resolution ----------

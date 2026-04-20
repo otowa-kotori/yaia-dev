@@ -11,8 +11,11 @@ import type {
   MonsterDef,
   MonsterId,
   ContentDb,
+  StageDef,
+  StageId,
 } from "../core/content";
 import { emptyContentDb } from "../core/content";
+import type { FormulaRef } from "../core/formula";
 
 // ---------- Attributes ----------
 
@@ -71,6 +74,15 @@ const attrDefs: Record<string, AttrDef> = {
   },
 };
 
+// ---------- Formulas ----------
+
+/** Character default XP curve: 25 * 1.2^(level-1). */
+export const defaultCharXpCurve: FormulaRef = {
+  kind: "exp_curve_v1",
+  base: 25,
+  growth: 1.2,
+};
+
 // ---------- Effects ----------
 
 export const strikeEffect: EffectDef = {
@@ -106,6 +118,17 @@ export const slime: MonsterDef = {
   xpReward: 10,
 };
 
+// ---------- Stages ----------
+
+export const forestLv1: StageDef = {
+  id: "stage.forest.lv1" as StageId,
+  name: "Sunny Forest",
+  mode: "solo",
+  monsters: [slime.id],
+  waveSize: 1,
+  waveIntervalTicks: 20,
+};
+
 // ---------- Default DB ----------
 
 export function buildDefaultContent(): ContentDb {
@@ -115,5 +138,6 @@ export function buildDefaultContent(): ContentDb {
     effects: { [strikeEffect.id]: strikeEffect },
     abilities: { [basicAttack.id]: basicAttack },
     monsters: { [slime.id]: slime },
+    stages: { [forestLv1.id]: forestLv1 },
   };
 }

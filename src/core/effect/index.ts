@@ -12,14 +12,15 @@
 // can remove the right stack via removeModifiersBySource.
 
 import type { EffectDef, AttrDef, ItemId } from "../content/types";
-import { getEffect } from "../content/registry";
+import { getEffect, getSkill } from "../content/registry";
 import { evalFormula, type FormulaContext } from "../formula";
 import type { Rng } from "../rng";
 import type { GameEventBus } from "../events";
 import type { ActiveEffect, GameState, ItemStack } from "../state/types";
-import type { Character } from "../actor";
+import type { Character, PlayerCharacter } from "../actor";
 import { getAttr, isPlayer } from "../actor";
 import { addModifiers, removeModifiersBySource } from "../attribute";
+import { grantCharacterXp, grantSkillXp } from "../progression";
 
 export interface EffectContext {
   state: GameState;
@@ -126,6 +127,7 @@ function applyRewards(
   if (!rewards) return;
   if (!isPlayer(target)) return; // Monsters don't collect rewards.
   const charId = target.id;
+  const pc = target as PlayerCharacter;
 
   if (rewards.items?.length) {
     for (const { itemId, qty } of rewards.items) {
@@ -135,18 +137,14 @@ function applyRewards(
   }
 
   if (rewards.xp?.length) {
-    // XP grants need the skill system. For Step 2 we emit a generic hook and
-    // let later code consume it. For now we store into flags as a cheap proxy.
-    // TODO(step 4): wire into character/skill grantSkillXp.
     for (const { skillId, amount } of rewards.xp) {
-      const key = `xp:${charId}:${skillId}`;
-      ctx.state.flags[key] = (ctx.state.flags[key] ?? 0) + amount;
+      const skillDef = getSkill(skillId);
+      grantSkillXp(pc, skillDef, amount, { bus: ctx.bus });
     }
   }
 
   if (rewards.charXp) {
-    const key = `charXp:${charId}`;
-    ctx.state.flags[key] = (ctx.state.flags[key] ?? 0) + rewards.charXp;
+    grantCharacterXp(pc, rewards.charXp, { bus: ctx.bus });
   }
 }
 

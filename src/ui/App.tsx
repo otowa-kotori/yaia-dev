@@ -21,7 +21,7 @@ export function App() {
   return (
     <div style={containerStyle}>
       <h1 style={{ margin: "0 0 16px", fontSize: 20, color: "#fff" }}>
-        yaia · combat skeleton
+        Combat Skeleton
       </h1>
       <Controls store={s} />
       <BattleView store={s} />
@@ -44,13 +44,15 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
         flexWrap: "wrap",
       }}
     >
-      <button
-        onClick={() => s.startDemoBattle()}
-        disabled={running}
-        style={btnStyle(running)}
-      >
-        {running ? "in combat..." : "start battle"}
-      </button>
+      {!running ? (
+        <button onClick={() => s.startDemoBattle()} style={btnStyle(false)}>
+          start grinding
+        </button>
+      ) : (
+        <button onClick={() => s.stopActivity()} style={btnStyle(false)}>
+          stop
+        </button>
+      )}
       <span style={{ opacity: 0.6, fontSize: 12 }}>speed:</span>
       {[0, 1, 2, 5].map((m) => (
         <button
