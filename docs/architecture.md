@@ -42,16 +42,16 @@ Stage **不管战斗流程**——它只管 actor 生命周期。
 
 ### 背包与装备
 
-物品分两类：
+物品两类：
 
-- **Stackable**（材料类）：只有 `{ itemId, qty }`，多次获取会合并到同一格。
-- **Non-stackable**（装备类）：每件一个 `GearInstance`，带 `instanceId + rolledMods`。**所有** gear 必经 `core/item/createGearInstance(itemId, { rng })` —— 怪物掉落 / 合成产出 / dev 赠送共用这一个创生口子，保证 `ctx.rng` 驱动的属性 roll 可重放。
+- **Stackable**（材料）：`{ itemId, qty }`，同 id 合并到一格。
+- **Gear**（装备）：`GearInstance { instanceId, itemId, rolledMods }`。所有 gear 必经 `core/item/createGearInstance(itemId, { rng })` —— 掉落 / 合成 / dev 共用这一个出生口子，`ItemDef.roll` 声明词缀范围，roll 走 `ctx.rng` 保证可重放。
 
-`ItemDef.roll` 声明词缀规则（`stat/op/min/max/integer?`），工厂按 rng 生成 `rolledMods`；`ItemDef.modifiers` 仍是该装备的基线加成。两者在 `rebuildCharacterDerived` 里合并，`sourceId` 带 `instanceId` 便于精准撤销。
+`ItemDef.modifiers` 是基线，`rolledMods` 是 per-instance 加成，两者在 `rebuildCharacterDerived` 合并，`sourceId` 带 `instanceId` 便于精准撤销。
 
-背包是固定位置网格：`Inventory { capacity, slots: (StackEntry | GearEntry | null)[] }`，索引稳定（空格 = null）。同一包可任意混放 stack 和 gear。`state.inventories` 以 `charId` 或 `"shared"` 键分包，每角色一主包 + 全局共享包。`addStack` 遇同 itemId 合并、`addGear` 始终占新空格、满则抛（alpha）。
+背包是固定位置网格：`Inventory { capacity, slots: (StackEntry | GearEntry | null)[] }`，索引稳定（空格 = null），stack 和 gear 可在同一包混放。`state.inventories` 以 `charId` 或 `"shared"` 分包。
 
-装备直接内联存在 `PlayerCharacter.equipped: Record<slot, GearInstance | null>`（不引用独立 instance 表）—— 单一所有权：要么在 bag 里，要么在身上。
+装备直接内联在 `PlayerCharacter.equipped: Record<slot, GearInstance | null>` —— 单一所有权：要么在 bag，要么在身上，不引用独立 instance 表。
 
 ### Activity（活动）
 

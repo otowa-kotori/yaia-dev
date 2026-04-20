@@ -1,24 +1,9 @@
 // Save schema version + migrations.
 //
-// Alpha-stage policy: we reserve the migration interface but do NOT write
-// migrations yet. When a structural change lands:
-//   - bump SAVE_VERSION
-//   - append a migration entry to `migrations` that maps version N -> N+1
-//   - deserialize will run the migrations in order
-//
-// Until migrations exist, mismatched versions throw; the caller (Store) is
-// expected to surface a "can't read save, reset?" affordance to the user
-// rather than silently wiping progress.
-//
-// Version history:
-//   v1 → v2 (alpha, intentionally incompatible, no migration):
-//     - inventories: Record<string, ItemStack[]>
-//       → Record<string, { capacity, slots: (StackEntry | GearEntry | null)[] }>
-//     - PlayerCharacter.equipped: Record<string, string | null>
-//       → Record<string, GearInstance | null>
-//     v1 saves will fail the structural checks in deserialize and the Store
-//     falls back to a fresh state. Acceptable for alpha; write a real
-//     migration the next time we change a shipped save shape.
+// Alpha-stage policy: schema changes bump SAVE_VERSION and break old saves.
+// We reserve the migration interface but don't write migrations yet —
+// mismatched versions throw and the Store falls back to a fresh state.
+// Revisit once we ship to real players.
 
 export const SAVE_VERSION = 2;
 
