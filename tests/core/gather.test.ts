@@ -14,6 +14,7 @@ import {
   createInventory,
   DEFAULT_CHAR_INVENTORY_CAPACITY,
 } from "../../src/core/inventory";
+import { ATTR, invalidateAttrs } from "../../src/core/attribute";
 import {
   attrDefs,
   loadFixtureContent,
@@ -121,6 +122,30 @@ describe("GatherActivity + Stage", () => {
 
     engine.step(30); // ~10 swings
     expect(activity.swingsCompleted).toBeGreaterThanOrEqual(8);
+  });
+
+  test("gathered items respect the player's runtime stack limit", () => {
+    const { state, engine, hero, ctxProvider } = setup();
+    hero.attrs.base[ATTR.INVENTORY_STACK_LIMIT] = 3;
+    invalidateAttrs(hero.attrs);
+    const nodeId = state.currentStage!.spawnedActorIds[0]!;
+    const activity = createGatherActivity({
+      ownerCharacterId: hero.id,
+      nodeId,
+      ctxProvider,
+    });
+    engine.register(activity);
+
+    engine.step(30);
+
+    const oreStacks = state.inventories[hero.id]!.slots.filter(
+      (slot) => slot?.kind === "stack" && slot.itemId === testOreItem.id,
+    );
+    expect(oreStacks.length).toBeGreaterThan(1);
+    for (const slot of oreStacks) {
+      if (!slot || slot.kind !== "stack") continue;
+      expect(slot.qty).toBeLessThanOrEqual(hero.attrs.base[ATTR.INVENTORY_STACK_LIMIT]!);
+    }
   });
 
   test("infinite yield — node stays spawned after many swings", () => {

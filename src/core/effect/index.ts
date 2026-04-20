@@ -22,6 +22,7 @@ import { getAttr, isPlayer } from "../actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../attribute";
 import { grantCharacterXp, grantSkillXp } from "../progression";
 import { addStack, addGear } from "../inventory";
+import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance } from "../item";
 
 export interface EffectContext {
@@ -173,7 +174,7 @@ function addItemToInventory(
   }
   const def = getItem(itemId);
   if (def.stackable) {
-    addStack(inv, itemId, qty);
+    addStack(inv, itemId, qty, getInventoryStackLimit(ctx.state, charId, ctx.attrDefs));
     return;
   }
   for (let i = 0; i < qty; i++) {

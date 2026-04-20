@@ -5,10 +5,10 @@
 // want softer behaviour (drop on ground, mailbox) wrap the throw themselves.
 //
 // Stack merging:
-//   addStack merges into an existing StackEntry with the same itemId before
-//   allocating a fresh slot. Item stacking is unlimited at the slot level —
-//   we do not currently enforce per-stack caps. If we ever add them, threading
-//   through ItemDef.maxStack here is the right place.
+//   addStack first fills every existing StackEntry with the same itemId, then
+//   allocates fresh slots for any overflow.
+//   stackLimit = null means unlimited stacking (current shared-bag behaviour).
+//   stackLimit = N means each slot can hold at most N copies of that item.
 //
 // Gear placement:
 //   addGear always takes the lowest-index null slot. No stacking possible
@@ -34,24 +34,67 @@ export function createInventory(capacity: number): Inventory {
   };
 }
 
-/** Merge into existing stack of the same itemId, else occupy the first empty slot. Throws if full. */
+/**
+ * Merge into existing stacks of the same itemId, then occupy fresh slots for
+ * overflow. Throws if the bag runs out of empty slots.
+ */
 export function addStack(
   inv: Inventory,
   itemId: ItemId | string,
   qty: number,
+  stackLimit?: StackLimit,
 ): void {
   if (qty <= 0) throw new Error(`addStack: qty must be positive, got ${qty}`);
-  const existingIndex = findStackSlot(inv, itemId);
-  if (existingIndex !== -1) {
-    const slot = inv.slots[existingIndex] as StackEntry;
-    slot.qty += qty;
+
+  const normalizedLimit = normalizeStackLimit(stackLimit);
+  const resolvedItemId = itemId as ItemId;
+
+  if (normalizedLimit === null) {
+    const existingIndex = findStackSlot(inv, itemId);
+    if (existingIndex !== -1) {
+      const slot = inv.slots[existingIndex] as StackEntry;
+      slot.qty += qty;
+      return;
+    }
+    const emptyIndex = firstEmpty(inv);
+    if (emptyIndex === -1) {
+      throw new Error(`inventory: full (capacity=${inv.capacity}, adding stack "${itemId}")`);
+    }
+    inv.slots[emptyIndex] = { kind: "stack", itemId: resolvedItemId, qty };
     return;
   }
-  const emptyIndex = firstEmpty(inv);
-  if (emptyIndex === -1) {
-    throw new Error(`inventory: full (capacity=${inv.capacity}, adding stack "${itemId}")`);
+
+  let remaining = qty;
+
+  for (const slot of inv.slots) {
+    if (!slot || slot.kind !== "stack" || slot.itemId !== itemId) continue;
+    const room = normalizedLimit - slot.qty;
+    if (room <= 0) continue;
+    const added = Math.min(room, remaining);
+    slot.qty += added;
+    remaining -= added;
+    if (remaining === 0) return;
   }
-  inv.slots[emptyIndex] = { kind: "stack", itemId: itemId as ItemId, qty };
+
+  while (remaining > 0) {
+    const emptyIndex = firstEmpty(inv);
+    if (emptyIndex === -1) {
+      throw new Error(
+        `inventory: full (capacity=${inv.capacity}, adding stack "${itemId}", remaining=${remaining})`,
+      );
+    }
+    const added = Math.min(normalizedLimit, remaining);
+    inv.slots[emptyIndex] = { kind: "stack", itemId: resolvedItemId, qty: added };
+    remaining -= added;
+  }
+}
+
+function normalizeStackLimit(limit: StackLimit): number | null {
+  if (limit === undefined || limit === null) return null;
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error(`addStack: invalid stackLimit ${limit}`);
+  }
+  return limit;
 }
 
 /** Occupy the first empty slot with this gear instance. Throws if full. */

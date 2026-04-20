@@ -1,7 +1,7 @@
 // Attribute system.
 //
 // An AttrSet holds per-unit base values plus a flat list of Modifier entries.
-// `recomputeAttrs` folds the list into a final numeric value per stat using:
+// `recomputeStat` folds the list into a final numeric value for a single stat:
 //
 //   final = (base + Σflat) * (1 + Σpct_add) * Π(1 + pct_mult)
 //   then clamp to [clampMin, clampMax] (from AttrDef)
@@ -13,6 +13,14 @@
 // Modifiers carry a sourceId so they can be removed cleanly when an item is
 // unequipped or a buff expires. NEVER mutate modifiers after insertion; always
 // remove + re-add.
+//
+// Cache strategy: per-stat lazy invalidation.
+//   - cache is always a Record (never null). A missing key means that stat is
+//     dirty and will be recomputed on the next getAttr call.
+//   - addModifiers / removeModifiersBySource delete only the keys for the
+//     affected stats, leaving untouched stats' cached values intact.
+//   - invalidateAttrs / recomputeAttrs reset the whole cache (base mutations,
+//     load from save, explicit full rebuild).
 
 import type { AttrDef, AttrId, Modifier } from "../content/types";
 
@@ -21,104 +29,103 @@ export interface AttrSet {
   base: Record<string, number>;
   /** All active modifiers (from gear, buffs, talents, etc). Append-only at insert, filtered at removal. */
   modifiers: Modifier[];
-  /** Cached final values. null means dirty / not yet computed. */
-  cache: Record<string, number> | null;
+  /** Cached final values. A missing key means that stat is dirty and will be
+   *  lazily recomputed by getAttr. Never null — use {} for "all dirty". */
+  cache: Record<string, number>;
 }
 
 export function createAttrSet(base: Record<string, number> = {}): AttrSet {
   return {
     base: { ...base },
     modifiers: [],
-    cache: null,
+    cache: {},  // all stats start dirty; computed on first getAttr
   };
 }
 
-/** Append modifiers and invalidate cache. */
+/** Append modifiers, invalidating only the stats they affect. */
 export function addModifiers(set: AttrSet, mods: readonly Modifier[]): void {
   if (mods.length === 0) return;
-  for (const m of mods) set.modifiers.push(m);
-  set.cache = null;
+  for (const m of mods) {
+    set.modifiers.push(m);
+    delete set.cache[m.stat];  // only this stat is now dirty
+  }
 }
 
-/** Remove all modifiers whose sourceId matches. Returns the number removed. */
+/** Remove all modifiers whose sourceId matches. Invalidates only affected stats.
+ *  Returns the number of modifiers removed. */
 export function removeModifiersBySource(set: AttrSet, sourceId: string): number {
-  const before = set.modifiers.length;
+  const removed = set.modifiers.filter((m) => m.sourceId === sourceId);
+  if (removed.length === 0) return 0;
   set.modifiers = set.modifiers.filter((m) => m.sourceId !== sourceId);
-  const removed = before - set.modifiers.length;
-  if (removed > 0) set.cache = null;
-  return removed;
+  for (const m of removed) delete set.cache[m.stat];
+  return removed.length;
 }
 
-/** Force a recompute. Normally you don't call this directly — getAttr does it. */
-export function recomputeAttrs(
+// ---------- Internal: recompute a single stat ----------
+
+function recomputeStat(
   set: AttrSet,
+  attrId: string,
   attrDefs: Readonly<Record<string, AttrDef>>,
 ): void {
-  const result: Record<string, number> = {};
+  const def = attrDefs[attrId];
+  const base = set.base[attrId] ?? def?.defaultBase ?? 0;
 
-  // Prime result with base values (including defaults from AttrDef).
-  for (const id of Object.keys(attrDefs)) {
-    const def = attrDefs[id]!;
-    result[id] = set.base[id] ?? def.defaultBase;
-  }
-  // Also honor any base-only stats the unit defines but the AttrDef doesn't know about.
-  for (const id of Object.keys(set.base)) {
-    if (!(id in result)) result[id] = set.base[id]!;
-  }
-
-  // Accumulate flat / pct_add / pct_mult buckets per stat.
-  const flat: Record<string, number> = {};
-  const pctAdd: Record<string, number> = {};
-  const pctMult: Record<string, number> = {};
-
+  let flat = 0, pctAdd = 0, pctMult = 1;
   for (const m of set.modifiers) {
+    if (m.stat !== attrId) continue;
     switch (m.op) {
-      case "flat":
-        flat[m.stat] = (flat[m.stat] ?? 0) + m.value;
-        break;
-      case "pct_add":
-        pctAdd[m.stat] = (pctAdd[m.stat] ?? 0) + m.value;
-        break;
-      case "pct_mult":
-        // Store as Σln(1+v) so we can multiply by exp()? No — just multiply directly below.
-        pctMult[m.stat] = (pctMult[m.stat] ?? 1) * (1 + m.value);
-        break;
+      case "flat":     flat += m.value; break;
+      case "pct_add":  pctAdd += m.value; break;
+      // Store as Σln(1+v) so we can multiply by exp()? No — just multiply directly.
+      case "pct_mult": pctMult *= (1 + m.value); break;
     }
   }
 
-  for (const id of Object.keys(result)) {
-    let v = result[id]!;
-    v = (v + (flat[id] ?? 0)) * (1 + (pctAdd[id] ?? 0)) * (pctMult[id] ?? 1);
-
-    const def = attrDefs[id];
-    if (def) {
-      if (def.clampMin !== undefined && v < def.clampMin) v = def.clampMin;
-      if (def.clampMax !== undefined && v > def.clampMax) v = def.clampMax;
-      if (def.integer) v = Math.floor(v);
-    }
-    result[id] = v;
+  let v = (base + flat) * (1 + pctAdd) * pctMult;
+  if (def) {
+    if (def.clampMin !== undefined && v < def.clampMin) v = def.clampMin;
+    if (def.clampMax !== undefined && v > def.clampMax) v = def.clampMax;
+    if (def.integer) v = Math.floor(v);
   }
-
-  set.cache = result;
+  set.cache[attrId] = v;
 }
 
-/** Read one stat. Triggers a recompute if the cache is dirty. */
+// ---------- Public API ----------
+
+/** Read one stat. Recomputes only if this stat's cache key is missing (dirty). */
 export function getAttr(
   set: AttrSet,
   attrId: AttrId | string,
   attrDefs: Readonly<Record<string, AttrDef>>,
 ): number {
-  if (set.cache === null) recomputeAttrs(set, attrDefs);
-  const v = set.cache![attrId];
+  if (!(attrId in set.cache)) recomputeStat(set, attrId, attrDefs);
+  const v = set.cache[attrId];
   if (v !== undefined) return v;
-  // Unknown attr: return the AttrDef default or 0.
-  const def = attrDefs[attrId];
-  return def?.defaultBase ?? 0;
+  // Unknown attr with no base entry and no AttrDef: return 0.
+  return attrDefs[attrId]?.defaultBase ?? 0;
 }
 
-/** Force the cache to be rebuilt on next read. Call after base mutations. */
+/** Force all stats dirty. Call after bulk base mutations or on load.
+ *  Individual reads will lazily recompute on demand. */
 export function invalidateAttrs(set: AttrSet): void {
-  set.cache = null;
+  set.cache = {};
+}
+
+/** Eagerly recompute all known stats (AttrDef keys + base keys + modifier
+ *  stats). Useful for load/debug paths that want a fully warm cache. */
+export function recomputeAttrs(
+  set: AttrSet,
+  attrDefs: Readonly<Record<string, AttrDef>>,
+): void {
+  // Collect the full universe of stat ids this unit might expose.
+  const allStats = new Set<string>([
+    ...Object.keys(attrDefs),
+    ...Object.keys(set.base),
+    ...set.modifiers.map((m) => m.stat),
+  ]);
+  set.cache = {};
+  for (const stat of allStats) recomputeStat(set, stat, attrDefs);
 }
 
 // ---------- Canonical attribute IDs (MVP) ----------
@@ -140,4 +147,5 @@ export const ATTR = {
   CRIT_RATE: "attr.crit_rate" as AttrId,
   CRIT_MULT: "attr.crit_mult" as AttrId,
   SPEED: "attr.speed" as AttrId,
+  INVENTORY_STACK_LIMIT: "attr.inventory_stack_limit" as AttrId,
 } as const;

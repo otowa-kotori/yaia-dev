@@ -15,6 +15,7 @@ describe("state", () => {
     expect(shared.capacity).toBe(DEFAULT_SHARED_INVENTORY_CAPACITY);
     expect(shared.slots.length).toBe(DEFAULT_SHARED_INVENTORY_CAPACITY);
     expect(shared.slots.every((x) => x === null)).toBe(true);
+    expect(s.sharedInventoryStackLimit).toBeNull();
     expect(s.worldActivities).toEqual([]);
     expect(s.flags).toEqual({});
     expect(s.settings.speedMultiplier).toBe(1);

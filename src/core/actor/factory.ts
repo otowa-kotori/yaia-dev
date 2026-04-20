@@ -46,10 +46,21 @@ export interface CreatePlayerOptions {
   skills?: PlayerCharacter["skills"];
   equipped?: PlayerCharacter["equipped"];
   talents?: string[];
+  inventoryStackLimit?: number;
   attrDefs: Readonly<Record<string, AttrDef>>;
 }
 
 export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacter {
+  const baseAttrs = { ...(opts.baseAttrs ?? {}) };
+  if (opts.inventoryStackLimit !== undefined) {
+    if (!Number.isInteger(opts.inventoryStackLimit) || opts.inventoryStackLimit <= 0) {
+      throw new Error(
+        `createPlayerCharacter: invalid inventoryStackLimit ${opts.inventoryStackLimit}`,
+      );
+    }
+    baseAttrs[ATTR.INVENTORY_STACK_LIMIT] = opts.inventoryStackLimit;
+  }
+
   const pc: PlayerCharacter = {
     id: opts.id,
     name: opts.name,
@@ -67,7 +78,7 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     currentMp: 0,
     activeEffects: [],
     cooldowns: {},
-    attrs: createAttrSet(opts.baseAttrs ?? {}),
+    attrs: createAttrSet(baseAttrs),
     abilities: [],
     side: "player",
   };

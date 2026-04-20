@@ -30,6 +30,7 @@ import {
 } from "../../src/core/actor";
 import type { FormulaRef } from "../../src/core/formula";
 import { registerBuiltinIntents } from "../../src/core/intent";
+import { DEFAULT_CHAR_STACK_LIMIT } from "../../src/core/inventory";
 
 // ---------- Shared attribute definitions ----------
 
@@ -66,6 +67,13 @@ export const attrDefs: Record<string, AttrDef> = {
     id: ATTR.SPEED,
     name: "Speed",
     defaultBase: 10,
+    integer: true,
+    clampMin: 1,
+  },
+  [ATTR.INVENTORY_STACK_LIMIT]: {
+    id: ATTR.INVENTORY_STACK_LIMIT,
+    name: "Inventory Stack Limit",
+    defaultBase: DEFAULT_CHAR_STACK_LIMIT,
     integer: true,
     clampMin: 1,
   },
@@ -272,6 +280,7 @@ export function makePlayer(overrides: {
   speed?: number;
   maxHp?: number;
   maxMp?: number;
+  inventoryStackLimit?: number;
   xpCurve?: FormulaRef;
 }): PlayerCharacter {
   const base: Partial<Record<AttrId, number>> = {
@@ -280,6 +289,7 @@ export function makePlayer(overrides: {
     [ATTR.ATK]: overrides.atk ?? 10,
     [ATTR.DEF]: overrides.def ?? 0,
     [ATTR.SPEED]: overrides.speed ?? 10,
+    [ATTR.INVENTORY_STACK_LIMIT]: overrides.inventoryStackLimit ?? DEFAULT_CHAR_STACK_LIMIT,
   };
   const pc = createPlayerCharacter({
     id: overrides.id,

@@ -41,7 +41,7 @@ export function serialize(state: GameState): string {
     // attrs.modifiers and attrs.cache are derived from equipped gear +
     // active effects. Base values ARE source of truth and are kept.
     a.attrs.modifiers = [];
-    a.attrs.cache = null;
+    a.attrs.cache = {};  // {} = all stats dirty; rebuilt by rebuildCharacterDerived on load
     // Runtime abilities list is derived (from knownAbilities for players,
     // MonsterDef for enemies). Blanked here; rebuilt on load.
     a.abilities = [];

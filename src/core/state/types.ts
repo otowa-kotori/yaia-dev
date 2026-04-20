@@ -16,6 +16,7 @@ import type { StageSession } from "../stage/types";
 import type { Inventory, StackEntry } from "../inventory/types";
 import {
   DEFAULT_SHARED_INVENTORY_CAPACITY,
+  DEFAULT_SHARED_STACK_LIMIT,
   createInventory,
 } from "../inventory";
 
@@ -114,6 +115,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     inventories: {
       [SHARED_INVENTORY_KEY]: createInventory(DEFAULT_SHARED_INVENTORY_CAPACITY),
     },
+    sharedInventoryStackLimit: DEFAULT_SHARED_STACK_LIMIT,
     worldActivities: [],
     flags: {},
     settings: { speedMultiplier: 1 },

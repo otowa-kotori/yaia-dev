@@ -22,6 +22,7 @@ import type {
 } from "../core/content";
 import { emptyContentDb } from "../core/content";
 import type { FormulaRef } from "../core/formula";
+import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
 
 // ---------- Attributes ----------
 
@@ -75,6 +76,13 @@ const attrDefs: Record<string, AttrDef> = {
     id: ATTR.SPEED,
     name: "Speed",
     defaultBase: 10,
+    integer: true,
+    clampMin: 1,
+  },
+  [ATTR.INVENTORY_STACK_LIMIT]: {
+    id: ATTR.INVENTORY_STACK_LIMIT,
+    name: "Inventory Stack Limit",
+    defaultBase: DEFAULT_CHAR_STACK_LIMIT,
     integer: true,
     clampMin: 1,
   },

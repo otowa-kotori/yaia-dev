@@ -12,6 +12,7 @@ import {
 
 const ORE = "item.ore.copper" as ItemId;
 const SWORD = "item.weapon.copper_sword" as ItemId;
+const STACK_LIMIT = 50;
 
 function gear(instanceId: string, itemId: ItemId = SWORD): GearInstance {
   return { instanceId, itemId, rolledMods: [] };
@@ -25,18 +26,35 @@ describe("inventory ops", () => {
     expect(inv.slots.every((s) => s === null)).toBe(true);
   });
 
-  test("addStack merges into existing stack of same itemId", () => {
+  test("addStack merges into existing stack of same itemId when under limit", () => {
     const inv = createInventory(3);
-    addStack(inv, ORE, 2);
-    addStack(inv, ORE, 5);
+    addStack(inv, ORE, 2, STACK_LIMIT);
+    addStack(inv, ORE, 5, STACK_LIMIT);
     expect(inv.slots[0]).toEqual({ kind: "stack", itemId: ORE, qty: 7 });
     expect(inv.slots[1]).toBeNull();
+  });
+
+  test("addStack spills into a new slot when the first stack hits its limit", () => {
+    const inv = createInventory(3);
+    addStack(inv, ORE, 40, STACK_LIMIT);
+    addStack(inv, ORE, 15, STACK_LIMIT);
+    expect(inv.slots[0]).toEqual({ kind: "stack", itemId: ORE, qty: 50 });
+    expect(inv.slots[1]).toEqual({ kind: "stack", itemId: ORE, qty: 5 });
+  });
+
+  test("addStack distributes a large quantity across multiple empty slots", () => {
+    const inv = createInventory(4);
+    addStack(inv, ORE, 120, STACK_LIMIT);
+    expect(inv.slots[0]).toEqual({ kind: "stack", itemId: ORE, qty: 50 });
+    expect(inv.slots[1]).toEqual({ kind: "stack", itemId: ORE, qty: 50 });
+    expect(inv.slots[2]).toEqual({ kind: "stack", itemId: ORE, qty: 20 });
+    expect(inv.slots[3]).toBeNull();
   });
 
   test("addStack claims first empty slot when item not present", () => {
     const inv = createInventory(3);
     addGear(inv, gear("g1"));
-    addStack(inv, ORE, 2);
+    addStack(inv, ORE, 2, STACK_LIMIT);
     expect(inv.slots[0]?.kind).toBe("gear");
     expect(inv.slots[1]).toEqual({ kind: "stack", itemId: ORE, qty: 2 });
   });
@@ -56,7 +74,7 @@ describe("inventory ops", () => {
 
   test("stacks and gear coexist in the same bag", () => {
     const inv = createInventory(4);
-    addStack(inv, ORE, 50);
+    addStack(inv, ORE, 50, STACK_LIMIT);
     addGear(inv, gear("g1"));
     addGear(inv, gear("g2"));
     expect(inv.slots[0]?.kind).toBe("stack");
@@ -69,16 +87,30 @@ describe("inventory ops", () => {
     const inv = createInventory(2);
     addGear(inv, gear("g1"));
     addGear(inv, gear("g2"));
-    expect(() => addStack(inv, ORE, 1)).toThrow(/full/);
+    expect(() => addStack(inv, ORE, 1, STACK_LIMIT)).toThrow(/full/);
   });
 
-  test("addStack still merges even when all other slots are full", () => {
+  test("addStack throws when overflow needs a new slot but bag is full", () => {
     const inv = createInventory(2);
-    addStack(inv, ORE, 1);
+    addStack(inv, ORE, 50, STACK_LIMIT);
     addGear(inv, gear("g1"));
-    // Bag is 'full' by slot count, but merging into the existing ore stack is fine.
-    expect(() => addStack(inv, ORE, 10)).not.toThrow();
-    expect((inv.slots[0] as { qty: number }).qty).toBe(11);
+    expect(() => addStack(inv, ORE, 1, STACK_LIMIT)).toThrow(/full/);
+  });
+
+  test("addStack still merges even when all other slots are full if current stack has room", () => {
+    const inv = createInventory(2);
+    addStack(inv, ORE, 40, STACK_LIMIT);
+    addGear(inv, gear("g1"));
+    expect(() => addStack(inv, ORE, 10, STACK_LIMIT)).not.toThrow();
+    expect((inv.slots[0] as { qty: number }).qty).toBe(50);
+  });
+
+  test("addStack stays unlimited when stackLimit is null", () => {
+    const inv = createInventory(2);
+    addStack(inv, ORE, 60, null);
+    addStack(inv, ORE, 10, null);
+    expect(inv.slots[0]).toEqual({ kind: "stack", itemId: ORE, qty: 70 });
+    expect(inv.slots[1]).toBeNull();
   });
 
   test("addGear throws when bag is full", () => {
@@ -89,7 +121,7 @@ describe("inventory ops", () => {
 
   test("findStackSlot + countItem ignore gear", () => {
     const inv = createInventory(3);
-    addStack(inv, ORE, 4);
+    addStack(inv, ORE, 4, STACK_LIMIT);
     addGear(inv, gear("g1", ORE)); // even with matching itemId, gear is a different class
     expect(findStackSlot(inv, ORE)).toBe(0);
     expect(countItem(inv, ORE)).toBe(4);
@@ -97,7 +129,7 @@ describe("inventory ops", () => {
 
   test("removeAtSlot: stack partial removal leaves residue", () => {
     const inv = createInventory(2);
-    addStack(inv, ORE, 10);
+    addStack(inv, ORE, 10, STACK_LIMIT);
     const out = removeAtSlot(inv, 0, 3);
     expect(out).toEqual({ kind: "stack", itemId: ORE, qty: 3 });
     expect(inv.slots[0]).toEqual({ kind: "stack", itemId: ORE, qty: 7 });
@@ -105,7 +137,7 @@ describe("inventory ops", () => {
 
   test("removeAtSlot: stack full removal nulls slot", () => {
     const inv = createInventory(2);
-    addStack(inv, ORE, 5);
+    addStack(inv, ORE, 5, STACK_LIMIT);
     removeAtSlot(inv, 0);
     expect(inv.slots[0]).toBeNull();
   });

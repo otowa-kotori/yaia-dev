@@ -11,7 +11,7 @@ import { INTENT, registerBuiltinIntents } from "../../src/core/intent";
 import { resetContent } from "../../src/core/content";
 import { loadFixtureContent, makePlayer, makeSlime, attrDefs } from "../fixtures/content";
 import { ATTR } from "../../src/core/attribute";
-import { isCharacter, isEnemy, isPlayer } from "../../src/core/actor";
+import { getAttr, isCharacter, isEnemy, isPlayer } from "../../src/core/actor";
 
 describe("save / serialize+deserialize", () => {
   beforeEach(() => {
@@ -32,7 +32,12 @@ describe("save / serialize+deserialize", () => {
 
   test("round-trips PC level / exp / currentHp / xpCurve", () => {
     const state = createEmptyState(42, 1);
-    const hero = makePlayer({ id: "hero.1", abilities: [], maxHp: 120 });
+    const hero = makePlayer({
+      id: "hero.1",
+      abilities: [],
+      maxHp: 120,
+      inventoryStackLimit: 12,
+    });
     hero.level = 5;
     hero.exp = 42;
     hero.currentHp = 73;
@@ -45,6 +50,7 @@ describe("save / serialize+deserialize", () => {
     expect(loaded.currentHp).toBe(73);
     expect(loaded.level).toBe(5);
     expect(loaded.exp).toBe(42);
+    expect(getAttr(loaded, ATTR.INVENTORY_STACK_LIMIT, attrDefs)).toBe(12);
   });
 
   test("strips derived attr modifiers — rebuilt from SoT on load", () => {

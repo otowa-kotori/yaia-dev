@@ -52,7 +52,12 @@ describe("inventory + gear save roundtrip", () => {
     state.inventories[hero.id] = createInventory(DEFAULT_CHAR_INVENTORY_CAPACITY);
 
     // Stack + two gear instances occupying distinct slots.
-    addStack(state.inventories[hero.id]!, copperOre.id, 7);
+    addStack(
+      state.inventories[hero.id]!,
+      copperOre.id,
+      7,
+      getAttr(hero, ATTR.INVENTORY_STACK_LIMIT, attrDefs),
+    );
     const rng = createRng(123);
     const s1 = createGearInstance(moddedSword.id, { rng });
     const s2 = createGearInstance(moddedSword.id, { rng });
