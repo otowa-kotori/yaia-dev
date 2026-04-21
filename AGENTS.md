@@ -4,9 +4,10 @@ Project-specific conventions for Claude. Read before editing code.
 
 ## Orientation
 
-- Architecture overview: `docs/architecture.md` (layering / Actor hierarchy / save rules / invariants).
+- Architecture overview: `docs/architecture.md` (layering / dependency direction / cross-module conventions).
+- Per-module design notes: `docs/modules/<name>.md` (read the relevant one before editing that module).
 - Current progress & TODOs: `docs/roadmap.md`.
-- Read both before touching code — do NOT grep the codebase blindly to infer architecture.
+- Read the relevant docs before touching code — do NOT grep the codebase blindly to infer architecture.
 - Maintain a critical mindset; do not accept technical compromises lightly. Seek out the most correct solution.
 - When there are issues with user requirements, ask questions decisively. Dare to challenge every decision the user makes.
 
