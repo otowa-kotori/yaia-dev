@@ -1,25 +1,44 @@
 # save
 
-序列化、版本迁移、存档适配器。
+`save` 模块负责序列化、版本迁移和存档适配器。
 
 ## 管线
 
-- `serialize`：深拷贝 + 剥派生字段，输出 plain JSON。
-- `deserialize`：按 version 逐步 migrate → 给 Enemy 填回 `MonsterDef.abilities` → `rebuildCharacterDerived`。
-- 结果交给 `session.loadFromSave` 接管。
+### serialize
+
+- 深拷贝当前状态
+- 剥离派生字段
+- 输出可持久化的 plain JSON
+
+### deserialize
+
+- 先按 `version` 逐步执行 migration
+- 再根据 content 定义补回需要重建的派生信息，例如给 `Enemy` 填回 `MonsterDef.abilities`
+- 最后调用 `rebuildCharacterDerived` 重建角色派生字段
+
+反序列化完成后，结果交给 `session.loadFromSave` 接管。
 
 ## 适配器
 
-`SaveAdapter` 抽象：默认 `LocalStorageSaveAdapter`，Node 环境自动降级到内存。IndexedDB 适配器接口预留。
+- `SaveAdapter` 是统一抽象
+- 默认实现是 `LocalStorageSaveAdapter`
+- Node 环境下会自动降级到内存适配器
+- IndexedDB 适配器的接口已经预留
 
 ## 调度
 
-存档节流由 store 管理：10 s 周期自动存，重要事件（levelup / activityComplete / beforeunload）立即 flush。
+存档节流由 store 管理：
+
+- 每 10 秒自动存一次
+- `levelup`、`activityComplete`、`beforeunload` 等重要事件会立即 flush
 
 ## 约定
 
-- `GameState` 必须 JSON 可往返；新增字段即新增 migration。
-- 允许单向引用 content 注册表，以填补派生字段。
-- 新游戏 bootstrap 由 `session.resetToFresh` 读 `ContentDb.starting` 触发，不经 save 管线。
+- `GameState` 必须能进行 JSON 往返
+- 新增持久化字段时，需要同步加入 migration
+- `save` 允许单向读取 content 注册表，用于补回派生字段
+- 新游戏初始化不走 save 管线，而是由 `session.resetToFresh` 读取 `ContentDb.starting`
 
-入口：`src/core/save/`。
+## 入口
+
+`src/core/save/`

@@ -11,6 +11,14 @@ Project-specific conventions for Claude. Read before editing code.
 - Maintain a critical mindset; do not accept technical compromises lightly. Seek out the most correct solution.
 - When there are issues with user requirements, ask questions decisively. Dare to challenge every decision the user makes.
 
+## Communication
+
+- Default to replying to the user in 中文 unless the user explicitly asks for another language.
+- Keep the tone direct, calm, and technically grounded. Always willing to challenge requirements, but do so with clear reasoning rather than combative language.
+- For user-facing explanations, prefer readable prose over compressed shorthand. Define important terms before diving into constraints.
+- When editing documentation, optimize for clarity first: avoid unexplained abbreviations, avoid internal slang, split dense sentences, and keep a stable structure such as "定位 → 职责 → 边界 → 入口" when it helps.
+- Prefer one main idea per sentence or bullet. If a sentence mixes lifecycle, persistence, and invariants at once, split it.
+
 ## Tools
 
 - Use `fd` to find files and `rg` to search contents. Do NOT use `find` or `grep`.
