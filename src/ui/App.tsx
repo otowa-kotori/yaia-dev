@@ -11,6 +11,8 @@
 
 import { useMemo, useState } from "react";
 import { buildDefaultContent } from "../content";
+import { getContent } from "../core/content";
+import { isResourceNode } from "../core/actor";
 import { createGameStore } from "./store";
 import { BattleView } from "./BattleView";
 import { InventoryView } from "./InventoryView";
@@ -144,6 +146,8 @@ function StageSelector({ store }: { store: ReturnType<typeof createGameStore> })
   const { store: s } = useStore(store);
   const stageIds = s.listStageIds();
   const current = s.stageId;
+  const content = getContent();
+
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
       <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>关卡:</span>
@@ -152,8 +156,9 @@ function StageSelector({ store }: { store: ReturnType<typeof createGameStore> })
           key={id}
           onClick={() => s.enterStage(id)}
           style={btnStyle(current === id, true)}
+          title={id}
         >
-          {id}
+          {content.stages[id]?.name ?? id}
         </button>
       ))}
     </div>
@@ -164,14 +169,14 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
   const { store: s } = useStore(store);
   const running = s.isRunning();
   const hasStage = s.stageId !== null;
-
-  // List resource node actor ids currently in this stage so the user can
-  // pick one to gather.
   const stage = s.state.currentStage;
-  const nodeIds = stage
-    ? stage.spawnedActorIds.filter((id) => {
-        const a = s.state.actors.find((x) => x.id === id);
-        return a?.kind === "resource_node";
+
+  // List resource node actors currently in this stage so the user can
+  // pick one to gather.
+  const nodes = stage
+    ? stage.spawnedActorIds.flatMap((id) => {
+        const actor = s.state.actors.find((x) => x.id === id);
+        return actor && isResourceNode(actor) ? [actor] : [];
       })
     : [];
 
@@ -194,13 +199,14 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
           >
             战斗
           </button>
-          {nodeIds.map((id) => (
+          {nodes.map((node) => (
             <button
-              key={id}
-              onClick={() => s.startGather(id)}
+              key={node.id}
+              onClick={() => s.startGather(node.id)}
               style={btnStyle(false)}
+              title={node.id}
             >
-              采集 {shortId(id)}
+              采集 {node.name}
             </button>
           ))}
         </>
@@ -260,11 +266,6 @@ function SettingsTab({ store }: { store: ReturnType<typeof createGameStore> }) {
 }
 
 // ---------- Shared helpers ----------
-
-function shortId(id: string): string {
-  const parts = id.split(".");
-  return parts.slice(-2).join(".");
-}
 
 function btnStyle(active: boolean, small = false): React.CSSProperties {
   return {

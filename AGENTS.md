@@ -7,10 +7,13 @@ Project-specific conventions for Claude. Read before editing code.
 - Architecture overview: `docs/architecture.md` (layering / Actor hierarchy / save rules / invariants).
 - Current progress & TODOs: `docs/roadmap.md`.
 - Read both before touching code — do NOT grep the codebase blindly to infer architecture.
+- Maintain a critical mindset; do not accept technical compromises lightly. Seek out the most correct solution.
+- When there are issues with user requirements, ask questions decisively. Dare to challenge every decision the user makes.
 
 ## Tools
 
 - Use `fd` to find files and `rg` to search contents. Do NOT use `find` or `grep`.
+- To surface TypeScript diagnostics in this PowerShell workspace, run `bun run typecheck 2>&1`.
 
 ## Comments
 
@@ -24,6 +27,7 @@ Project-specific conventions for Claude. Read before editing code.
 - Time units inside game-core are logic ticks. ms only at the UI boundary.
 - All gameplay RNG flows through `ctx.rng`. No `Math.random()` in core.
 - Battles / scheduler state / intent state must be JSON-safe (plain data) so `GameState` can round-trip through a save file.
+- For type narrowing, prefer shared type guards like `isPlayer()` instead of direct checks such as `actor.kind === "player"` when a guard already exists.
 - Persisted actor fields: currentHp, currentMp, activeEffects, cooldowns, attrs.base, per-kind source fields (level/exp/equipped/talents/knownAbilities/xpCurve/skills for PlayerCharacter; defId for Enemy). Derived fields (attrs.modifiers, attrs.cache, runtime abilities list) are rebuilt on load.
 - Content IDs are dot-namespaced (`ability.fire.fireball`, `item.ore.copper`). Coin the ID once; renaming later costs a migration.
 
@@ -34,4 +38,4 @@ Project-specific conventions for Claude. Read before editing code.
 
 ## Commits
 
-- Don't mention Claude in commit messages.
+- Don't mention AI Agent in commit messages.
