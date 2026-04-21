@@ -9,7 +9,6 @@
 //   guard against max being lowered between saves).
 // - All IDs are dot-namespaced strings (e.g. "ability.fire.fireball").
 
-import type { SkillId } from "../content/types";
 import type { Actor } from "../actor/types";
 import type { Battle } from "../combat/battle";
 import type { StageSession } from "../stage/types";
@@ -106,6 +105,8 @@ export interface GameState {
    *  indices are stable across mutations (null = empty). See
    *  ../inventory/types.ts. */
   inventories: Record<string, Inventory>;
+  /** Shared inventory stack limit. null means unlimited stacking. */
+  sharedInventoryStackLimit: number | null;
   worldActivities: WorldActivityState[];
   /** Generic counters / unlock flags / quest progress. */
   flags: Record<string, number>;

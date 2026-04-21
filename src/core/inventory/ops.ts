@@ -34,6 +34,8 @@ export function createInventory(capacity: number): Inventory {
   };
 }
 
+export type StackLimit = number | null | undefined;
+
 /**
  * Merge into existing stacks of the same itemId, then occupy fresh slots for
  * overflow. Throws if the bag runs out of empty slots.

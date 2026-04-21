@@ -177,7 +177,7 @@ function stepWaiting(
 function stepFighting(
   activity: CombatActivity,
   ctx: ActivityContext,
-  params: StepParams,
+  _params: StepParams,
 ): void {
   const battle = lookupBattle(activity, ctx.state);
   if (!battle) {

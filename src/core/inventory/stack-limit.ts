@@ -1,3 +1,4 @@
+import { isPlayer } from "../actor/types";
 import { ATTR, getAttr as getAttrFromSet } from "../attribute";
 import type { AttrDef } from "../content/types";
 import { SHARED_INVENTORY_KEY, type GameState } from "../state/types";
@@ -21,7 +22,7 @@ export function getInventoryStackLimit(
       `getInventoryStackLimit: no actor found for inventory owner "${inventoryOwnerId}"`,
     );
   }
-  if (owner.kind !== "player") {
+  if (!isPlayer(owner)) {
     throw new Error(
       `getInventoryStackLimit: actor "${inventoryOwnerId}" is not a player`,
     );
