@@ -11,7 +11,7 @@
 // - attrs.base is PERSISTED. Modifiers/cache/derived ability list are NOT.
 
 import type { AbilityId, AttrDef, MonsterDef } from "../content/types";
-import { getEffect, getItem } from "../content/registry";
+import { getContent, getEffect, getItem } from "../content/registry";
 import type { FormulaRef } from "../formula/types";
 import {
   addModifiers,
@@ -29,6 +29,8 @@ import type {
   Side,
 } from "./types";
 import type { ResourceNodeDef } from "../content/types";
+import type { WorldRecord } from "../state/types";
+import { computeWorldModifiers } from "../worldrecord";
 
 // ---------- PlayerCharacter factory ----------
 
@@ -150,10 +152,16 @@ export function createResourceNode(
  *
  * Safe to call repeatedly. Clamps currentHp/Mp against the freshly computed
  * maxHp/maxMp (guards against max being lowered between saves).
+ *
+ * Pass `worldRecord` when rebuilding a PlayerCharacter after a save load or
+ * after purchasing a global upgrade — it injects the world-level modifiers.
+ * Omitting it (or passing undefined) is correct for Enemies and for the
+ * initial character-creation call before WorldRecord exists.
  */
 export function rebuildCharacterDerived(
   c: Character,
   attrDefs: Readonly<Record<string, AttrDef>>,
+  worldRecord?: WorldRecord,
 ): void {
   // 1) Wipe modifier stack and cache.
   c.attrs.modifiers = [];
@@ -179,6 +187,15 @@ export function rebuildCharacterDerived(
         [...baseline, ...rolled].map((m) => ({ ...m, sourceId: source })),
       );
     }
+  }
+
+  // 2.5) World upgrade modifiers (players only).
+  //      Injected after gear so the stacking order is: base → gear → world.
+  //      source prefix "world." lets callers removeModifiersBySource("world.")
+  //      for targeted revocation if ever needed.
+  if (worldRecord && c.kind === "player") {
+    const worldMods = computeWorldModifiers(worldRecord, getContent());
+    if (worldMods.length > 0) addModifiers(c.attrs, worldMods);
   }
 
   // 3) Active-effect modifiers.

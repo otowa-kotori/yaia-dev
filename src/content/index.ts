@@ -19,10 +19,16 @@ import type {
   SkillId,
   StageDef,
   StageId,
+  UpgradeDef,
 } from "../core/content";
 import { emptyContentDb } from "../core/content";
 import type { FormulaRef } from "../core/formula";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
+
+// ---------- Currency IDs ----------
+
+/** Gold — primary combat currency, earned by killing monsters. */
+export const CURRENCY_GOLD = "currency.gold";
 
 // ---------- Attributes ----------
 
@@ -130,6 +136,7 @@ export const slime: MonsterDef = {
   abilities: [basicAttack.id],
   drops: [],
   xpReward: 10,
+  currencyReward: { [CURRENCY_GOLD]: 5 },
 };
 
 // ---------- Items ----------
@@ -188,6 +195,40 @@ export const copperMine: StageDef = {
   resourceNodes: [copperVein.id],
 };
 
+// ---------- Global Upgrades ----------
+//
+// Purchased via WorldRecord. Cost scales using exp_curve_v1 so the same
+// formula evaluator handles both character XP and upgrade pricing.
+//
+// ATK upgrade: +2 ATK per level, 10 levels max.
+//   Cost: 50 / 80 / 128 / 205 / 328 / 524 / 839 / 1342 / 2147 / 3436
+// DEF upgrade: +1 DEF per level, 10 levels max.
+//   Cost: 40 / 60 / 90 / 135 / 202 / 304 / 455 / 683 / 1024 / 1536
+
+export const atkUpgrade: UpgradeDef = {
+  id: "upgrade.combat.atk",
+  name: "战士训练",
+  description: "永久提升所有角色攻击力 +2",
+  maxLevel: 10,
+  modifierPerLevel: [
+    { stat: ATTR.ATK, op: "flat", value: 2, sourceId: "world.upgrade.combat.atk" },
+  ],
+  costCurrency: CURRENCY_GOLD,
+  costScaling: { kind: "exp_curve_v1", base: 50, growth: 1.6 },
+};
+
+export const defUpgrade: UpgradeDef = {
+  id: "upgrade.combat.def",
+  name: "护甲强化",
+  description: "永久提升所有角色防御力 +1",
+  maxLevel: 10,
+  modifierPerLevel: [
+    { stat: ATTR.DEF, op: "flat", value: 1, sourceId: "world.upgrade.combat.def" },
+  ],
+  costCurrency: CURRENCY_GOLD,
+  costScaling: { kind: "exp_curve_v1", base: 40, growth: 1.5 },
+};
+
 // ---------- Default DB ----------
 
 export function buildDefaultContent(): ContentDb {
@@ -204,5 +245,9 @@ export function buildDefaultContent(): ContentDb {
     items: { [copperOre.id]: copperOre },
     skills: { [miningSkill.id]: miningSkill },
     resourceNodes: { [copperVein.id]: copperVein },
+    upgrades: {
+      [atkUpgrade.id]: atkUpgrade,
+      [defUpgrade.id]: defUpgrade,
+    },
   };
 }

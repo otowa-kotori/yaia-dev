@@ -23,6 +23,9 @@ export type StageId = string & { readonly __brand: "StageId" };
 export type RecipeId = string & { readonly __brand: "RecipeId" };
 export type AttrId = string & { readonly __brand: "AttrId" };
 export type TalentId = string & { readonly __brand: "TalentId" };
+/** Currency is a plain string at runtime (e.g. "currency.gold"). Branded only
+ *  for call-site clarity; safe to cast with `as CurrencyId`. */
+export type CurrencyId = string & { readonly __brand: "CurrencyId" };
 
 // ---------- Attribute ----------
 
@@ -96,6 +99,8 @@ export interface MonsterDef {
   drops: { itemId: ItemId; chance: number; minQty: number; maxQty: number }[];
   /** XP rewarded on kill (to the character / party). */
   xpReward: number;
+  /** Currencies rewarded on kill. key = currency id (e.g. "currency.gold"). */
+  currencyReward?: Record<string, number>;
 }
 
 // ---------- Effects ----------
@@ -117,6 +122,8 @@ export interface EffectDef {
     items?: { itemId: ItemId; qty: number }[];
     xp?: { skillId: SkillId; amount: number }[];
     charXp?: number;
+    /** Currencies to add to GameState.currencies on reward. key = currency id. */
+    currencies?: Record<string, number>;
   };
   /** Formula used to compute numeric magnitude (e.g. damage). */
   formula?: FormulaRef;
@@ -226,6 +233,32 @@ export interface ResourceNodeDef {
   xpPerSwing: number;
 }
 
+// ---------- Upgrades (global / WorldRecord) ----------
+//
+// Each UpgradeDef represents a purchasable permanent upgrade that affects
+// all PlayerCharacters via the WorldRecord mechanism. Level N means the
+// modifierPerLevel entry is applied N times during rebuildCharacterDerived.
+// Non-attribute effects (drop rate multipliers, etc.) are read directly from
+// WorldRecord.upgrades[id] at the call site — they don't need modifiers.
+
+export interface UpgradeDef {
+  id: string;
+  name: string;
+  /** Short description shown in the upgrade shop UI. */
+  description: string;
+  /** Maximum purchasable level. */
+  maxLevel: number;
+  /** Modifiers injected once per level held. Level 3 → 3 copies stacked.
+   *  sourceId on each modifier is overwritten to "world.<upgradeId>" by
+   *  computeWorldModifiers — the value here is ignored. */
+  modifierPerLevel: Modifier[];
+  /** Currency id used to buy the next level (e.g. "currency.gold"). */
+  costCurrency: string;
+  /** Cost to reach nextLevel = base * growth^(nextLevel-1).
+   *  Reuses FormulaRef/exp_curve_v1 so the same evalFormula path applies. */
+  costScaling: FormulaRef;
+}
+
 // ---------- Talents ----------
 
 export interface TalentDef {
@@ -250,6 +283,7 @@ export interface ContentDb {
   stages: Readonly<Record<string, StageDef>>;
   recipes: Readonly<Record<string, RecipeDef>>;
   talents: Readonly<Record<string, TalentDef>>;
+  upgrades: Readonly<Record<string, UpgradeDef>>;
   attributes: Readonly<Record<string, AttrDef>>;
   resourceNodes: Readonly<Record<string, ResourceNodeDef>>;
   /** Formulas referenced by other content (xp curves, damage, etc). */
@@ -267,6 +301,7 @@ export function emptyContentDb(): ContentDb {
     stages: {},
     recipes: {},
     talents: {},
+    upgrades: {},
     attributes: {},
     resourceNodes: {},
     formulas: {},

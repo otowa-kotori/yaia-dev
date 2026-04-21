@@ -303,12 +303,21 @@ function onParticipantKilled(
   const enemy = victim as Enemy;
   const def = getMonster(enemy.defId);
   const xpReward = def.xpReward;
-  if (xpReward <= 0) return;
+
+  // Build a runtime reward effect combining XP and currency. Skip entirely if
+  // neither is available to avoid a no-op applyEffect call.
+  const hasXp = xpReward > 0;
+  const hasCurrency =
+    def.currencyReward && Object.keys(def.currencyReward).length > 0;
+  if (!hasXp && !hasCurrency) return;
 
   const rewardEffect = {
     id: `effect.runtime.kill_reward.${enemy.defId}` as never,
     kind: "instant" as const,
-    rewards: { charXp: xpReward },
+    rewards: {
+      charXp: hasXp ? xpReward : undefined,
+      currencies: hasCurrency ? def.currencyReward : undefined,
+    },
   };
 
   const ectx: EffectContext = {

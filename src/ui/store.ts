@@ -26,7 +26,7 @@
 import { createTickEngine, TICK_MS } from "../core/tick";
 import { createGameEventBus } from "../core/events";
 import { createRng, restoreRng } from "../core/rng";
-import { createEmptyState, type GameState } from "../core/state";
+import { createEmptyState, type GameState, type WorldRecord } from "../core/state";
 import { setContent, type ContentDb } from "../core/content";
 import {
   ACTIVITY_COMBAT_KIND,
@@ -40,6 +40,8 @@ import {
 import {
   createPlayerCharacter,
   getAttr,
+  isPlayer,
+  rebuildCharacterDerived,
   type PlayerCharacter,
 } from "../core/actor";
 import { ATTR } from "../core/attribute";
@@ -65,6 +67,7 @@ import {
   defaultCharXpCurve,
   forestLv1,
 } from "../content";
+import { upgradeCost } from "../core/worldrecord";
 
 const SAVE_KEY = "yaia:save";
 const AUTOSAVE_INTERVAL_MS = 10_000;
@@ -92,6 +95,15 @@ export interface GameStore {
   isRunning(): boolean;
   setSpeedMultiplier(mul: number): void;
   getSpeedMultiplier(): number;
+  /** Current currency balances (e.g. state.currencies["currency.gold"]). */
+  getCurrencies(): Record<string, number>;
+  /** Current WorldRecord (upgrade levels). */
+  getWorldRecord(): WorldRecord;
+  /** Ids of all upgrades available in the content db. */
+  listUpgradeIds(): string[];
+  /** Purchase the next level of an upgrade. No-ops if the player lacks funds
+   *  or the upgrade is already at max level. */
+  purchaseUpgrade(upgradeId: string): void;
   dispose(): void;
 }
 
@@ -482,6 +494,26 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       notify();
     },
     getSpeedMultiplier: () => engine.speedMultiplier,
+    getCurrencies: () => state.currencies,
+    getWorldRecord: () => state.worldRecord,
+    listUpgradeIds: () => Object.keys(opts.content.upgrades),
+    purchaseUpgrade(upgradeId: string) {
+      const def = opts.content.upgrades[upgradeId];
+      if (!def) throw new Error(`purchaseUpgrade: unknown upgrade "${upgradeId}"`);
+      const currentLevel = state.worldRecord.upgrades[upgradeId] ?? 0;
+      if (currentLevel >= def.maxLevel) return; // already maxed
+      const cost = upgradeCost(def, currentLevel);
+      const balance = state.currencies[def.costCurrency] ?? 0;
+      if (balance < cost) return; // insufficient funds — caller should have gated via UI
+      state.currencies[def.costCurrency] = balance - cost;
+      state.worldRecord.upgrades[upgradeId] = currentLevel + 1;
+      // Rebuild derived state for every PC so world modifiers take effect.
+      for (const a of state.actors) {
+        if (isPlayer(a)) rebuildCharacterDerived(a, attrDefs, state.worldRecord);
+      }
+      notify();
+      persistSoon();
+    },
     dispose() {
       stopLoop();
       if (pendingSaveTimer !== null) clearTimeout(pendingSaveTimer);

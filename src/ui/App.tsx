@@ -15,6 +15,7 @@ import { createGameStore } from "./store";
 import { BattleView } from "./BattleView";
 import { InventoryView } from "./InventoryView";
 import { XpOverview } from "./XpOverview";
+import { UpgradesView } from "./UpgradesView";
 import { useStore } from "./useStore";
 
 // ---------- Container ----------
@@ -32,12 +33,13 @@ const containerStyle: React.CSSProperties = {
 
 // ---------- Tab definitions ----------
 
-type TabId = "map" | "inventory" | "xp" | "settings";
+type TabId = "map" | "inventory" | "xp" | "upgrades" | "settings";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "map",       label: "地图 & 战斗" },
   { id: "inventory", label: "背包" },
   { id: "xp",        label: "经验总览" },
+  { id: "upgrades",  label: "全局升级" },
   { id: "settings",  label: "设置" },
 ];
 
@@ -119,6 +121,8 @@ function TabPanel({
       return <InventoryView store={store} />;
     case "xp":
       return <XpOverview store={store} />;
+    case "upgrades":
+      return <UpgradesView store={store} />;
     case "settings":
       return <SettingsTab store={store} />;
   }

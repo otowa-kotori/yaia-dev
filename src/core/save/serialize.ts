@@ -108,7 +108,7 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
       rebuildCharacterDerived(a, opts.attrDefs);
     } else if (isPlayer(a)) {
       a.abilities = a.knownAbilities.slice();
-      rebuildCharacterDerived(a, opts.attrDefs);
+      rebuildCharacterDerived(a, opts.attrDefs, state.worldRecord);
     }
   }
 

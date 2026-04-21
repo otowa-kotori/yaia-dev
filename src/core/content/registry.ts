@@ -25,6 +25,7 @@ export function patchContent(partial: Partial<ContentDb>): void {
     stages: { ...current.stages, ...(partial.stages ?? {}) },
     recipes: { ...current.recipes, ...(partial.recipes ?? {}) },
     talents: { ...current.talents, ...(partial.talents ?? {}) },
+    upgrades: { ...current.upgrades, ...(partial.upgrades ?? {}) },
     attributes: { ...current.attributes, ...(partial.attributes ?? {}) },
     resourceNodes: {
       ...current.resourceNodes,

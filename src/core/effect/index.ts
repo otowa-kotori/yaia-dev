@@ -149,6 +149,16 @@ function applyRewards(
   if (rewards.charXp) {
     grantCharacterXp(pc, rewards.charXp, { bus: ctx.bus });
   }
+
+  // Currency rewards are written directly to state.currencies.
+  // No event emitted — the store's per-tick notify() covers UI updates.
+  if (rewards.currencies) {
+    for (const [currId, amount] of Object.entries(rewards.currencies)) {
+      if (amount > 0) {
+        ctx.state.currencies[currId] = (ctx.state.currencies[currId] ?? 0) + amount;
+      }
+    }
+  }
 }
 
 // Dispatch into the per-item-class inventory API:

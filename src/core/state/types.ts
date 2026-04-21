@@ -59,6 +59,20 @@ export interface WorldActivityState {
   data: Record<string, unknown>;
 }
 
+// ---------- WorldRecord (cross-run permanent progress) ----------
+//
+// Stored alongside GameState but semantically separate: WorldRecord survives
+// only when explicitly preserved (currently clearSaveAndReset resets it too,
+// but the interface is ready for a prestige / account-level save split).
+//
+// Persisted fields: upgrades only. Derived modifier lists are rebuilt by
+// computeWorldModifiers in the worldrecord module; they are never stored here.
+
+export interface WorldRecord {
+  /** upgradeId → current level (0 = not yet purchased). */
+  upgrades: Record<string, number>;
+}
+
 // ---------- Root state ----------
 
 export interface GameSettings {
@@ -95,6 +109,12 @@ export interface GameState {
   worldActivities: WorldActivityState[];
   /** Generic counters / unlock flags / quest progress. */
   flags: Record<string, number>;
+  /** Accumulated currencies (gold, gems, …). key = currency id string.
+   *  Part of the per-run save; reset on clearSaveAndReset. */
+  currencies: Record<string, number>;
+  /** Permanent global upgrade state. Rebuilt into character attrs via
+   *  computeWorldModifiers + rebuildCharacterDerived on load / purchase. */
+  worldRecord: WorldRecord;
   settings: GameSettings;
 }
 
@@ -118,6 +138,8 @@ export function createEmptyState(seed: number, version: number): GameState {
     sharedInventoryStackLimit: DEFAULT_SHARED_STACK_LIMIT,
     worldActivities: [],
     flags: {},
+    currencies: {},
+    worldRecord: { upgrades: {} },
     settings: { speedMultiplier: 1 },
   };
 }
