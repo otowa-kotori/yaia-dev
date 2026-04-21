@@ -148,6 +148,21 @@ export const slimeMonster: MonsterDef = {
   xpReward: 10,
 };
 
+export const goblinMonster: MonsterDef = {
+  id: "monster.goblin" as MonsterId,
+  name: "Goblin",
+  level: 1,
+  baseAttrs: {
+    [ATTR.MAX_HP]: 22,
+    [ATTR.ATK]: 6,
+    [ATTR.DEF]: 0,
+    [ATTR.SPEED]: 7,
+  },
+  abilities: [basicAttackAbility.id],
+  drops: [],
+  xpReward: 15,
+};
+
 // ---------- Common fixture skills ----------
 
 export const testXpCurve: FormulaRef = {
@@ -171,6 +186,12 @@ export const testOreItem: ItemDef = {
   stackable: true,
 };
 
+export const waveTrophyItem: ItemDef = {
+  id: "item.wave.trophy" as ItemId,
+  name: "Wave Trophy",
+  stackable: true,
+};
+
 export const testVein: ResourceNodeDef = {
   id: "node.test_vein" as ResourceNodeId,
   name: "Test Vein",
@@ -186,9 +207,37 @@ export const forestStage: StageDef = {
   id: "stage.forest.test" as StageId,
   name: "Test Forest",
   mode: "solo",
-  monsters: [slimeMonster.id],
-  waveSize: 1,
-  waveIntervalTicks: 5,
+  recoverBelowHpFactor: 0.5,
+  encounters: [
+    {
+      id: "encounter.forest.test_path",
+      name: "Test Path",
+      waveSelection: "random",
+      waveIntervalTicks: 5,
+      waves: [
+        {
+          id: "wave.forest.test_slimes",
+          name: "Twin Slimes",
+          monsters: [slimeMonster.id, slimeMonster.id],
+          rewards: {
+            drops: [
+              { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
+            ],
+          },
+        },
+        {
+          id: "wave.forest.test_mix",
+          name: "Slime and Goblin",
+          monsters: [slimeMonster.id, goblinMonster.id],
+          rewards: {
+            drops: [
+              { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
+            ],
+          },
+        },
+      ],
+    },
+  ],
 };
 
 export const mineStage: StageDef = {
@@ -218,12 +267,14 @@ export function loadFixtureContent(): ContentDb {
     },
     monsters: {
       [slimeMonster.id]: slimeMonster,
+      [goblinMonster.id]: goblinMonster,
     },
     skills: {
       [miningSkill.id]: miningSkill,
     },
     items: {
       [testOreItem.id]: testOreItem,
+      [waveTrophyItem.id]: waveTrophyItem,
     },
     resourceNodes: {
       [testVein.id]: testVein,

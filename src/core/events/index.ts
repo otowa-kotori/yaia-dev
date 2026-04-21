@@ -49,6 +49,14 @@ export type GameEvents = {
   kill: { attackerId: string; victimId: string };
   damage: { attackerId: string; targetId: string; amount: number };
   loot: { charId: string; itemId: string; qty: number };
+  waveResolved: {
+    charId: string;
+    stageId: string;
+    encounterId: string;
+    waveId: string;
+    waveIndex: number;
+    outcome: "players_won" | "enemies_won";
+  };
   activityComplete: { charId: string | null; kind: string };
 };
 

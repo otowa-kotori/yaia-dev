@@ -168,8 +168,43 @@ export interface SkillDef {
 // ---------- Stages ----------
 
 export type StageMode = "solo" | "party";
+export type EncounterWaveSelection = "random";
 
-/** Scene manifest. A Stage can contain any mix of combat waves and
+export interface WaveRewardDropDef {
+  itemId: ItemId;
+  chance: number;
+  minQty: number;
+  maxQty: number;
+}
+
+export interface WaveRewardDef {
+  /** Loot rolled once when the player clears the wave. */
+  drops?: WaveRewardDropDef[];
+  /** Fixed currencies granted on wave clear. */
+  currencies?: Record<string, number>;
+}
+
+export interface WaveDef {
+  id: string;
+  name: string;
+  /** Exact enemy lineup for this wave. */
+  monsters: MonsterId[];
+  /** Rewards granted only when the wave is cleared (not on player wipe). */
+  rewards?: WaveRewardDef;
+}
+
+export interface EncounterDef {
+  id: string;
+  name: string;
+  /** Candidate waves for this encounter. Current MVP only supports random pick. */
+  waves: WaveDef[];
+  /** Selection strategy hook for future encounter-specific logic. */
+  waveSelection?: EncounterWaveSelection;
+  /** Ticks between one wave resolving and the next wave spawning. */
+  waveIntervalTicks?: number;
+}
+
+/** Scene manifest. A Stage can contain any mix of combat encounters and
  *  resource nodes; which of those the player actually engages with is
  *  decided by the Activity they start. */
 export interface StageDef {
@@ -177,12 +212,10 @@ export interface StageDef {
   name: string;
   mode: StageMode;
   // ---------- Combat aspect (optional) ----------
-  /** Monster pool. A combat-capable stage pulls waves from this list. */
-  monsters?: MonsterId[];
-  /** How many enemies spawn per wave. Default 1. */
-  waveSize?: number;
-  /** Ticks between a wave being cleared and the next wave spawning. */
-  waveIntervalTicks?: number;
+  /** Encounter list available inside this stage. MVP keeps one active encounter at a time. */
+  encounters?: EncounterDef[];
+  /** After a battle ends, pause to heal if HP ratio is at or below this threshold. */
+  recoverBelowHpFactor?: number;
   /** Which skill's XP this stage grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
   // ---------- Gather aspect (optional) ----------
@@ -190,6 +223,7 @@ export interface StageDef {
    *  ResourceNode actor; use the same nodeDefId twice to get two veins. */
   resourceNodes?: ResourceNodeId[];
 }
+
 
 // ---------- Recipes ----------
 

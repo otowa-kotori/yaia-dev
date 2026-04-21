@@ -6,13 +6,13 @@ import type {
   AbilityDef,
   AbilityId,
   AttrDef,
+  ContentDb,
   EffectDef,
   EffectId,
   ItemDef,
   ItemId,
   MonsterDef,
   MonsterId,
-  ContentDb,
   ResourceNodeDef,
   ResourceNodeId,
   SkillDef,
@@ -139,6 +139,22 @@ export const slime: MonsterDef = {
   currencyReward: { [CURRENCY_GOLD]: 5 },
 };
 
+export const goblin: MonsterDef = {
+  id: "monster.goblin" as MonsterId,
+  name: "Goblin",
+  level: 1,
+  baseAttrs: {
+    [ATTR.MAX_HP]: 24,
+    [ATTR.ATK]: 6,
+    [ATTR.DEF]: 0,
+    [ATTR.SPEED]: 7,
+  },
+  abilities: [basicAttack.id],
+  drops: [],
+  xpReward: 14,
+  currencyReward: { [CURRENCY_GOLD]: 7 },
+};
+
 // ---------- Items ----------
 
 export const copperOre: ItemDef = {
@@ -146,6 +162,13 @@ export const copperOre: ItemDef = {
   name: "Copper Ore",
   stackable: true,
   tags: ["ore"],
+};
+
+export const slimeGel: ItemDef = {
+  id: "item.monster.slime_gel" as ItemId,
+  name: "Slime Gel",
+  stackable: true,
+  tags: ["monster_drop"],
 };
 
 // ---------- Skills ----------
@@ -182,9 +205,39 @@ export const forestLv1: StageDef = {
   id: "stage.forest.lv1" as StageId,
   name: "Sunny Forest",
   mode: "solo",
-  monsters: [slime.id],
-  waveSize: 1,
-  waveIntervalTicks: 20,
+  recoverBelowHpFactor: 0.5,
+  encounters: [
+    {
+      id: "encounter.forest.path",
+      name: "Forest Path",
+      waveSelection: "random",
+      waveIntervalTicks: 20,
+      waves: [
+        {
+          id: "wave.forest.slime_pack",
+          name: "Slime Pack",
+          monsters: [slime.id, slime.id],
+          rewards: {
+            drops: [
+              { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 2 },
+            ],
+            currencies: { [CURRENCY_GOLD]: 2 },
+          },
+        },
+        {
+          id: "wave.forest.goblin_patrol",
+          name: "Goblin Patrol",
+          monsters: [slime.id, goblin.id],
+          rewards: {
+            drops: [
+              { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 },
+            ],
+            currencies: { [CURRENCY_GOLD]: 4 },
+          },
+        },
+      ],
+    },
+  ],
 };
 
 /** A mining-only stage. One copper vein spawns at enter. */
@@ -237,12 +290,18 @@ export function buildDefaultContent(): ContentDb {
     attributes: attrDefs,
     effects: { [strikeEffect.id]: strikeEffect },
     abilities: { [basicAttack.id]: basicAttack },
-    monsters: { [slime.id]: slime },
+    monsters: {
+      [slime.id]: slime,
+      [goblin.id]: goblin,
+    },
     stages: {
       [forestLv1.id]: forestLv1,
       [copperMine.id]: copperMine,
     },
-    items: { [copperOre.id]: copperOre },
+    items: {
+      [copperOre.id]: copperOre,
+      [slimeGel.id]: slimeGel,
+    },
     skills: { [miningSkill.id]: miningSkill },
     resourceNodes: { [copperVein.id]: copperVein },
     upgrades: {

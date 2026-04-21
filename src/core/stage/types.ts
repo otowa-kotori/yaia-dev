@@ -5,8 +5,7 @@
 // Activity layer. A stage is responsible for:
 //
 //   - spawning its initial population on enter
-//   - respawning elements over time according to its def (e.g. 20 ticks
-//     after a wave is cleared, a new wave spawns)
+//   - keeping the active encounter's wave loop moving over time
 //   - cleaning up its population on leave (so actors don't pile up in the
 //     world forever)
 //
@@ -16,6 +15,16 @@
 // Stage state is JSON-safe (plain data) so it round-trips through saves.
 // Runtime logic (the "controller") is not persisted; it's re-instantiated
 // from state.currentStage on load.
+
+export interface ActiveCombatWaveSession {
+  encounterId: string;
+  waveId: string;
+  waveIndex: number;
+  enemyIds: string[];
+  /** active = unresolved, victory/defeat = battle resolved and waiting for next spawn. */
+  status: "active" | "victory" | "defeat";
+  rewardGranted: boolean;
+}
 
 /**
  * Per-session state stored in GameState.currentStage. Minimal bookkeeping
@@ -29,11 +38,13 @@ export interface StageSession {
    *  leave). Actors that pre-date the stage, like the player character,
    *  are not in this list. */
   spawnedActorIds: string[];
+  /** Currently selected encounter in this stage. MVP enters the first encounter. */
+  activeEncounterId: string | null;
   // ---------- Respawn bookkeeping ----------
-  /** If > 0, number of ticks remaining until the next combat wave spawns.
-   *  When a wave is cleared, the stage controller sets this to the stage's
-   *  waveIntervalTicks. When it reaches 0, a new wave is spawned. */
+  /** If > 0, number of ticks remaining until the next combat wave spawns. */
   combatWaveCooldownTicks: number;
   /** Monotonically increasing wave counter. Used to build unique enemy ids. */
   combatWaveIndex: number;
+  /** The wave currently spawned (or most recently resolved while cooling down). */
+  currentWave: ActiveCombatWaveSession | null;
 }

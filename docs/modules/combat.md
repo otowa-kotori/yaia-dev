@@ -33,7 +33,9 @@
 
 - 胜负由 `tickBattle` 判断
 - `combat` 自己不直接发放奖励，只负责发出战斗相关事件
-- 例如 `kill` 事件会被 listener（如 `CombatActivity`）接收，再通过 `applyEffect(synthesizedInstantEffect)` 发放奖励，从而复用 effect 管线
+- `kill` 事件会被 listener（如 `CombatActivity`）接收，再通过 `applyEffect(synthesizedInstantEffect)` 发放逐个怪物的击杀奖励
+- 波次奖励不属于 `Battle` 本身；它由 `CombatActivity` 在战斗结束且结果为 `players_won` 时，根据当前 wave 的 reward 配置统一结算
+- `waveResolved` 事件描述的是波次层面的结算，不是 `Battle` 内部调度的一部分
 
 ## 边界
 

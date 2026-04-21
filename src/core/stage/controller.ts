@@ -2,12 +2,12 @@
 //
 // Ticking responsibilities:
 //   1. At enter: spawn the stage's initial ResourceNodes + open the first
-//      combat wave (if the stage has combat configured).
+//      combat wave of the active encounter (if the stage has combat configured).
 //   2. Each tick: reap dead stage-owned enemies that are no longer
 //      referenced by any ongoing battle (keeps state.actors + save size
 //      bounded — without this, every slime you kill stays resident forever).
-//   3. In the fighting phase: nothing, until all enemies are dead → set
-//      combatWaveCooldownTicks; then tick it down; at 0, spawn a new wave.
+//   3. When the current wave resolves, wait for combatWaveCooldownTicks and
+//      then spawn the next randomly selected wave from the active encounter.
 //   4. On leave: remove every actor whose id is in spawnedActorIds.
 //
 // The controller does NOT run combat. Whoever wants to fight (a
@@ -24,13 +24,13 @@ import {
   type Actor,
   type Enemy,
 } from "../actor";
-import type { AttrDef, StageDef } from "../content/types";
+import type { AttrDef, EncounterDef, StageDef, WaveDef } from "../content/types";
 import { getMonster, getResourceNode, getStage } from "../content/registry";
 import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
 import type { Tickable } from "../tick";
-import type { StageSession } from "./types";
+import type { ActiveCombatWaveSession, StageSession } from "./types";
 
 export interface StageControllerContext {
   state: GameState;
@@ -64,13 +64,13 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
         `stage: cannot enter "${opts.stageId}" — already in "${initialCtx.state.currentStage.stageId}"; leaveStage first`,
       );
     }
-    initialCtx.state.currentStage = freshSession(
-      opts.stageId,
-      initialCtx.currentTick,
-    );
+    initialCtx.state.currentStage = freshSession(stageDef, initialCtx.currentTick);
     // Spawn the initial population.
     spawnResourceNodes(stageDef, initialCtx);
-    spawnCombatWave(stageDef, initialCtx);
+    const encounter = currentEncounter(stageDef, initialCtx.state.currentStage);
+    if (encounter) {
+      spawnCombatWave(encounter, initialCtx);
+    }
   }
 
   const controller: StageController = {
@@ -113,24 +113,24 @@ function stepController(def: StageDef, ctx: StageControllerContext): void {
   // the reference is gone and the enemy is collectible.
   reapDeadEnemies(session, ctx);
 
-  // Combat wave respawn: when no stage-spawned enemies are alive, start the
-  // cooldown countdown; when it hits 0, spawn a new wave.
-  if ((def.monsters?.length ?? 0) > 0) {
-    const aliveEnemies = stageEnemies(session, ctx.state).filter(
-      (e) => e.currentHp > 0,
-    );
-    if (aliveEnemies.length === 0) {
-      if (session.combatWaveCooldownTicks <= 0) {
-        session.combatWaveCooldownTicks =
-          def.waveIntervalTicks ?? DEFAULT_WAVE_INTERVAL;
-      } else {
-        session.combatWaveCooldownTicks -= 1;
-        if (session.combatWaveCooldownTicks === 0) {
-          spawnCombatWave(def, ctx);
-        }
-      }
+  const encounter = currentEncounter(def, session);
+  if (!encounter) return;
+
+  if (!session.currentWave) {
+    if (session.combatWaveCooldownTicks > 0) {
+      tickWaveCooldown(encounter, session, ctx);
+      return;
     }
+    spawnCombatWave(encounter, ctx);
+    return;
   }
+
+  if (session.currentWave.status === "active") {
+    return;
+  }
+
+  clearResolvedWaveActors(session, ctx);
+  tickWaveCooldown(encounter, session, ctx);
 }
 
 const DEFAULT_WAVE_INTERVAL = 20;
@@ -183,17 +183,17 @@ function spawnResourceNodes(def: StageDef, ctx: StageControllerContext): void {
   }
 }
 
-function spawnCombatWave(def: StageDef, ctx: StageControllerContext): void {
+function spawnCombatWave(encounter: EncounterDef, ctx: StageControllerContext): void {
   const session = ctx.state.currentStage!;
-  const monsters = def.monsters ?? [];
-  if (monsters.length === 0) return;
+  const wave = pickEncounterWave(encounter, ctx.rng);
 
   session.combatWaveIndex += 1;
-  const waveSize = Math.max(1, def.waveSize ?? 1);
-  for (let i = 0; i < waveSize; i++) {
-    const monsterId = ctx.rng.pick(monsters);
+  const enemyIds: string[] = [];
+  for (let i = 0; i < wave.monsters.length; i++) {
+    const monsterId = wave.monsters[i]!;
     const mdef = getMonster(monsterId);
-    const instanceId = `enemy.${monsterId}.${session.stageId}.w${session.combatWaveIndex}.${i}`;
+    const instanceId =
+      `enemy.${monsterId}.${session.stageId}.${encounter.id}.w${session.combatWaveIndex}.${i}`;
     const enemy = createEnemy({
       instanceId,
       def: mdef,
@@ -201,7 +201,17 @@ function spawnCombatWave(def: StageDef, ctx: StageControllerContext): void {
     });
     ctx.state.actors.push(enemy);
     session.spawnedActorIds.push(instanceId);
+    enemyIds.push(instanceId);
   }
+
+  session.currentWave = {
+    encounterId: encounter.id,
+    waveId: wave.id,
+    waveIndex: session.combatWaveIndex,
+    enemyIds,
+    status: "active",
+    rewardGranted: false,
+  };
   session.combatWaveCooldownTicks = 0;
 }
 
@@ -227,14 +237,97 @@ export function stageResourceNodes(
   );
 }
 
+export function lookupEncounter(
+  def: StageDef,
+  encounterId: string,
+): EncounterDef {
+  const encounter = (def.encounters ?? []).find((x) => x.id === encounterId);
+  if (!encounter) {
+    throw new Error(
+      `stage: stage "${def.id}" has no encounter "${encounterId}"`,
+    );
+  }
+  return encounter;
+}
+
+export function lookupWave(
+  encounter: EncounterDef,
+  waveId: string,
+): WaveDef {
+  const wave = encounter.waves.find((x) => x.id === waveId);
+  if (!wave) {
+    throw new Error(
+      `stage: encounter "${encounter.id}" has no wave "${waveId}"`,
+    );
+  }
+  return wave;
+}
+
 // ---------- Internal ----------
 
-function freshSession(stageId: string, currentTick: number): StageSession {
+function currentEncounter(
+  def: StageDef,
+  session: StageSession,
+): EncounterDef | null {
+  const encounters = def.encounters ?? [];
+  if (encounters.length === 0) return null;
+  if (!session.activeEncounterId) {
+    session.activeEncounterId = encounters[0]!.id;
+  }
+  return lookupEncounter(def, session.activeEncounterId);
+}
+
+function pickEncounterWave(encounter: EncounterDef, rng: Rng): WaveDef {
+  if (encounter.waves.length === 0) {
+    throw new Error(`stage: encounter "${encounter.id}" has no waves`);
+  }
+  switch (encounter.waveSelection ?? "random") {
+    case "random":
+      return rng.pick(encounter.waves);
+  }
+}
+
+function clearResolvedWaveActors(
+  session: StageSession,
+  ctx: StageControllerContext,
+): void {
+  const wave = session.currentWave;
+  if (!wave || wave.status === "active") return;
+  if (wave.enemyIds.length === 0) return;
+
+  const enemyIds = new Set(wave.enemyIds);
+  ctx.state.actors = ctx.state.actors.filter((a) => !enemyIds.has(a.id));
+  session.spawnedActorIds = session.spawnedActorIds.filter(
+    (id) => !enemyIds.has(id),
+  );
+  wave.enemyIds = [];
+}
+
+function tickWaveCooldown(
+  encounter: EncounterDef,
+  session: StageSession,
+  ctx: StageControllerContext,
+): void {
+  if (session.combatWaveCooldownTicks <= 0) {
+    session.combatWaveCooldownTicks =
+      encounter.waveIntervalTicks ?? DEFAULT_WAVE_INTERVAL;
+    return;
+  }
+
+  session.combatWaveCooldownTicks -= 1;
+  if (session.combatWaveCooldownTicks === 0) {
+    spawnCombatWave(encounter, ctx);
+  }
+}
+
+function freshSession(def: StageDef, currentTick: number): StageSession {
   return {
-    stageId,
+    stageId: def.id,
     enteredAtTick: currentTick,
     spawnedActorIds: [],
+    activeEncounterId: def.encounters?.[0]?.id ?? null,
     combatWaveCooldownTicks: 0,
     combatWaveIndex: 0,
+    currentWave: null,
   };
 }

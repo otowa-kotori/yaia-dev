@@ -10,11 +10,17 @@ import { createRng } from "../../src/core/rng";
 import { createGameEventBus } from "../../src/core/events";
 import { createEmptyState } from "../../src/core/state";
 import {
+  createInventory,
+  countItem,
+  DEFAULT_CHAR_INVENTORY_CAPACITY,
+} from "../../src/core/inventory";
+import {
   attrDefs,
   forestStage,
   loadFixtureContent,
   makePlayer,
   basicAttackAbility,
+  waveTrophyItem,
 } from "../fixtures/content";
 
 function makeCtxProvider(
@@ -32,13 +38,22 @@ function makeCtxProvider(
   });
 }
 
+function installHero(
+  state: ReturnType<typeof createEmptyState>,
+  hero: ReturnType<typeof makePlayer>,
+): void {
+  state.actors.push(hero);
+  state.inventories[hero.id] = createInventory(DEFAULT_CHAR_INVENTORY_CAPACITY);
+}
+
 describe("CombatActivity + Stage integration", () => {
   beforeEach(() => {
     resetContent();
     loadFixtureContent();
+    forestStage.recoverBelowHpFactor = 0.5;
   });
 
-  test("stage spawns waves; activity fights and awards XP", () => {
+  test("stage spawns configured waves; activity fights and awards XP plus wave loot", () => {
     const state = createEmptyState(42, 1);
     const bus = createGameEventBus();
     const rng = createRng(42);
@@ -50,13 +65,16 @@ describe("CombatActivity + Stage integration", () => {
       speed: 20,
       maxHp: 50,
     });
-    state.actors.push(hero);
+    installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
 
     const controller = enterStage({ stageId: forestStage.id, ctxProvider });
     engine.register(controller);
+
+    expect(state.currentStage?.currentWave).not.toBeNull();
+    expect(state.currentStage?.currentWave?.enemyIds.length).toBe(2);
 
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
@@ -75,6 +93,7 @@ describe("CombatActivity + Stage integration", () => {
     const progressed =
       hero.level > levelBefore || hero.exp > expBefore;
     expect(progressed).toBe(true);
+    expect(countItem(state.inventories[hero.id]!, waveTrophyItem.id)).toBeGreaterThan(0);
   });
 
   test("stopRequested ends the activity cleanly", () => {
@@ -87,7 +106,7 @@ describe("CombatActivity + Stage integration", () => {
       atk: 20,
       speed: 20,
     });
-    state.actors.push(hero);
+    installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
@@ -116,24 +135,27 @@ describe("CombatActivity + Stage integration", () => {
     expect(engine.listTickables().some((t) => t.id === controller.id)).toBe(true);
   });
 
-  test("hero KO enters recovering then resumes when stage respawns enemies", () => {
+  test("hero KO fails the wave, gets no wave reward, then the stage advances to later waves", () => {
     const state = createEmptyState(42, 1);
     const bus = createGameEventBus();
     const rng = createRng(42);
 
-    // Weak hero that dies to slime easily.
+    // Weak hero that dies to the first wave easily.
     const hero = makePlayer({
       id: "hero",
       abilities: [basicAttackAbility.id],
       atk: 0,
       def: 0,
-      speed: 1, // slime acts first
+      speed: 1,
       maxHp: 3,
     });
-    state.actors.push(hero);
+    installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
+
+    const resolvedOutcomes: string[] = [];
+    bus.on("waveResolved", (payload) => resolvedOutcomes.push(payload.outcome));
 
     const controller = enterStage({ stageId: forestStage.id, ctxProvider });
     engine.register(controller);
@@ -142,28 +164,65 @@ describe("CombatActivity + Stage integration", () => {
       ownerCharacterId: hero.id,
       ctxProvider,
       actionDelayTicks: 1,
-      recoverHpPctPerTick: 0.5, // half maxHp per tick -> ~2 ticks to full
+      recoverHpPctPerTick: 0.5,
     });
     engine.register(activity);
 
-    engine.step(10);
-    expect(
-      activity.phase === "recovering" ||
-        activity.phase === "fighting" ||
-        activity.phase === "waitingForEnemies",
-    ).toBe(true);
+    engine.step(120);
 
-    // Let the loop cycle through recover + fight several times. The hero
-    // can't actually win — slime never dies — so the stage never respawns.
-    // The important property: the activity keeps cycling (not permanently
-    // stuck) and the hero keeps recovering.
-    engine.step(100);
-    expect(hero.currentHp).toBeGreaterThanOrEqual(0);
-    // At some point the hero has been revived — phase should still be
-    // progressing (recovering / fighting / waiting), not a dead-end.
+    expect(resolvedOutcomes).toContain("enemies_won");
+    expect(countItem(state.inventories[hero.id]!, waveTrophyItem.id)).toBe(0);
+    expect(state.currentStage!.combatWaveIndex).toBeGreaterThanOrEqual(2);
     expect(["recovering", "fighting", "waitingForEnemies"]).toContain(
       activity.phase,
     );
+  });
+
+  test("winning below the configured HP threshold enters recovering", () => {
+    const state = createEmptyState(42, 1);
+    const bus = createGameEventBus();
+    const rng = createRng(42);
+    const hero = makePlayer({
+      id: "hero",
+      abilities: [basicAttackAbility.id],
+      atk: 999,
+      def: 0,
+      speed: 10,
+      maxHp: 100,
+    });
+    installHero(state, hero);
+
+    const prevThreshold = forestStage.recoverBelowHpFactor;
+    forestStage.recoverBelowHpFactor = 1;
+
+    try {
+      const engine = createTickEngine();
+      const ctxProvider = makeCtxProvider(state, bus, rng, engine);
+      const controller = enterStage({ stageId: forestStage.id, ctxProvider });
+      engine.register(controller);
+
+      const activity = createCombatActivity({
+        ownerCharacterId: hero.id,
+        ctxProvider,
+        actionDelayTicks: 1,
+        recoverHpPctPerTick: 0.01,
+      });
+      engine.register(activity);
+
+      let won = false;
+      bus.on("waveResolved", (payload) => {
+        if (payload.outcome === "players_won") won = true;
+      });
+
+      for (let i = 0; i < 40 && !won; i++) {
+        engine.step(1);
+      }
+
+      expect(won).toBe(true);
+      expect(activity.phase).toBe("recovering");
+    } finally {
+      forestStage.recoverBelowHpFactor = prevThreshold;
+    }
   });
 
   test("leaveStage removes spawned actors", () => {
@@ -176,7 +235,7 @@ describe("CombatActivity + Stage integration", () => {
       atk: 20,
       speed: 20,
     });
-    state.actors.push(hero);
+    installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
@@ -185,7 +244,7 @@ describe("CombatActivity + Stage integration", () => {
     engine.register(controller);
     engine.step(3);
     const beforeCount = state.actors.length;
-    expect(beforeCount).toBeGreaterThan(1); // at least the hero + one enemy
+    expect(beforeCount).toBeGreaterThan(1); // at least the hero + wave enemies
 
     engine.unregister(controller.id);
     leaveStage(ctxProvider());
@@ -196,18 +255,18 @@ describe("CombatActivity + Stage integration", () => {
     expect(state.actors.filter((a) => a.kind === "enemy").length).toBe(0);
   });
 
-  test("dead enemies are reaped so state.actors stays bounded", () => {
+  test("resolved wave enemies are cleared so state.actors stays bounded", () => {
     const state = createEmptyState(42, 1);
     const bus = createGameEventBus();
     const rng = createRng(42);
     const hero = makePlayer({
       id: "hero",
       abilities: [basicAttackAbility.id],
-      atk: 999, // one-shot slimes
-      speed: 999, // always goes first
+      atk: 999, // one-shot enemies
+      speed: 999,
       maxHp: 100,
     });
-    state.actors.push(hero);
+    installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
@@ -224,7 +283,6 @@ describe("CombatActivity + Stage integration", () => {
     // Grind for a while — many waves should have been spawned and killed.
     engine.step(500);
 
-    // waveIndex grows unbounded, but dead enemies must be collected.
     expect(state.currentStage!.combatWaveIndex).toBeGreaterThan(5);
 
     const stageOwned = new Set(state.currentStage!.spawnedActorIds);
@@ -234,13 +292,7 @@ describe("CombatActivity + Stage integration", () => {
         stageOwned.has(a.id) &&
         (a as unknown as { currentHp: number }).currentHp <= 0,
     );
-    // At most a small handful can be lingering (e.g. just-killed, still
-    // referenced by the current ongoing battle). Definitely not one per wave.
-    expect(deadInState.length).toBeLessThanOrEqual(3);
-
-    // spawnedActorIds array also pruned — hard upper bound well below waves.
-    expect(state.currentStage!.spawnedActorIds.length).toBeLessThan(
-      state.currentStage!.combatWaveIndex,
-    );
+    expect(deadInState.length).toBeLessThanOrEqual(2);
+    expect(state.currentStage!.spawnedActorIds.length).toBeLessThanOrEqual(4);
   });
 });

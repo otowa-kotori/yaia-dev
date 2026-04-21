@@ -1,7 +1,7 @@
 // CombatActivity — player "I am actively fighting in the current stage".
 //
 // This is strictly the ACTIVITY layer: it drives battle ticks, handles
-// hero KO recovery, and issues stop cleanup. The ACTOR POPULATION of the
+// hero recovery, and issues stop cleanup. The ACTOR POPULATION of the
 // stage (spawning and respawning waves of enemies) is the StageController's
 // job — CombatActivity just looks at the world and fights whatever enemies
 // are currently in the current stage.
@@ -13,17 +13,18 @@
 //     | enemies appear -> fighting
 //     | stopRequested   -> stopped
 //   fighting          — a Battle is active; delegate ticks to tickBattle.
-//     | battle ends players_won -> waitingForEnemies
+//     | battle ends players_won -> waitingForEnemies / recovering
 //     | battle ends enemies_won -> recovering
 //     | stopRequested (and battle ends) -> stopped
-//   recovering        — hero KO'd. Regen HP per tick until full.
+//   recovering        — hero HP too low after battle. Regen HP per tick until full.
 //     | hero full-hp -> waitingForEnemies
 //     | stopRequested (at full-hp) -> stopped
 //   stopped           — terminal.
 //
 // Kill rewards flow via the bus — CombatActivity subscribes to 'kill' for
 // enemies in its current battle and hands the hero an instant reward
-// Effect per kill. See onParticipantKilled below.
+// Effect per kill. Wave rewards are granted only when the wave resolves with
+// players_won. See onParticipantKilled / grantWaveRewards below.
 //
 // Save/load: persisted in PlayerCharacter.activity.data = { phase,
 // currentBattleId, lastTransitionTick }. The stage the player is in is
@@ -47,7 +48,9 @@ import {
   type PlayerCharacter,
 } from "../actor";
 import { ATTR } from "../attribute";
-import { getMonster } from "../content/registry";
+import { getMonster, getStage } from "../content/registry";
+import type { EffectDef, ItemId, WaveRewardDef } from "../content/types";
+
 import type { GameState } from "../state/types";
 import {
   createBattle,
@@ -57,7 +60,7 @@ import {
 } from "../combat";
 import { INTENT } from "../intent";
 import { applyEffect, type EffectContext } from "../effect";
-import { stageEnemies } from "../stage";
+import { lookupEncounter, lookupWave, stageEnemies } from "../stage";
 import type { CharacterActivity, ActivityContext } from "./types";
 
 export const ACTIVITY_COMBAT_KIND = "activity.combat";
@@ -130,7 +133,10 @@ export function createCombatActivity(
 
     tick() {
       const ctx = opts.ctxProvider();
-      stepPhase(activity, ctx, { recoverHpPctPerTick: recoverHp, actionDelayTicks: actionDelay });
+      stepPhase(activity, ctx, {
+        recoverHpPctPerTick: recoverHp,
+        actionDelayTicks: actionDelay,
+      });
     },
 
     isDone() {
@@ -207,6 +213,8 @@ function stepFighting(
     // Lost the battle reference somehow — fall back to waiting.
     activity.phase = "waitingForEnemies";
     activity.currentBattleId = null;
+    const hero = findHero(activity, ctx.state);
+    if (hero) syncCombatToHero(activity, hero);
     return;
   }
 
@@ -224,10 +232,30 @@ function stepFighting(
   if (battle.outcome === "ongoing") return;
 
   // Battle resolved. Dispose of the battle record; the stage controller
-  // reclaims dead enemies on its own schedule.
+  // reclaims / clears wave enemies on its own schedule.
   removeBattle(ctx.state, battle.id);
 
   const hero = findHero(activity, ctx.state);
+  const session = ctx.state.currentStage;
+  const resolvedOutcome =
+    battle.outcome === "players_won" ? "players_won" : "enemies_won";
+  if (session?.currentWave?.status === "active") {
+    session.currentWave.status =
+      resolvedOutcome === "players_won" ? "victory" : "defeat";
+    if (resolvedOutcome === "players_won" && hero) {
+      grantWaveRewards(session, hero, ctx);
+    }
+    ctx.bus.emit("waveResolved", {
+      charId: activity.ownerCharacterId,
+      stageId: session.stageId,
+      encounterId: session.currentWave.encounterId,
+      waveId: session.currentWave.waveId,
+      waveIndex: session.currentWave.waveIndex,
+      outcome: resolvedOutcome,
+    });
+  }
+
+
   activity.currentBattleId = null;
   activity.lastTransitionTick = ctx.currentTick;
 
@@ -235,12 +263,16 @@ function stepFighting(
     enterStopped(activity, ctx);
     return;
   }
-  if (!hero || hero.currentHp <= 0) {
-    activity.phase = "recovering";
-  } else {
-    activity.phase = "waitingForEnemies";
+
+  if (!hero) {
+    activity.phase = "stopped";
+    return;
   }
-  if (hero) syncCombatToHero(activity, hero);
+
+  activity.phase = shouldRecoverAfterBattle(hero, ctx)
+    ? "recovering"
+    : "waitingForEnemies";
+  syncCombatToHero(activity, hero);
 }
 
 function stepRecovering(
@@ -282,12 +314,12 @@ function openBattle(
   params: StepParams,
 ): void {
   const session = ctx.state.currentStage!;
+  const waveIndex = session.currentWave?.waveIndex ?? session.combatWaveIndex;
   const intents: Record<string, string> = {};
   intents[hero.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
 
-  const battleId =
-    `battle.${activity.id}.${session.stageId}.w${session.combatWaveIndex}`;
+  const battleId = `battle.${activity.id}.${session.stageId}.w${waveIndex}`;
   const battle = createBattle({
     id: battleId,
     mode: "solo",
@@ -356,6 +388,68 @@ function onParticipantKilled(
   applyEffect(rewardEffect, victim, hero, ectx);
 }
 
+function grantWaveRewards(
+  session: NonNullable<ActivityContext["state"]["currentStage"]>,
+  hero: PlayerCharacter,
+  ctx: ActivityContext,
+): void {
+  const activeWave = session.currentWave;
+  if (!activeWave || activeWave.rewardGranted) return;
+
+  const stageDef = getStage(session.stageId);
+  const encounter = lookupEncounter(stageDef, activeWave.encounterId);
+  const wave = lookupWave(encounter, activeWave.waveId);
+  const rewardEffect = buildWaveRewardEffect(
+    session.stageId,
+    activeWave.waveIndex,
+    wave.rewards,
+    ctx,
+  );
+  activeWave.rewardGranted = true;
+  if (!rewardEffect) return;
+
+  const ectx: EffectContext = {
+    state: ctx.state,
+    bus: ctx.bus,
+    rng: ctx.rng,
+    attrDefs: ctx.attrDefs,
+    currentTick: ctx.currentTick,
+  };
+  applyEffect(rewardEffect, hero, hero, ectx);
+}
+
+function buildWaveRewardEffect(
+  stageId: string,
+  waveIndex: number,
+  rewards: WaveRewardDef | undefined,
+  ctx: ActivityContext,
+): EffectDef | null {
+  if (!rewards) return null;
+
+  const items: { itemId: ItemId; qty: number }[] = [];
+
+  for (const drop of rewards.drops ?? []) {
+    if (!ctx.rng.chance(drop.chance)) continue;
+    const qty = ctx.rng.int(drop.minQty, drop.maxQty);
+    if (qty <= 0) continue;
+    items.push({ itemId: drop.itemId, qty });
+  }
+
+  const hasItems = items.length > 0;
+  const hasCurrencies =
+    !!rewards.currencies && Object.keys(rewards.currencies).length > 0;
+  if (!hasItems && !hasCurrencies) return null;
+
+  return {
+    id: `effect.runtime.wave_reward.${stageId}.${waveIndex}` as never,
+    kind: "instant",
+    rewards: {
+      items: hasItems ? items : undefined,
+      currencies: hasCurrencies ? rewards.currencies : undefined,
+    },
+  };
+}
+
 // ---------- Helpers ----------
 
 function findHero(
@@ -373,6 +467,22 @@ function lookupBattle(
 ): Battle | null {
   if (!activity.currentBattleId) return null;
   return state.battles.find((b) => b.id === activity.currentBattleId) ?? null;
+}
+
+function shouldRecoverAfterBattle(
+  hero: PlayerCharacter,
+  ctx: ActivityContext,
+): boolean {
+  if (hero.currentHp <= 0) return true;
+  const session = ctx.state.currentStage;
+  if (!session) return false;
+  const stage = getStage(session.stageId);
+  const threshold = stage.recoverBelowHpFactor ?? 0;
+  if (threshold <= 0) return false;
+
+  const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
+  if (maxHp <= 0) return true;
+  return hero.currentHp / maxHp <= threshold;
 }
 
 function enterStopped(activity: CombatActivity, ctx: ActivityContext): void {
