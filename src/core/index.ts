@@ -22,3 +22,7 @@ export * as stage from "./stage";
 export * as activity from "./activity";
 export * as progression from "./progression";
 export * as save from "./save";
+
+
+export * as upgradeManager from "./upgrade-manager";
+export * as session from "./session";

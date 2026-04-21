@@ -272,6 +272,25 @@ export interface TalentDef {
   cost: number;
 }
 
+// ---------- New game bootstrap ----------
+//
+// Configures how a brand-new save is populated: the starting PlayerCharacter
+// and which stage the player lands in. Lives in ContentDb so designers (not
+// code) own the decision. Optional for tests / fixture DBs; resetToFresh
+// throws loudly if a session tries to boot without it.
+
+export interface StartingConfig {
+  hero: {
+    id: string;
+    name: string;
+    xpCurve: FormulaRef;
+    knownAbilities: AbilityId[];
+    /** Per-character bag capacity. Falls back to DEFAULT_CHAR_INVENTORY_CAPACITY. */
+    inventoryCapacity?: number;
+  };
+  initialStageId: StageId;
+}
+
 // ---------- ContentDb ----------
 
 export interface ContentDb {
@@ -288,6 +307,9 @@ export interface ContentDb {
   resourceNodes: Readonly<Record<string, ResourceNodeDef>>;
   /** Formulas referenced by other content (xp curves, damage, etc). */
   formulas: Readonly<Record<string, FormulaRef>>;
+  /** New-game bootstrap config. Optional so empty/test DBs still type-check;
+   *  session.resetToFresh throws if a real game tries to boot without it. */
+  starting?: StartingConfig;
 }
 
 /** An empty db, mostly for tests/bootstrapping. */

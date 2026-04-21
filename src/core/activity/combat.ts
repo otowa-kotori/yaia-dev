@@ -29,6 +29,14 @@
 // currentBattleId, lastTransitionTick }. The stage the player is in is
 // persisted separately on GameState.currentStage; the activity does not
 // own stage state.
+//
+// hero.activity self-sync: every phase transition calls syncCombatToHero so
+// the persisted snapshot is always fresh. Session layer must NOT manually
+// mirror state — the activity is the single writer (mirrors gather.ts).
+//
+// Lifecycle owners:
+//   - Pre-fight reset (refill HP/MP, wipe activeEffects/cooldowns) happens in
+//     onStart so it runs on fresh starts but NOT on resume-from-save.
 
 import {
   getAttr,
@@ -89,7 +97,10 @@ export interface CombatActivity extends CharacterActivity {
 export function createCombatActivity(
   opts: CombatActivityOptions,
 ): CombatActivity {
-  const recoverHp = opts.recoverHpPctPerTick ?? 0.01;
+  // 0.02 = ~50 ticks (5s @ 10Hz) to full-heal from zero, a floor tuning
+  // choice. Session does not pass this any more; if it ever needs to be
+  // per-stage, expose it via content.
+  const recoverHp = opts.recoverHpPctPerTick ?? 0.02;
   const actionDelay = opts.actionDelayTicks ?? 8;
 
   const initialCtx = opts.ctxProvider();
@@ -104,6 +115,18 @@ export function createCombatActivity(
     currentBattleId: resume?.currentBattleId ?? null,
     lastTransitionTick: resume?.lastTransitionTick ?? initialCtx.currentTick,
     stopRequested: false,
+
+    onStart(ctx) {
+      // Fresh-start reset only. The resume path (opts.resume set) never hits
+      // onStart because the caller skips it when rehydrating from a save.
+      const hero = findHero(activity, ctx.state);
+      if (!hero) return;
+      hero.currentHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
+      hero.currentMp = getAttr(hero, ATTR.MAX_MP, ctx.attrDefs);
+      hero.activeEffects = [];
+      hero.cooldowns = {};
+      syncCombatToHero(activity, hero);
+    },
 
     tick() {
       const ctx = opts.ctxProvider();
@@ -217,6 +240,7 @@ function stepFighting(
   } else {
     activity.phase = "waitingForEnemies";
   }
+  if (hero) syncCombatToHero(activity, hero);
 }
 
 function stepRecovering(
@@ -244,6 +268,7 @@ function stepRecovering(
     }
     activity.phase = "waitingForEnemies";
     activity.lastTransitionTick = ctx.currentTick;
+    syncCombatToHero(activity, hero);
   }
 }
 
@@ -275,6 +300,7 @@ function openBattle(
   activity.currentBattleId = battle.id;
   activity.phase = "fighting";
   activity.lastTransitionTick = ctx.currentTick;
+  syncCombatToHero(activity, hero);
 }
 
 function removeBattle(state: GameState, battleId: string): void {
@@ -361,4 +387,26 @@ function enterStopped(activity: CombatActivity, ctx: ActivityContext): void {
     charId: activity.ownerCharacterId,
     kind: ACTIVITY_COMBAT_KIND,
   });
+}
+
+/** Mirror current activity state onto hero.activity so autosave captures
+ *  the latest phase / battle / transition tick. Called at every phase
+ *  transition; the activity is the single writer (mirrors gather.ts). */
+function syncCombatToHero(
+  activity: CombatActivity,
+  hero: PlayerCharacter,
+): void {
+  if (activity.phase === "stopped") {
+    hero.activity = null;
+    return;
+  }
+  hero.activity = {
+    kind: ACTIVITY_COMBAT_KIND,
+    startedAtTick: activity.startedAtTick,
+    data: {
+      phase: activity.phase,
+      currentBattleId: activity.currentBattleId,
+      lastTransitionTick: activity.lastTransitionTick,
+    },
+  };
 }

@@ -249,5 +249,16 @@ export function buildDefaultContent(): ContentDb {
       [atkUpgrade.id]: atkUpgrade,
       [defUpgrade.id]: defUpgrade,
     },
+    // The hero's starting ability list and landing stage are content
+    // decisions, not engine ones. session.resetToFresh reads this block.
+    starting: {
+      hero: {
+        id: "hero.1",
+        name: "Hero",
+        xpCurve: defaultCharXpCurve,
+        knownAbilities: [basicAttack.id],
+      },
+      initialStageId: forestLv1.id,
+    },
   };
 }
