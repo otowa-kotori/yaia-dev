@@ -24,6 +24,7 @@ import { createGameEventBus } from "../../src/core/events";
 import type { GameEventBus } from "../../src/core/events";
 import { createRng, type Rng } from "../../src/core/rng";
 import { createEmptyState, type GameState } from "../../src/core/state";
+import { SAVE_VERSION } from "../../src/core/save/migrations";
 import {
   createEnemy,
   createPlayerCharacter,
@@ -311,7 +312,7 @@ export interface TestHarness {
 export function makeHarness(seed = 42): TestHarness {
   loadFixtureContent();
   return {
-    state: createEmptyState(seed, 1),
+    state: createEmptyState(seed, SAVE_VERSION),
     bus: createGameEventBus(),
     rng: createRng(seed),
     attrDefs,

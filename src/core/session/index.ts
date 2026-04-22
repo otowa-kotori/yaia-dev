@@ -1,34 +1,33 @@
 // GameSession — runtime orchestrator for the game-core.
 //
-// Responsibilities:
-// - Own the live runtime graph: tick engine, event bus, rng, state, stage
-//   controller, and the active character activity.
-// - Expose gameplay commands (enterLocation, startFight, startGather, …) as
-//   direct methods. These methods encode the rules for each action.
-// - Take a ContentDb and optional seed; nothing else.
+// Two-layer architecture:
+//   GameSession  — global layer: tick engine, bus, rng, state, lifecycle,
+//                  speed, character management (getCharacter, listHeroes).
+//   CharacterController — per-hero layer: gameplay commands (enterLocation,
+//                  startFight, startGather, equipItem, craftRecipe, …).
+//                  UI calls getFocusedCharacter() and operates directly
+//                  without passing charId.
 //
-// Location / Entry / Instance flow:
-//   1. enterLocation(locationId) — set state.currentLocationId, stop any
-//      running activity + instance. No actors are spawned yet.
-//   2. startFight(encounterId) — create a StageSession + StageController for
-//      the chosen combat entry. Spawn first wave. Create CombatActivity.
-//   3. startGather(nodeId) — create a StageSession + StageController for
-//      the chosen gather entry. Spawn resource nodes. Create GatherActivity.
-//   4. stopActivity / leaveLocation — tear down in reverse.
+// Stage instances live in state.stages (keyed by stageId). Each hero
+// references its stage via hero.stageId. StageControllers are managed
+// independently in a Map<stageId, StageController> — they are NOT owned
+// by CharacterController, because in the future multiple heroes may share
+// a stage (co-op dungeons).
+//
+// Location / Entry / Instance flow (per character):
+//   1. cc.enterLocation(locationId) — set hero.locationId, stop any
+//      running activity + stage instance. No actors are spawned yet.
+//   2. cc.startFight(encounterId) — create a StageSession in state.stages,
+//      set hero.stageId, spawn first wave, create CombatActivity.
+//   3. cc.startGather(nodeId) — create a StageSession in state.stages,
+//      set hero.stageId, spawn resource nodes, create GatherActivity.
+//   4. cc.stopActivity / cc.leaveLocation — tear down in reverse.
 //
 // What it is NOT:
-// - Not a React bridge. It does not publish a revision counter, does not
-//   manage subscriptions, does not schedule autosave. Those live in the UI
-//   Store adapter (src/ui/store.ts).
-// - Not a save adapter. It exposes loadFromSave(state) / resetToFresh() as
-//   lifecycle hooks; the Store decides when/how to persist.
-//
-// Runtime object lifetime:
-// - The tick engine is created once and lives until dispose(). Internal
-//   state (state, rng, stageController, activity) is replaced in place on
-//   loadFromSave / resetToFresh; public getters always see the latest.
-// - buildCtx() closes over those slots so Activity/StageController callbacks
-//   always receive the current runtime graph even after a reload.
+// - Not a React bridge. Revision counter, subscriptions, autosave live in
+//   the UI Store adapter (src/ui/store.ts).
+// - Not a save adapter. It exposes loadFromSave / resetToFresh as lifecycle
+//   hooks; the Store decides when/how to persist.
 //
 // No Math.random / no setInterval inside gameplay paths — everything flows
 // through ctx.rng and the tick engine, per the project invariants.
@@ -40,6 +39,7 @@ import {
   createEmptyState,
   type GameState,
 } from "../state";
+import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
 import { getItem, getLocation, getRecipe, getSkill, setContent } from "../content";
 import {
@@ -75,6 +75,7 @@ import {
   leaveStage as leaveStageCore,
   type StageController,
 } from "../stage";
+import type { StageSession } from "../stage/types";
 
 // ---------- Persisted activity pointers ----------
 // The resume payload stored in PlayerCharacter.activity.data. Mirrored in
@@ -92,45 +93,47 @@ interface GatherActivityData extends Record<string, unknown> {
   swingsCompleted: number;
 }
 
-// ---------- Public interface ----------
+// ---------- Public interfaces ----------
 
-export interface GameSession {
-  // Data exposure (read-only for the UI). These are live getters; the
-  // backing slots are replaced on loadFromSave / resetToFresh.
-  readonly state: GameState;
+/** Per-hero runtime handle. Exposes gameplay commands scoped to one character.
+ *  Obtained via session.getCharacter(id) or session.getFocusedCharacter(). */
+export interface CharacterController {
+  readonly hero: PlayerCharacter;
   readonly activity: CombatActivity | GatherActivity | null;
-  readonly locationId: string | null;
+  /** Convenience getter: state.stages[hero.stageId] ?? null. */
+  readonly stageSession: StageSession | null;
 
-  // Runtime handles the Store (or any adapter) needs to wire up its own
-  // side effects. Stable across reloads.
-  readonly engine: TickEngine;
-  readonly bus: GameEventBus;
-
-  // Gameplay commands.
+  isRunning(): boolean;
   enterLocation(locationId: string): void;
   leaveLocation(): void;
   startFight(encounterId: string): void;
   startGather(nodeId: string): void;
   stopActivity(): void;
-  equipItem(inventoryOwnerId: string, slotIndex: number): void;
+  equipItem(slotIndex: number): void;
   unequipItem(slot: string): void;
   craftRecipe(recipeId: string): void;
+}
 
-  // Queries.
-  getHero(): PlayerCharacter | null;
-  isRunning(): boolean;
+export interface GameSession {
+  readonly state: GameState;
+  readonly engine: TickEngine;
+  readonly bus: GameEventBus;
+  readonly focusedCharId: string;
+
+  // Character management.
+  getCharacter(charId: string): CharacterController;
+  getFocusedCharacter(): CharacterController;
+  setFocusedChar(charId: string): void;
+  listHeroes(): PlayerCharacter[];
+
+  // Global commands.
   setSpeedMultiplier(mul: number): void;
   getSpeedMultiplier(): number;
 
   // Lifecycle hooks. The Store owns persistence; these methods replace the
   // in-memory graph but do not touch any save adapter.
-  /** Swap in a freshly deserialized GameState. Rehydrates stage + activity. */
   loadFromSave(loaded: GameState): void;
-  /** Reset to a brand-new game using content.starting. Installs the hero,
-   *  seeds an empty inventory, and enters the initial location. Throws if
-   *  content.starting is missing. */
   resetToFresh(): void;
-
   dispose(): void;
 }
 
@@ -152,21 +155,28 @@ export function createGameSession(
   const seed = opts.seed ?? 42;
   const attrDefs = content.attributes;
 
-  // --- Mutable runtime slots. These are swapped on reload. buildCtx always
-  //     closes over the current values through the `state` / `rng` bindings.
-  let state: GameState = createEmptyState(seed, 1);
+  // --- Mutable runtime slots. Swapped on reload. buildCtx always closes
+  //     over the current values through the bindings below.
+  let state: GameState = createEmptyState(seed, SAVE_VERSION);
   let rng: Rng = createRng(seed);
   const bus = createGameEventBus();
   const engine = createTickEngine({ initialSpeedMultiplier: 1 });
-  let activity: CombatActivity | GatherActivity | null = null;
-  let stageController: StageController | null = null;
+
+  // Per-hero runtime controllers. Rebuilt on resetToFresh / loadFromSave.
+  const characters = new Map<string, CharacterControllerImpl>();
+  // Per-stage runtime controllers. Independent of characters because a stage
+  // may be shared by multiple heroes in the future (co-op).
+  const stageControllers = new Map<string, StageController>();
 
   // The engine runs in real time; Store attaches __ui_notifier on top.
   const stopLoop = engine.start();
 
-  // Activity self-completion cleanup.
-  bus.on("activityComplete", () => {
-    activity = null;
+  // Activity self-completion cleanup — route by charId.
+  bus.on("activityComplete", (payload) => {
+    if (payload.charId) {
+      const cc = characters.get(payload.charId);
+      if (cc) cc._activity = null;
+    }
   });
 
   // ---------- Context builder ----------
@@ -181,51 +191,7 @@ export function createGameSession(
     };
   }
 
-  // ---------- Hero helpers ----------
-
-  function getHeroInternal(): PlayerCharacter | null {
-    const h = state.actors.find((a) => isPlayer(a));
-    return h ? (h as PlayerCharacter) : null;
-  }
-
-  function ensureHeroFromContent(): PlayerCharacter {
-    const existing = getHeroInternal();
-    if (existing) return existing;
-    const starting = content.starting;
-    if (!starting) {
-      throw new Error(
-        "session.resetToFresh: content.starting is not configured; " +
-          "set ContentDb.starting before booting a new game",
-      );
-    }
-    const hero = createPlayerCharacter({
-      id: starting.hero.id,
-      name: starting.hero.name,
-      xpCurve: starting.hero.xpCurve,
-      knownAbilities: starting.hero.knownAbilities.slice(),
-      attrDefs,
-    });
-    state.actors.push(hero);
-    if (!state.inventories[hero.id]) {
-      state.inventories[hero.id] = createInventory(
-        starting.hero.inventoryCapacity ?? DEFAULT_CHAR_INVENTORY_CAPACITY,
-      );
-    }
-    if (starting.hero.startingItems?.length) {
-      for (const entry of starting.hero.startingItems) {
-        addItemToInventory(hero.id, entry.itemId, entry.qty);
-      }
-    }
-    return hero;
-  }
-
-  function getRequiredHero(): PlayerCharacter {
-    const hero = getHeroInternal();
-    if (!hero) {
-      throw new Error("session: hero is missing from state");
-    }
-    return hero;
-  }
+  // ---------- Shared helpers ----------
 
   function getInventoryByOwner(inventoryOwnerId: string): Inventory {
     const inventory = state.inventories[inventoryOwnerId];
@@ -317,6 +283,7 @@ export function createGameSession(
   }
 
   function simulateRecipeInventoryChange(
+    hero: PlayerCharacter,
     inventory: Inventory,
     recipe: RecipeDef,
   ): void {
@@ -331,7 +298,7 @@ export function createGameSession(
           draft,
           output.itemId,
           output.qty,
-          getInventoryStackLimit(state, getRequiredHero().id, attrDefs),
+          getInventoryStackLimit(state, hero.id, attrDefs),
         );
         continue;
       }
@@ -345,47 +312,72 @@ export function createGameSession(
     }
   }
 
-  // ---------- Activity lifecycle ----------
+  // ---------- Stage lifecycle helpers ----------
 
-  function stopRunningActivity(): void {
-    if (!activity) return;
-    if (activity.kind === ACTIVITY_COMBAT_KIND) activity.phase = "stopped";
-    else if (activity.kind === ACTIVITY_GATHER_KIND) activity.stopRequested = true;
-    engine.unregister(activity.id);
-    activity = null;
-    const hero = getHeroInternal();
-    if (hero) hero.activity = null;
+  /** Generate a unique stageId for a new stage instance. */
+  let stageIdCounter = 0;
+  function nextStageId(locationId: string): string {
+    stageIdCounter += 1;
+    return `stage:${locationId}:${stageIdCounter}`;
   }
 
-  // ---------- Instance (stage) lifecycle ----------
-
-  function tearDownInstance(): void {
-    stopRunningActivity();
-    if (stageController) {
-      engine.unregister(stageController.id);
-      leaveStageCore(buildCtx());
-      stageController = null;
+  /** Tear down a character's current stage + activity. */
+  function tearDownCharInstance(cc: CharacterControllerImpl): void {
+    // Stop activity.
+    if (cc._activity) {
+      if (cc._activity.kind === ACTIVITY_COMBAT_KIND) cc._activity.phase = "stopped";
+      else if (cc._activity.kind === ACTIVITY_GATHER_KIND) cc._activity.stopRequested = true;
+      engine.unregister(cc._activity.id);
+      cc._activity = null;
+      cc.hero.activity = null;
+    }
+    // Leave stage (only if no other character references it).
+    const stageId = cc.hero.stageId;
+    if (stageId) {
+      cc.hero.stageId = null;
+      if (!hasOtherStageParticipant(stageId, cc.hero.id)) {
+        const ctrl = stageControllers.get(stageId);
+        if (ctrl) {
+          engine.unregister(ctrl.id);
+          stageControllers.delete(stageId);
+        }
+        leaveStageCore(stageId, buildCtx());
+      }
     }
   }
 
-  function startInstance(opts: {
-    locationId: string;
-    encounterId?: string | null;
-    resourceNodes?: string[];
-  }): void {
-    tearDownInstance();
-    ensureHeroFromContent();
-    stageController = enterStageCore({
+  function hasOtherStageParticipant(stageId: string, excludeCharId: string): boolean {
+    for (const [id, cc] of characters) {
+      if (id !== excludeCharId && cc.hero.stageId === stageId) return true;
+    }
+    return false;
+  }
+
+  function startStageInstance(
+    cc: CharacterControllerImpl,
+    opts: {
+      locationId: string;
+      encounterId?: string | null;
+      resourceNodes?: string[];
+    },
+  ): string {
+    tearDownCharInstance(cc);
+    const stageId = nextStageId(opts.locationId);
+    const ctrl = enterStageCore({
+      stageId,
       locationId: opts.locationId,
       encounterId: opts.encounterId,
       resourceNodes: opts.resourceNodes,
       ctxProvider: buildCtx,
     });
-    engine.register(stageController);
+    stageControllers.set(stageId, ctrl);
+    engine.register(ctrl);
+    cc.hero.stageId = stageId;
+    return stageId;
   }
 
-  function findSpawnedResourceNodeActorId(defId: string): string {
-    const session = state.currentStage;
+  function findSpawnedResourceNodeActorId(stageId: string, defId: string): string {
+    const session = state.stages[stageId];
     if (!session) {
       throw new Error(
         `session.startGather: no active instance while resolving node "${defId}"`,
@@ -402,211 +394,298 @@ export function createGameSession(
     );
   }
 
-  // ---------- Location ----------
+  // ---------- CharacterController implementation ----------
 
-  function enterLocation(locationId: string): void {
-    // Validate the location exists in content.
-    getLocation(locationId);
-    tearDownInstance();
-    state.currentLocationId = locationId;
+  interface CharacterControllerImpl extends CharacterController {
+    hero: PlayerCharacter;
+    _activity: CombatActivity | GatherActivity | null;
   }
 
-  function leaveLocation(): void {
-    tearDownInstance();
-    state.currentLocationId = null;
-  }
+  function createCharacterController(hero: PlayerCharacter): CharacterControllerImpl {
+    const cc: CharacterControllerImpl = {
+      hero,
+      _activity: null,
 
-  // ---------- Activities ----------
+      get activity() {
+        return cc._activity;
+      },
 
-  function startFight(encounterId: string): void {
-    if (!state.currentLocationId) {
-      console.warn("session.startFight: not in a location");
-      return;
-    }
-    startInstance({
-      locationId: state.currentLocationId,
-      encounterId,
-    });
-    const hero = ensureHeroFromContent();
-    activity = createCombatActivity({
-      ownerCharacterId: hero.id,
-      ctxProvider: buildCtx,
-    });
-    activity.onStart?.(buildCtx());
-    engine.register(activity);
-  }
+      get stageSession(): StageSession | null {
+        return cc.hero.stageId ? state.stages[cc.hero.stageId] ?? null : null;
+      },
 
-  function startGather(nodeDefId: string): void {
-    if (!state.currentLocationId) {
-      console.warn("session.startGather: not in a location");
-      return;
-    }
-    startInstance({
-      locationId: state.currentLocationId,
-      resourceNodes: [nodeDefId],
-    });
-    const hero = ensureHeroFromContent();
-    const nodeActorId = findSpawnedResourceNodeActorId(nodeDefId);
-    activity = createGatherActivity({
-      ownerCharacterId: hero.id,
-      nodeId: nodeActorId,
-      ctxProvider: buildCtx,
-    });
-    engine.register(activity);
-  }
+      isRunning(): boolean {
+        if (!cc._activity) return false;
+        if (cc._activity.kind === ACTIVITY_COMBAT_KIND) return cc._activity.phase !== "stopped";
+        if (cc._activity.kind === ACTIVITY_GATHER_KIND) return !cc._activity.stopRequested;
+        return false;
+      },
 
-  function stopActivity(): void {
-    tearDownInstance();
-  }
+      enterLocation(locationId: string): void {
+        getLocation(locationId);
+        tearDownCharInstance(cc);
+        cc.hero.locationId = locationId;
+      },
 
-  function equipItem(inventoryOwnerId: string, slotIndex: number): void {
-    const hero = getRequiredHero();
-    const inventory = getInventoryByOwner(inventoryOwnerId);
-    const slot = inventory.slots[slotIndex];
-    if (!slot) {
-      throw new Error(`session.equipItem: slot ${slotIndex} is empty`);
-    }
-    if (slot.kind !== "gear") {
-      throw new Error(
-        `session.equipItem: slot ${slotIndex} does not contain gear`,
-      );
-    }
+      leaveLocation(): void {
+        tearDownCharInstance(cc);
+        cc.hero.locationId = null;
+      },
 
-    const def = getItem(slot.instance.itemId);
-    if (!def.slot) {
-      throw new Error(
-        `session.equipItem: item "${slot.instance.itemId}" is not equippable`,
-      );
-    }
+      startFight(encounterId: string): void {
+        if (!cc.hero.locationId) {
+          console.warn("session.startFight: not in a location");
+          return;
+        }
+        const stageId = startStageInstance(cc, {
+          locationId: cc.hero.locationId,
+          encounterId,
+        });
+        void stageId; // stageId is set on hero by startStageInstance
+        cc._activity = createCombatActivity({
+          ownerCharacterId: cc.hero.id,
+          ctxProvider: buildCtx,
+        });
+        cc._activity.onStart?.(buildCtx());
+        engine.register(cc._activity);
+      },
 
-    const removed = removeAtSlot(inventory, slotIndex);
-    if (removed.kind !== "gear") {
-      throw new Error("session.equipItem: expected gear removal result");
-    }
+      startGather(nodeDefId: string): void {
+        if (!cc.hero.locationId) {
+          console.warn("session.startGather: not in a location");
+          return;
+        }
+        const stageId = startStageInstance(cc, {
+          locationId: cc.hero.locationId,
+          resourceNodes: [nodeDefId],
+        });
+        const nodeActorId = findSpawnedResourceNodeActorId(stageId, nodeDefId);
+        cc._activity = createGatherActivity({
+          ownerCharacterId: cc.hero.id,
+          nodeId: nodeActorId,
+          ctxProvider: buildCtx,
+        });
+        engine.register(cc._activity);
+      },
 
-    const previous = hero.equipped[def.slot] ?? null;
-    hero.equipped[def.slot] = removed.instance;
-    if (previous) {
-      inventory.slots[slotIndex] = { kind: "gear", instance: previous };
-    }
+      stopActivity(): void {
+        tearDownCharInstance(cc);
+      },
 
-    rebuildHeroDerived(hero);
-    bus.emit("equipmentChanged", { charId: hero.id, slot: def.slot });
-  }
+      equipItem(slotIndex: number): void {
+        const hero = cc.hero;
+        const inventory = getInventoryByOwner(hero.id);
+        const slot = inventory.slots[slotIndex];
+        if (!slot) {
+          throw new Error(`session.equipItem: slot ${slotIndex} is empty`);
+        }
+        if (slot.kind !== "gear") {
+          throw new Error(
+            `session.equipItem: slot ${slotIndex} does not contain gear`,
+          );
+        }
 
-  function unequipItem(slot: string): void {
-    const hero = getRequiredHero();
-    const equipped = hero.equipped[slot] ?? null;
-    if (!equipped) {
-      throw new Error(`session.unequipItem: slot "${slot}" is empty`);
-    }
-    addGear(getInventoryByOwner(hero.id), equipped);
-    hero.equipped[slot] = null;
-    rebuildHeroDerived(hero);
-    bus.emit("equipmentChanged", { charId: hero.id, slot });
-  }
+        const def = getItem(slot.instance.itemId);
+        if (!def.slot) {
+          throw new Error(
+            `session.equipItem: item "${slot.instance.itemId}" is not equippable`,
+          );
+        }
 
-  function craftRecipe(recipeId: string): void {
-    if (activity) {
-      throw new Error("session.craftRecipe: stop the current activity before crafting");
-    }
+        const removed = removeAtSlot(inventory, slotIndex);
+        if (removed.kind !== "gear") {
+          throw new Error("session.equipItem: expected gear removal result");
+        }
 
-    const hero = getRequiredHero();
-    const recipe = getRecipe(recipeId);
-    const skillDef = getSkill(recipe.skill);
-    const currentLevel = getSkillLevel(hero, recipe.skill);
-    if (currentLevel < recipe.requiredLevel) {
-      throw new Error(
-        `session.craftRecipe: recipe "${recipeId}" requires ${recipe.skill} level ${recipe.requiredLevel}, got ${currentLevel}`,
-      );
-    }
+        const previous = hero.equipped[def.slot] ?? null;
+        hero.equipped[def.slot] = removed.instance;
+        if (previous) {
+          inventory.slots[slotIndex] = { kind: "gear", instance: previous };
+        }
 
-    const inventory = getInventoryByOwner(hero.id);
-    simulateRecipeInventoryChange(inventory, recipe);
+        rebuildHeroDerived(hero);
+        bus.emit("equipmentChanged", { charId: hero.id, slot: def.slot });
+      },
 
-    for (const input of recipe.inputs) {
-      removeItemFromInventoryByItemId(inventory, input.itemId, input.qty);
-    }
-    for (const output of recipe.outputs) {
-      addItemToInventory(hero.id, output.itemId, output.qty);
-    }
-    grantSkillXp(hero, skillDef, recipe.xpReward, { bus });
+      unequipItem(slot: string): void {
+        const hero = cc.hero;
+        const equipped = hero.equipped[slot] ?? null;
+        if (!equipped) {
+          throw new Error(`session.unequipItem: slot "${slot}" is empty`);
+        }
+        addGear(getInventoryByOwner(hero.id), equipped);
+        hero.equipped[slot] = null;
+        rebuildHeroDerived(hero);
+        bus.emit("equipmentChanged", { charId: hero.id, slot });
+      },
 
-    bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
-    bus.emit("crafted", { charId: hero.id, recipeId });
+      craftRecipe(recipeId: string): void {
+        if (cc._activity) {
+          throw new Error("session.craftRecipe: stop the current activity before crafting");
+        }
+
+        const hero = cc.hero;
+        const recipe = getRecipe(recipeId);
+        const skillDef = getSkill(recipe.skill);
+        const currentLevel = getSkillLevel(hero, recipe.skill);
+        if (currentLevel < recipe.requiredLevel) {
+          throw new Error(
+            `session.craftRecipe: recipe "${recipeId}" requires ${recipe.skill} level ${recipe.requiredLevel}, got ${currentLevel}`,
+          );
+        }
+
+        const inventory = getInventoryByOwner(hero.id);
+        simulateRecipeInventoryChange(hero, inventory, recipe);
+
+        for (const input of recipe.inputs) {
+          removeItemFromInventoryByItemId(inventory, input.itemId, input.qty);
+        }
+        for (const output of recipe.outputs) {
+          addItemToInventory(hero.id, output.itemId, output.qty);
+        }
+        grantSkillXp(hero, skillDef, recipe.xpReward, { bus });
+
+        bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
+        bus.emit("crafted", { charId: hero.id, recipeId });
+      },
+    };
+
+    return cc;
   }
 
   // ---------- Rehydrate after load ----------
 
-  function rehydrateStage(): void {
-    if (!state.currentStage) return;
-    stageController = enterStageCore({
-      locationId: state.currentStage.locationId,
-      encounterId: state.currentStage.encounterId,
-      ctxProvider: buildCtx,
-      resume: true,
-    });
-    engine.register(stageController);
-  }
+  /** Rebuild characters Map + stageControllers from a loaded state. */
+  function rehydrateAll(): void {
+    // Clear old runtime objects.
+    for (const cc of characters.values()) {
+      if (cc._activity) engine.unregister(cc._activity.id);
+    }
+    for (const ctrl of stageControllers.values()) {
+      engine.unregister(ctrl.id);
+    }
+    characters.clear();
+    stageControllers.clear();
+    stageIdCounter = 0;
 
-  function rehydrateActivity(): void {
-    const hero = getHeroInternal();
-    if (!hero || !hero.activity) return;
-    if (hero.activity.kind === ACTIVITY_COMBAT_KIND) {
-      const data = hero.activity.data as CombatActivityData;
-      activity = createCombatActivity({
-        ownerCharacterId: hero.id,
+    // Rebuild character controllers.
+    for (const actor of state.actors) {
+      if (!isPlayer(actor)) continue;
+      const hero = actor as PlayerCharacter;
+      const cc = createCharacterController(hero);
+      characters.set(hero.id, cc);
+    }
+
+    // Rebuild stage controllers from state.stages.
+    for (const [stageId, session] of Object.entries(state.stages)) {
+      const ctrl = enterStageCore({
+        stageId,
+        locationId: session.locationId,
+        encounterId: session.encounterId,
         ctxProvider: buildCtx,
-        resume: {
-          phase: data.phase,
-          currentBattleId: data.currentBattleId,
-          lastTransitionTick: data.lastTransitionTick,
-        },
+        resume: true,
       });
-      if (activity.phase !== "stopped") engine.register(activity);
-    } else if (hero.activity.kind === ACTIVITY_GATHER_KIND) {
-      const data = hero.activity.data as GatherActivityData;
-      activity = createGatherActivity({
-        ownerCharacterId: hero.id,
-        nodeId: data.nodeId,
-        ctxProvider: buildCtx,
-        resume: { progressTicks: data.progressTicks },
-      });
-      engine.register(activity);
+      stageControllers.set(stageId, ctrl);
+      engine.register(ctrl);
+      // Track stageId counter to avoid collision with future stages.
+      const numMatch = stageId.match(/:(\d+)$/);
+      if (numMatch) {
+        const n = parseInt(numMatch[1]!, 10);
+        if (n > stageIdCounter) stageIdCounter = n;
+      }
+    }
+
+    // Rehydrate activities for each character.
+    for (const cc of characters.values()) {
+      const hero = cc.hero;
+      if (!hero.activity) continue;
+      if (hero.activity.kind === ACTIVITY_COMBAT_KIND) {
+        const data = hero.activity.data as CombatActivityData;
+        cc._activity = createCombatActivity({
+          ownerCharacterId: hero.id,
+          ctxProvider: buildCtx,
+          resume: {
+            phase: data.phase,
+            currentBattleId: data.currentBattleId,
+            lastTransitionTick: data.lastTransitionTick,
+          },
+        });
+        if (cc._activity.phase !== "stopped") engine.register(cc._activity);
+      } else if (hero.activity.kind === ACTIVITY_GATHER_KIND) {
+        const data = hero.activity.data as GatherActivityData;
+        cc._activity = createGatherActivity({
+          ownerCharacterId: hero.id,
+          nodeId: data.nodeId,
+          ctxProvider: buildCtx,
+          resume: { progressTicks: data.progressTicks },
+        });
+        engine.register(cc._activity);
+      }
     }
   }
 
   // ---------- Public lifecycle ----------
 
   function loadFromSave(loaded: GameState): void {
-    if (stageController) {
-      engine.unregister(stageController.id);
-      stageController = null;
-    }
-    if (activity) {
-      engine.unregister(activity.id);
-      activity = null;
-    }
     state = loaded;
     rng = restoreRng(loaded.rngState);
     engine.setTick(loaded.tick);
-    rehydrateStage();
-    rehydrateActivity();
+    rehydrateAll();
   }
 
   function resetToFresh(): void {
-    tearDownInstance();
-    state = createEmptyState(seed, 1);
+    // Tear down all existing characters.
+    for (const cc of characters.values()) {
+      tearDownCharInstance(cc);
+    }
+    characters.clear();
+    stageControllers.clear();
+    stageIdCounter = 0;
+
+    state = createEmptyState(seed, SAVE_VERSION);
     rng = createRng(seed);
     engine.setTick(0);
+
     const starting = content.starting;
     if (!starting) {
       throw new Error(
-        "session.resetToFresh: content.starting is not configured",
+        "session.resetToFresh: content.starting is not configured; " +
+          "set ContentDb.starting before booting a new game",
       );
     }
-    ensureHeroFromContent();
-    enterLocation(starting.initialLocationId);
+    if (starting.heroes.length === 0) {
+      throw new Error(
+        "session.resetToFresh: content.starting.heroes is empty",
+      );
+    }
+
+    // Create all starting heroes.
+    for (const heroCfg of starting.heroes) {
+      const hero = createPlayerCharacter({
+        id: heroCfg.id,
+        name: heroCfg.name,
+        xpCurve: heroCfg.xpCurve,
+        knownAbilities: heroCfg.knownAbilities.slice(),
+        attrDefs,
+      });
+      state.actors.push(hero);
+      if (!state.inventories[hero.id]) {
+        state.inventories[hero.id] = createInventory(
+          heroCfg.inventoryCapacity ?? DEFAULT_CHAR_INVENTORY_CAPACITY,
+        );
+      }
+      if (heroCfg.startingItems?.length) {
+        for (const entry of heroCfg.startingItems) {
+          addItemToInventory(hero.id, entry.itemId, entry.qty);
+        }
+      }
+      const cc = createCharacterController(hero);
+      characters.set(hero.id, cc);
+      // Enter the initial location for each hero.
+      cc.enterLocation(starting.initialLocationId);
+    }
+
+    state.focusedCharId = starting.heroes[0]!.id;
   }
 
   // ---------- Speed ----------
@@ -627,33 +706,36 @@ export function createGameSession(
       state.rngState = rng.state;
       return state;
     },
-    get activity() {
-      return activity;
-    },
-    get locationId() {
-      return state.currentLocationId;
-    },
     get engine() {
       return engine;
     },
     get bus() {
       return bus;
     },
-    enterLocation,
-    leaveLocation,
-    startFight,
-    startGather,
-    stopActivity,
-    equipItem,
-    unequipItem,
-    craftRecipe,
-    getHero: getHeroInternal,
-    isRunning(): boolean {
-      if (!activity) return false;
-      if (activity.kind === ACTIVITY_COMBAT_KIND) return activity.phase !== "stopped";
-      if (activity.kind === ACTIVITY_GATHER_KIND) return !activity.stopRequested;
-      return false;
+    get focusedCharId() {
+      return state.focusedCharId;
     },
+
+    getCharacter(charId: string): CharacterController {
+      const cc = characters.get(charId);
+      if (!cc) {
+        throw new Error(`session.getCharacter: no character with id "${charId}"`);
+      }
+      return cc;
+    },
+    getFocusedCharacter(): CharacterController {
+      return session.getCharacter(state.focusedCharId);
+    },
+    setFocusedChar(charId: string): void {
+      if (!characters.has(charId)) {
+        throw new Error(`session.setFocusedChar: no character with id "${charId}"`);
+      }
+      state.focusedCharId = charId;
+    },
+    listHeroes(): PlayerCharacter[] {
+      return Array.from(characters.values()).map((cc) => cc.hero);
+    },
+
     setSpeedMultiplier,
     getSpeedMultiplier,
     loadFromSave,

@@ -39,7 +39,8 @@ interface SelectionState {
 
 export function InventoryView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const hero = s.getHero();
+  const cc = s.getFocusedCharacter();
+  const hero = cc.hero;
   const [selected, setSelected] = useState<SelectionState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -64,7 +65,7 @@ export function InventoryView({ store }: { store: GameStore }) {
   function handleEquip(): void {
     if (!selected) return;
     try {
-      s.equipItem(selected.inventoryOwnerId, selected.slotIndex);
+      cc.equipItem(selected.slotIndex);
       clearError();
       setSelected(null);
     } catch (error) {
@@ -74,7 +75,7 @@ export function InventoryView({ store }: { store: GameStore }) {
 
   function handleUnequip(slot: string): void {
     try {
-      s.unequipItem(slot);
+      cc.unequipItem(slot);
       clearError();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "卸下失败");

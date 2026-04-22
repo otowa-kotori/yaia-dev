@@ -406,13 +406,21 @@ export function buildDefaultContent(): ContentDb {
       [defUpgrade.id]: defUpgrade,
     },
     starting: {
-      hero: {
-        id: "hero.1",
-        name: "Hero",
-        xpCurve: defaultCharXpCurve,
-        knownAbilities: [basicAttack.id],
-        startingItems: [{ itemId: trainingSword.id, qty: 1 }],
-      },
+      heroes: [
+        {
+          id: "hero.1",
+          name: "勇者",
+          xpCurve: defaultCharXpCurve,
+          knownAbilities: [basicAttack.id],
+          startingItems: [{ itemId: trainingSword.id, qty: 1 }],
+        },
+        {
+          id: "hero.2",
+          name: "学徒",
+          xpCurve: defaultCharXpCurve,
+          knownAbilities: [basicAttack.id],
+        },
+      ],
 
       initialLocationId: forestLocation.id,
     },

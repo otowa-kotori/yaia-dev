@@ -9,6 +9,7 @@ import { resetContent } from "../../src/core/content";
 import { createRng } from "../../src/core/rng";
 import { createGameEventBus } from "../../src/core/events";
 import { createEmptyState } from "../../src/core/state";
+import { SAVE_VERSION } from "../../src/core/save/migrations";
 import {
   createInventory,
   countItem,
@@ -23,6 +24,8 @@ import {
   basicAttackAbility,
   waveTrophyItem,
 } from "../fixtures/content";
+
+const STAGE_ID = "test-stage";
 
 function makeCtxProvider(
   state: ReturnType<typeof createEmptyState>,
@@ -54,8 +57,7 @@ describe("CombatActivity + Stage integration", () => {
   });
 
   test("stage spawns configured waves; activity fights and awards XP plus wave loot", () => {
-    const state = createEmptyState(42, 1);
-    state.currentLocationId = forestLocation.id;
+    const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
     const rng = createRng(42);
 
@@ -66,20 +68,23 @@ describe("CombatActivity + Stage integration", () => {
       speed: 20,
       maxHp: 50,
     });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
     installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
 
     const controller = enterStage({
+      stageId: STAGE_ID,
       locationId: forestLocation.id,
       encounterId: forestEncounter.id,
       ctxProvider,
     });
     engine.register(controller);
 
-    expect(state.currentStage?.currentWave).not.toBeNull();
-    expect(state.currentStage?.currentWave?.enemyIds.length).toBe(2);
+    expect(state.stages[STAGE_ID]?.currentWave).not.toBeNull();
+    expect(state.stages[STAGE_ID]?.currentWave?.enemyIds.length).toBe(2);
 
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
@@ -94,7 +99,7 @@ describe("CombatActivity + Stage integration", () => {
     // Grind enough ticks for at least 3 waves.
     engine.step(200);
 
-    expect(state.currentStage!.combatWaveIndex).toBeGreaterThanOrEqual(3);
+    expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThanOrEqual(3);
     const progressed =
       hero.level > levelBefore || hero.exp > expBefore;
     expect(progressed).toBe(true);
@@ -102,8 +107,7 @@ describe("CombatActivity + Stage integration", () => {
   });
 
   test("stopRequested ends the activity cleanly", () => {
-    const state = createEmptyState(42, 1);
-    state.currentLocationId = forestLocation.id;
+    const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
     const rng = createRng(42);
     const hero = makePlayer({
@@ -112,6 +116,8 @@ describe("CombatActivity + Stage integration", () => {
       atk: 20,
       speed: 20,
     });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
     installHero(state, hero);
 
     const engine = createTickEngine();
@@ -121,6 +127,7 @@ describe("CombatActivity + Stage integration", () => {
     bus.on("activityComplete", (p) => events.push(p.kind));
 
     const controller = enterStage({
+      stageId: STAGE_ID,
       locationId: forestLocation.id,
       encounterId: forestEncounter.id,
       ctxProvider,
@@ -145,8 +152,7 @@ describe("CombatActivity + Stage integration", () => {
   });
 
   test("hero KO fails the wave, gets no wave reward, then the stage advances to later waves", () => {
-    const state = createEmptyState(42, 1);
-    state.currentLocationId = forestLocation.id;
+    const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
     const rng = createRng(42);
 
@@ -158,6 +164,8 @@ describe("CombatActivity + Stage integration", () => {
       speed: 1,
       maxHp: 3,
     });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
     installHero(state, hero);
 
     const engine = createTickEngine();
@@ -167,6 +175,7 @@ describe("CombatActivity + Stage integration", () => {
     bus.on("waveResolved", (payload) => resolvedOutcomes.push(payload.outcome));
 
     const controller = enterStage({
+      stageId: STAGE_ID,
       locationId: forestLocation.id,
       encounterId: forestEncounter.id,
       ctxProvider,
@@ -185,15 +194,14 @@ describe("CombatActivity + Stage integration", () => {
 
     expect(resolvedOutcomes).toContain("enemies_won");
     expect(countItem(state.inventories[hero.id]!, waveTrophyItem.id)).toBe(0);
-    expect(state.currentStage!.combatWaveIndex).toBeGreaterThanOrEqual(2);
+    expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThanOrEqual(2);
     expect(["recovering", "fighting", "waitingForEnemies"]).toContain(
       activity.phase,
     );
   });
 
   test("winning below the configured HP threshold enters recovering", () => {
-    const state = createEmptyState(42, 1);
-    state.currentLocationId = forestLocation.id;
+    const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
     const rng = createRng(42);
     const hero = makePlayer({
@@ -204,6 +212,8 @@ describe("CombatActivity + Stage integration", () => {
       speed: 10,
       maxHp: 100,
     });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
     installHero(state, hero);
 
     // Temporarily set threshold to 1 (always recover).
@@ -214,6 +224,7 @@ describe("CombatActivity + Stage integration", () => {
       const engine = createTickEngine();
       const ctxProvider = makeCtxProvider(state, bus, rng, engine);
       const controller = enterStage({
+        stageId: STAGE_ID,
         locationId: forestLocation.id,
         encounterId: forestEncounter.id,
         ctxProvider,
@@ -245,8 +256,7 @@ describe("CombatActivity + Stage integration", () => {
   });
 
   test("leaveStage removes spawned actors", () => {
-    const state = createEmptyState(42, 1);
-    state.currentLocationId = forestLocation.id;
+    const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
     const rng = createRng(42);
     const hero = makePlayer({
@@ -255,12 +265,15 @@ describe("CombatActivity + Stage integration", () => {
       atk: 20,
       speed: 20,
     });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
     installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
 
     const controller = enterStage({
+      stageId: STAGE_ID,
       locationId: forestLocation.id,
       encounterId: forestEncounter.id,
       ctxProvider,
@@ -271,16 +284,15 @@ describe("CombatActivity + Stage integration", () => {
     expect(beforeCount).toBeGreaterThan(1);
 
     engine.unregister(controller.id);
-    leaveStage(ctxProvider());
+    leaveStage(STAGE_ID, ctxProvider());
 
     expect(state.actors.find((a) => a.id === "hero")).toBeDefined();
-    expect(state.currentStage).toBe(null);
+    expect(state.stages[STAGE_ID]).toBeUndefined();
     expect(state.actors.filter((a) => a.kind === "enemy").length).toBe(0);
   });
 
   test("resolved wave enemies are cleared so state.actors stays bounded", () => {
-    const state = createEmptyState(42, 1);
-    state.currentLocationId = forestLocation.id;
+    const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
     const rng = createRng(42);
     const hero = makePlayer({
@@ -290,12 +302,15 @@ describe("CombatActivity + Stage integration", () => {
       speed: 999,
       maxHp: 100,
     });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
     installHero(state, hero);
 
     const engine = createTickEngine();
     const ctxProvider = makeCtxProvider(state, bus, rng, engine);
 
     const controller = enterStage({
+      stageId: STAGE_ID,
       locationId: forestLocation.id,
       encounterId: forestEncounter.id,
       ctxProvider,
@@ -310,9 +325,9 @@ describe("CombatActivity + Stage integration", () => {
 
     engine.step(500);
 
-    expect(state.currentStage!.combatWaveIndex).toBeGreaterThan(5);
+    expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThan(5);
 
-    const stageOwned = new Set(state.currentStage!.spawnedActorIds);
+    const stageOwned = new Set(state.stages[STAGE_ID]!.spawnedActorIds);
     const deadInState = state.actors.filter(
       (a) =>
         a.kind === "enemy" &&
@@ -320,6 +335,6 @@ describe("CombatActivity + Stage integration", () => {
         (a as unknown as { currentHp: number }).currentHp <= 0,
     );
     expect(deadInState.length).toBeLessThanOrEqual(2);
-    expect(state.currentStage!.spawnedActorIds.length).toBeLessThanOrEqual(4);
+    expect(state.stages[STAGE_ID]!.spawnedActorIds.length).toBeLessThanOrEqual(4);
   });
 });

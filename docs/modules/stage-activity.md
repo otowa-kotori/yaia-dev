@@ -12,8 +12,9 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 
 - **LocationDef** 是纯静态内容；注册在 `ContentDb.locations` 中
 - **LocationEntryDef** 挂在 Location 下面，是一个联合类型（`combat` / `gather`）
-- **StageSession** 是运行态纯数据，存放在 `state.currentStage` 中
-- `state.currentLocationId` 记录玩家当前在哪个地点；切换地点不会自动创建实例
+- **StageSession** 是运行态纯数据，存放在 `state.stages[stageId]` 中
+- `PlayerCharacter.locationId` 记录角色当前在哪个地点；切换地点不会自动创建实例
+- `PlayerCharacter.stageId` 引用 `state.stages` 中的条目；多角色可独立各自拥有 stage
 
 ## Stage（运行实例）
 
@@ -32,13 +33,13 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 - 波次结算后，StageController 会清掉这一波的敌人，然后等待 `waveIntervalTicks` 再刷下一波
 - 难度差异体现在入口层：同一个 Location 可以有"普通"和"困难"两个战斗入口，指向不同的 EncounterDef
 
-## GameSession 命令流程
+## CharacterController 命令流程
 
-1. `enterLocation(locationId)` — 设置 `state.currentLocationId`，不创建实例
-2. `startFight(encounterId)` — 创建 StageSession + StageController，刷首波，创建 CombatActivity
-3. `startGather(nodeId)` — 创建 StageSession + StageController，刷资源节点，创建 GatherActivity
-4. `stopActivity()` — 停止活动
-5. `leaveLocation()` — 清理实例，清空 `currentLocationId`
+1. `cc.enterLocation(locationId)` — 设置 `hero.locationId`，不创建实例
+2. `cc.startFight(encounterId)` — 创建 StageSession 写入 `state.stages`，设 `hero.stageId`，刷首波，创建 CombatActivity
+3. `cc.startGather(nodeId)` — 创建 StageSession 写入 `state.stages`，设 `hero.stageId`，刷资源节点，创建 GatherActivity
+4. `cc.stopActivity()` — 停止活动，清理 stage
+5. `cc.leaveLocation()` — 清理实例，清空 `hero.locationId`
 
 ## Activity
 

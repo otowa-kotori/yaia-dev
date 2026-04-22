@@ -13,9 +13,9 @@
 //   - keeping the active encounter's wave loop running
 //   - cleaning up its population on leave
 //
-// The player can be in at most one running instance at a time:
-// state.currentStage. state.currentLocationId records which location
-// they're in (survives stopping an activity).
+// The player can be in at most one running instance per character:
+// hero.stageId references an entry in state.stages.
+// hero.locationId records which location the character is in.
 //
 // Stage state is JSON-safe (plain data) so it round-trips through saves.
 // Runtime logic (the "controller") is not persisted; it's re-instantiated
@@ -32,7 +32,7 @@ export interface ActiveCombatWaveSession {
 }
 
 /**
- * Per-instance state stored in GameState.currentStage. Minimal bookkeeping
+ * Per-instance state stored in GameState.stages[stageId]. Minimal bookkeeping
  * for respawn timers + tracking which actors belong to this instance so
  * leaveStage can clean up.
  */

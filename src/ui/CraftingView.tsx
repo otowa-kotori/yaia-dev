@@ -19,7 +19,8 @@ import { useStore } from "./useStore";
 
 export function CraftingView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const hero = s.getHero();
+  const cc = s.getFocusedCharacter();
+  const hero = cc.hero;
   const [actionError, setActionError] = useState<string | null>(null);
   const content = getContent();
 
@@ -52,7 +53,7 @@ export function CraftingView({ store }: { store: GameStore }) {
 
       {recipes.map((recipe) => {
         const skillLevel = hero.skills[recipe.skill]?.level ?? 1;
-        const blockedByActivity = s.isRunning();
+        const blockedByActivity = cc.isRunning();
         const blockedBySkill = skillLevel < recipe.requiredLevel;
         const blockedByMaterials = recipe.inputs.some(
           (input) => countItemInInventory(inventory, input.itemId) < input.qty,
@@ -71,7 +72,7 @@ export function CraftingView({ store }: { store: GameStore }) {
             blockedByMaterials={blockedByMaterials}
             onCraft={() => {
               try {
-                s.craftRecipe(recipe.id);
+                cc.craftRecipe(recipe.id);
                 setActionError(null);
               } catch (error) {
                 setActionError(error instanceof Error ? error.message : "合成失败");

@@ -319,23 +319,24 @@ export interface TalentDef {
 
 // ---------- New game bootstrap ----------
 //
-// Configures how a brand-new save is populated: the starting PlayerCharacter
-// and which location the player lands in. Lives in ContentDb so designers (not
+// Configures how a brand-new save is populated: the starting PlayerCharacters
+// and which location each hero lands in. Lives in ContentDb so designers (not
 // code) own the decision. Optional for tests / fixture DBs; resetToFresh
 // throws loudly if a session tries to boot without it.
 
-export interface StartingConfig {
-  hero: {
-    id: string;
-    name: string;
-    xpCurve: FormulaRef;
-    knownAbilities: AbilityId[];
-    /** Per-character bag capacity. Falls back to DEFAULT_CHAR_INVENTORY_CAPACITY. */
-    inventoryCapacity?: number;
-    /** Items granted into the hero's personal bag on a brand-new save. */
-    startingItems?: { itemId: ItemId; qty: number }[];
-  };
+export interface HeroConfig {
+  id: string;
+  name: string;
+  xpCurve: FormulaRef;
+  knownAbilities: AbilityId[];
+  /** Per-character bag capacity. Falls back to DEFAULT_CHAR_INVENTORY_CAPACITY. */
+  inventoryCapacity?: number;
+  /** Items granted into the hero's personal bag on a brand-new save. */
+  startingItems?: { itemId: ItemId; qty: number }[];
+}
 
+export interface StartingConfig {
+  heroes: HeroConfig[];
   initialLocationId: LocationId;
 }
 

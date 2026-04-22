@@ -4,7 +4,7 @@
 // We write a migration for each bump so existing dev saves can be upgraded
 // without a full reset.
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** A migration transforms serialized save data from `fromVersion` to
  *  `fromVersion + 1`. Migrations operate on the parsed JSON object to keep

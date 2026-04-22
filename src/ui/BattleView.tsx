@@ -24,12 +24,13 @@ const ATTR_DEFS = buildDefaultContent().attributes;
 
 export function BattleView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const activity = s.activity;
-  const hero = s.getHero();
+  const cc = s.getFocusedCharacter();
+  const activity = cc.activity;
+  const hero = cc.hero;
 
   const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
 
-  if (!s.locationId) {
+  if (!hero.locationId) {
     return (
       <div>
         {heroRow}
@@ -149,7 +150,7 @@ function GatherPanel({
 }
 
 function StageRoster({ store }: { store: GameStore }) {
-  const stage = store.state.currentStage;
+  const stage = store.getFocusedCharacter().stageSession;
   if (!stage) return null;
   const roster = stage.spawnedActorIds
     .map((id) => store.state.actors.find((a) => a.id === id))
@@ -192,7 +193,7 @@ function HeroCard({
   activity,
 }: {
   hero: PlayerCharacter;
-  activity: GameStore["activity"];
+  activity: CombatActivity | GatherActivity | null;
 }) {
   const maxHp = Math.max(1, getAttr(hero, ATTR.MAX_HP, ATTR_DEFS));
   const hpPct = Math.max(0, Math.min(1, hero.currentHp / maxHp));

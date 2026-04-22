@@ -31,12 +31,14 @@ const liveSessions: GameSession[] = [];
 function createSession(initialLocationId: string): GameSession {
   const content = loadFixtureContent();
   content.starting = {
-    hero: {
-      id: "hero.session",
-      name: "Session Hero",
-      xpCurve: testXpCurve,
-      knownAbilities: [basicAttackAbility.id],
-    },
+    heroes: [
+      {
+        id: "hero.session",
+        name: "Session Hero",
+        xpCurve: testXpCurve,
+        knownAbilities: [basicAttackAbility.id],
+      },
+    ],
     initialLocationId: initialLocationId as never,
   };
 
@@ -71,18 +73,20 @@ describe("GameSession location flow", () => {
 
   test("stopActivity tears down the current instance but keeps the chosen location", () => {
     const session = createSession(forestLocation.id);
+    const cc = session.getFocusedCharacter();
 
-    session.startFight(forestEncounter.id);
+    cc.startFight(forestEncounter.id);
 
-    const spawnedIds = session.state.currentStage?.spawnedActorIds.slice() ?? [];
+    const stageId = cc.hero.stageId!;
+    const spawnedIds = session.state.stages[stageId]?.spawnedActorIds.slice() ?? [];
     expect(spawnedIds.length).toBeGreaterThan(0);
     expect(session.state.actors.some((a) => a.kind === "enemy")).toBe(true);
 
-    session.stopActivity();
+    cc.stopActivity();
 
-    expect(session.locationId).toBe(forestLocation.id);
-    expect(session.activity).toBeNull();
-    expect(session.state.currentStage).toBeNull();
+    expect(cc.hero.locationId).toBe(forestLocation.id);
+    expect(cc.activity).toBeNull();
+    expect(cc.hero.stageId).toBeNull();
     expect(session.state.actors.some((a) => a.kind === "enemy")).toBe(false);
     for (const actorId of spawnedIds) {
       expect(session.state.actors.find((a) => a.id === actorId)).toBeUndefined();
@@ -91,15 +95,16 @@ describe("GameSession location flow", () => {
 
   test("startGather binds to the spawned resource-node actor and begins swinging", () => {
     const session = createSession(mineLocation.id);
+    const cc = session.getFocusedCharacter();
 
-    session.startGather(testVein.id);
+    cc.startGather(testVein.id);
 
-    expect(session.activity?.kind).toBe(ACTIVITY_GATHER_KIND);
-    if (!session.activity || session.activity.kind !== ACTIVITY_GATHER_KIND) {
+    expect(cc.activity?.kind).toBe(ACTIVITY_GATHER_KIND);
+    if (!cc.activity || cc.activity.kind !== ACTIVITY_GATHER_KIND) {
       throw new Error("expected gather activity to be active");
     }
 
-    const gather = session.activity;
+    const gather = cc.activity;
     expect(gather.nodeId).not.toBe(testVein.id);
 
     const nodeActor = session.state.actors.find((a) => a.id === gather.nodeId);
@@ -108,35 +113,36 @@ describe("GameSession location flow", () => {
 
     session.engine.step(testVein.swingTicks);
 
-    const hero = session.getHero();
+    const hero = cc.hero;
     expect(hero).not.toBeNull();
     expect(gather.swingsCompleted).toBeGreaterThanOrEqual(1);
     expect(
-      countItem(session.state.inventories[hero!.id]!, testOreItem.id),
+      countItem(session.state.inventories[hero.id]!, testOreItem.id),
     ).toBeGreaterThan(0);
   });
 
   test("fresh hero gets a starter weapon that can be equipped and unequipped", () => {
     const { session, content } = createDefaultSession();
-    const hero = session.getHero();
-    expect(hero).not.toBeNull();
+    // Focus on the first hero (勇者) which gets the starter weapon.
+    const cc = session.getCharacter("hero.1");
+    const hero = cc.hero;
 
-    const inventory = session.state.inventories[hero!.id]!;
+    const inventory = session.state.inventories[hero.id]!;
     const starterSlot = inventory.slots.findIndex(
       (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
     );
     expect(starterSlot).toBeGreaterThanOrEqual(0);
 
-    const atkBefore = getAttr(hero!, ATTR.ATK, content.attributes);
-    session.equipItem(hero!.id, starterSlot);
+    const atkBefore = getAttr(hero, ATTR.ATK, content.attributes);
+    cc.equipItem(starterSlot);
 
-    expect(hero!.equipped.weapon?.itemId).toBe(trainingSword.id);
-    expect(getAttr(hero!, ATTR.ATK, content.attributes)).toBe(atkBefore + 2);
+    expect(hero.equipped.weapon?.itemId).toBe(trainingSword.id);
+    expect(getAttr(hero, ATTR.ATK, content.attributes)).toBe(atkBefore + 2);
 
-    session.unequipItem("weapon");
+    cc.unequipItem("weapon");
 
-    expect(hero!.equipped.weapon ?? null).toBeNull();
-    expect(getAttr(hero!, ATTR.ATK, content.attributes)).toBe(atkBefore);
+    expect(hero.equipped.weapon ?? null).toBeNull();
+    expect(getAttr(hero, ATTR.ATK, content.attributes)).toBe(atkBefore);
     expect(
       inventory.slots.some(
         (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
@@ -146,23 +152,37 @@ describe("GameSession location flow", () => {
 
   test("craftRecipe consumes materials, grants smithing XP, and produces the crafted weapon", () => {
     const { session } = createDefaultSession();
-    const hero = session.getHero();
-    expect(hero).not.toBeNull();
+    const cc = session.getCharacter("hero.1");
+    const hero = cc.hero;
 
-    const inventory = session.state.inventories[hero!.id]!;
+    const inventory = session.state.inventories[hero.id]!;
     addStack(inventory, copperOre.id, 3, 99);
     addStack(inventory, slimeGel.id, 2, 99);
 
-    session.craftRecipe(copperSwordRecipe.id);
+    cc.craftRecipe(copperSwordRecipe.id);
 
     expect(countItem(inventory, copperOre.id)).toBe(0);
     expect(countItem(inventory, slimeGel.id)).toBe(0);
-    expect(hero!.skills[smithingSkill.id]?.xp).toBe(copperSwordRecipe.xpReward);
+    expect(hero.skills[smithingSkill.id]?.xp).toBe(copperSwordRecipe.xpReward);
     expect(
       inventory.slots.some(
         (slot) => slot?.kind === "gear" && slot.instance.itemId === copperSword.id,
       ),
     ).toBe(true);
   });
-});
 
+  test("multiple heroes can exist and be focused independently", () => {
+    const { session } = createDefaultSession();
+    const heroes = session.listHeroes();
+    expect(heroes.length).toBe(2);
+
+    expect(session.focusedCharId).toBe("hero.1");
+    session.setFocusedChar("hero.2");
+    expect(session.focusedCharId).toBe("hero.2");
+
+    const cc1 = session.getCharacter("hero.1");
+    const cc2 = session.getCharacter("hero.2");
+    expect(cc1.hero.name).toBe("勇者");
+    expect(cc2.hero.name).toBe("学徒");
+  });
+});

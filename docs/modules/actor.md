@@ -31,8 +31,13 @@ Actor                      任何世界实体
 
 其中：
 
-- `PlayerCharacter` 会保存 `level`、`exp`、`equipped`、`talents`、`knownAbilities`、`xpCurve`、`skills`
+- `PlayerCharacter` 会保存 `level`、`exp`、`equipped`、`talents`、`knownAbilities`、`xpCurve`、`skills`、`locationId`、`stageId`
 - `Enemy` 只保存 `defId`
+
+**多角色相关字段**：
+
+- `locationId: string | null` — 该角色当前所在地点。每个角色独立，支持多角色并行在不同地点挂机
+- `stageId: string | null` — 引用 `GameState.stages` 中的 stage 实例。null 表示不在任何 stage。多个角色可以引用同一个 stageId（未来多人副本）
 
 ### 派生字段
 

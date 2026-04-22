@@ -29,7 +29,7 @@ const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [
 
 export function XpOverview({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const hero = s.getHero();
+  const hero = s.getFocusedCharacter().hero;
   if (!hero) {
     return (
       <div style={{ opacity: 0.5, fontSize: 14, marginTop: 12 }}>

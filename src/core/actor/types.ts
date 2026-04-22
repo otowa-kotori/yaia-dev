@@ -32,6 +32,7 @@ import type {
 import type { SkillId } from "../content/types";
 import type { FormulaRef } from "../formula/types";
 import type { GearInstance } from "../item/types";
+import type { StageSession } from "../stage/types";
 
 /** Team / side within a battle. Transient — not persisted. */
 export type Side = "player" | "enemy" | "neutral";
@@ -92,6 +93,14 @@ export interface PlayerCharacter extends Character {
   activity: CharacterActivityState | null;
   /** Ability ids the player has learned (source of truth for `abilities`). */
   knownAbilities: AbilityId[];
+  /** The location (map area) this character is currently in. null = nowhere.
+   *  Per-character since multi-character idle allows each hero to be in a
+   *  different location simultaneously. (persisted) */
+  locationId: string | null;
+  /** Key into GameState.stages for the running instance this character is in.
+   *  null = not in any stage. Multiple characters may reference the same
+   *  stageId (future: co-op dungeons). (persisted) */
+  stageId: string | null;
 }
 
 // ---------- Enemy ----------

@@ -48,6 +48,8 @@ export interface StageController extends Tickable {
 }
 
 export interface CreateStageControllerOptions {
+  /** Unique id for this stage instance, used as key in state.stages. */
+  stageId: string;
   locationId: string;
   /** Encounter to fight. Null for gather-only instances. */
   encounterId?: string | null;
@@ -63,29 +65,31 @@ export interface CreateStageControllerOptions {
  *  Tickable controller you should register on the tick engine. */
 export function enterStage(opts: CreateStageControllerOptions): StageController {
   const encId = opts.encounterId ?? null;
+  const stageId = opts.stageId;
   const initialCtx = opts.ctxProvider();
 
   if (!opts.resume) {
-    if (initialCtx.state.currentStage) {
+    if (initialCtx.state.stages[stageId]) {
       throw new Error(
-        `stage: cannot enter instance for "${opts.locationId}" — already in "${initialCtx.state.currentStage.locationId}"; leaveStage first`,
+        `stage: cannot enter instance "${stageId}" — already exists; leaveStage first`,
       );
     }
-    initialCtx.state.currentStage = freshSession(
+    const session = freshSession(
       opts.locationId,
       encId,
       initialCtx.currentTick,
     );
+    initialCtx.state.stages[stageId] = session;
 
     // Spawn resource nodes if this is a gather entry.
     if (opts.resourceNodes && opts.resourceNodes.length > 0) {
-      spawnResourceNodes(opts.resourceNodes, initialCtx);
+      spawnResourceNodes(opts.resourceNodes, session, initialCtx);
     }
 
     // Spawn the first combat wave if this is a combat entry.
     if (encId) {
       const encounter = getEncounter(encId);
-      spawnCombatWave(encounter, initialCtx);
+      spawnCombatWave(encounter, session, initialCtx);
     }
   }
 
@@ -93,23 +97,25 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
   const encounterDef = encId ? getEncounter(encId) : null;
 
   const controller: StageController = {
-    id: `stage:${opts.locationId}:${encId ?? "gather"}`,
+    id: `stage:${stageId}`,
     locationId: opts.locationId,
     encounterId: encId,
     tick() {
       const ctx = opts.ctxProvider();
-      stepController(encounterDef, ctx);
+      const session = ctx.state.stages[stageId];
+      if (!session) return;
+      stepController(encounterDef, session, ctx);
     },
   };
   return controller;
 }
 
-/** Tear down the current instance: remove all spawned actors, clear the
- *  session. Safe to call when no instance is active (no-op). Removing the
- *  controller from the tick engine is the caller's job (they have the
- *  handle). */
-export function leaveStage(ctx: StageControllerContext): void {
-  const session = ctx.state.currentStage;
+/** Tear down a stage instance: remove all spawned actors, delete the
+ *  session from state.stages. Safe to call when the stageId doesn't exist
+ *  (no-op). Removing the controller from the tick engine is the caller's
+ *  job (they have the handle). */
+export function leaveStage(stageId: string, ctx: StageControllerContext): void {
+  const session = ctx.state.stages[stageId];
   if (!session) return;
   const toRemove = new Set(session.spawnedActorIds);
   ctx.state.actors = ctx.state.actors.filter((a) => !toRemove.has(a.id));
@@ -117,18 +123,16 @@ export function leaveStage(ctx: StageControllerContext): void {
   ctx.state.battles = ctx.state.battles.filter((b) => {
     return !b.participantIds.some((id) => toRemove.has(id));
   });
-  ctx.state.currentStage = null;
+  delete ctx.state.stages[stageId];
 }
 
 // ---------- Step ----------
 
 function stepController(
   encounter: EncounterDef | null,
+  session: StageSession,
   ctx: StageControllerContext,
 ): void {
-  const session = ctx.state.currentStage;
-  if (!session) return;
-
   // Reap dead instance-owned enemies first.
   reapDeadEnemies(session, ctx);
 
@@ -139,7 +143,7 @@ function stepController(
       tickWaveCooldown(encounter, session, ctx);
       return;
     }
-    spawnCombatWave(encounter, ctx);
+    spawnCombatWave(encounter, session, ctx);
     return;
   }
 
@@ -189,9 +193,9 @@ function reapDeadEnemies(
 
 function spawnResourceNodes(
   nodeIds: string[],
+  session: StageSession,
   ctx: StageControllerContext,
 ): void {
-  const session = ctx.state.currentStage!;
   for (let i = 0; i < nodeIds.length; i++) {
     const defId = nodeIds[i]!;
     const nodeDef = getResourceNode(defId);
@@ -202,8 +206,7 @@ function spawnResourceNodes(
   }
 }
 
-function spawnCombatWave(encounter: EncounterDef, ctx: StageControllerContext): void {
-  const session = ctx.state.currentStage!;
+function spawnCombatWave(encounter: EncounterDef, session: StageSession, ctx: StageControllerContext): void {
   const wave = pickEncounterWave(encounter, ctx.rng);
 
   session.combatWaveIndex += 1;
@@ -310,7 +313,7 @@ function tickWaveCooldown(
 
   session.combatWaveCooldownTicks -= 1;
   if (session.combatWaveCooldownTicks === 0) {
-    spawnCombatWave(encounter, ctx);
+    spawnCombatWave(encounter, session, ctx);
   }
 }
 

@@ -83,6 +83,8 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     attrs: createAttrSet(baseAttrs),
     abilities: [],
     side: "player",
+    locationId: null,
+    stageId: null,
   };
   rebuildCharacterDerived(pc, opts.attrDefs);
   pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, opts.attrDefs);

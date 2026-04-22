@@ -27,8 +27,8 @@
 // players_won. See onParticipantKilled / grantWaveRewards below.
 //
 // Save/load: persisted in PlayerCharacter.activity.data = { phase,
-// currentBattleId, lastTransitionTick }. The instance the player is in is
-// persisted separately on GameState.currentStage; the activity does not
+// currentBattleId, lastTransitionTick }. The stage instance the player is in
+// is persisted in GameState.stages[hero.stageId]; the activity does not
 // own instance state.
 //
 // hero.activity self-sync: every phase transition calls syncCombatToHero so
@@ -61,6 +61,7 @@ import {
 import { INTENT } from "../intent";
 import { applyEffect, type EffectContext } from "../effect";
 import { lookupWave, stageEnemies } from "../stage";
+import type { StageSession } from "../stage/types";
 import type { CharacterActivity, ActivityContext } from "./types";
 
 export const ACTIVITY_COMBAT_KIND = "activity.combat";
@@ -192,13 +193,12 @@ function stepWaiting(
     enterStopped(activity, ctx);
     return;
   }
-  const session = ctx.state.currentStage;
+  const hero = findHero(activity, ctx.state);
+  if (!hero) return;
+  const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
   if (!session) return;
   const enemies = stageEnemies(session, ctx.state).filter((e) => e.currentHp > 0);
   if (enemies.length === 0) return;
-
-  const hero = findHero(activity, ctx.state);
-  if (!hero) return;
 
   openBattle(activity, hero, enemies, ctx, params);
 }
@@ -236,7 +236,7 @@ function stepFighting(
   removeBattle(ctx.state, battle.id);
 
   const hero = findHero(activity, ctx.state);
-  const session = ctx.state.currentStage;
+  const session = hero?.stageId ? ctx.state.stages[hero.stageId] : undefined;
   const resolvedOutcome =
     battle.outcome === "players_won" ? "players_won" : "enemies_won";
   if (session?.currentWave?.status === "active") {
@@ -313,7 +313,7 @@ function openBattle(
   ctx: ActivityContext,
   params: StepParams,
 ): void {
-  const session = ctx.state.currentStage!;
+  const session = ctx.state.stages[hero.stageId!]!;
   const waveIndex = session.currentWave?.waveIndex ?? session.combatWaveIndex;
   const intents: Record<string, string> = {};
   intents[hero.id] = INTENT.RANDOM_ATTACK;
@@ -389,7 +389,7 @@ function onParticipantKilled(
 }
 
 function grantWaveRewards(
-  session: NonNullable<ActivityContext["state"]["currentStage"]>,
+  session: StageSession,
   hero: PlayerCharacter,
   ctx: ActivityContext,
 ): void {
@@ -473,7 +473,7 @@ function shouldRecoverAfterBattle(
   ctx: ActivityContext,
 ): boolean {
   if (hero.currentHp <= 0) return true;
-  const session = ctx.state.currentStage;
+  const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
   if (!session || !session.encounterId) return false;
   const encounter = getEncounter(session.encounterId);
   const threshold = encounter.recoverBelowHpFactor ?? 0;

@@ -1,6 +1,13 @@
 # session
 
-`GameSession` 是运行时编排层。它聚合 tick 引擎、事件总线、随机数、`GameState`、stage controller 与当前 activity，并对外暴露游戏指令。
+`GameSession` 是运行时编排层，采用两层接口设计。
+
+## 两层接口
+
+- **GameSession**（全局层）：tick 引擎、事件总线、rng、state、角色管理（`getCharacter`、`getFocusedCharacter`、`listHeroes`）、全局指令（速度、存档、重置）
+- **CharacterController**（单角色层）：per-hero 运行时句柄，暴露 `enterLocation`、`startFight`、`startGather`、`stopActivity`、`equipItem`、`craftRecipe` 等命令——不需要传 charId
+
+UI 通过 `session.getFocusedCharacter()` 获取当前聚焦角色的 controller，直接调方法。
 
 ## 定位
 
@@ -10,9 +17,10 @@
 
 ## 职责
 
-- **指令**：`enterStage`、`leaveStage`、`startFight`、`startGather`、`stopActivity`
-- **生命周期**：`loadFromSave` 负责接管存档恢复；`resetToFresh` 根据 `ContentDb.starting` 初始化新游戏；`dispose` 负责停止引擎
-- **查询**：提供 `getHero`、`isRunning`、`getSpeedMultiplier` 等适合 UI 调用的只读入口
+- **全局指令**：`setSpeedMultiplier`、`loadFromSave`、`resetToFresh`、`dispose`
+- **角色管理**：`getCharacter(charId)`、`getFocusedCharacter()`、`setFocusedChar(charId)`、`listHeroes()`
+- **CharacterController 指令**：`enterLocation`、`leaveLocation`、`startFight`、`startGather`、`stopActivity`、`equipItem`、`unequipItem`、`craftRecipe`
+- **生命周期**：`loadFromSave` 负责接管存档恢复并重建所有 controller；`resetToFresh` 根据 `ContentDb.starting.heroes` 初始化多角色新游戏；`dispose` 负责停止引擎
 
 ## 边界
 
@@ -22,8 +30,11 @@
 
 ## 不变量
 
-- 同一时刻最多只有一个 `currentStage`
-- 同一时刻最多只有一个当前 activity
+- 每个角色同一时刻最多只有一个 stage（通过 `hero.stageId` 引用 `state.stages` 中的条目）
+- 每个角色同一时刻最多只有一个 activity（持有在 CharacterController 内部）
+- Stage 独立于角色：多个角色可以引用同一个 stageId（未来多人副本预留）
+- StageController 由 session 层独立管理（`stageControllers Map`），不归属 CharacterController
+- Stage 销毁时检查是否还有角色引用该 stageId，无引用才真正清理
 - 从存档恢复 activity 时，按继续执行处理，不重复触发仅应在首次启动时发生的 `onStart` 副作用
 
 ## 入口

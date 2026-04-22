@@ -7,19 +7,9 @@
 //   events + beforeunload.
 // - Clear-save flow.
 //
-// What this file is NOT doing any more:
-// - It does NOT encode any game rules. All gameplay logic (enter location,
-//   start fight, purchase upgrade, rehydrate activity, etc.) lives in
-//   src/core/session. This file physically is a GameSession with a few
-//   extra methods mixed in — see `Object.assign(session, …)` below — so
-//   `store.enterLocation(id)` calls straight through to the session's own
-//   method with zero forwarding boilerplate.
-// - It does NOT own GameState, rng, engine, or bus; those belong to the
-//   session.
-//
 // GameStore IS-A GameSession (type-level): `GameStore extends GameSession`.
-// Adding a new gameplay command = add a method on GameSession; the store
-// picks it up for free.
+// Adding a new gameplay command = add a method on CharacterController; the
+// store picks it up for free via getFocusedCharacter().
 
 import { TICK_MS } from "../core/tick";
 import { createGameSession, type GameSession } from "../core/session";
@@ -31,6 +21,7 @@ import {
   type SaveAdapter,
 } from "../core/save";
 import { purchaseUpgrade as purchaseUpgradeImpl, type UpgradePurchaseContext } from "../core/upgrade-manager";
+import { isPlayer, rebuildCharacterDerived } from "../core/actor";
 
 const SAVE_KEY = "yaia:save";
 const AUTOSAVE_INTERVAL_MS = 10_000;
@@ -178,15 +169,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   }
 
   // ---------- Mix store-only methods onto the session ----------
-  //
-  // The key move: `Object.assign(session, { … })` returns the session
-  // itself, typed as GameStore. UI code keeps writing `s.enterStage(id)`
-  // exactly as before — it now dispatches to session.enterStage directly
-  // with no forwarding shim.
-  //
-    // Store-owned methods either hook into persist/notify (clearSaveAndReset,
-    // purchaseUpgrade) or expose tiny content lookups the UI already depended
-    // on (listLocationIds, getCurrencies, …).
 
   const baseDispose = session.dispose.bind(session);
 
@@ -210,6 +192,12 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       };
       const result = purchaseUpgradeImpl(upgradeId, ctx);
       if (result.success) {
+        // Rebuild derived attrs for ALL heroes (world upgrades affect everyone).
+        for (const actor of session.state.actors) {
+          if (isPlayer(actor)) {
+            rebuildCharacterDerived(actor, attrDefs, session.state.worldRecord);
+          }
+        }
         notify();
         persistSoon();
       }
@@ -243,13 +231,13 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     });
   }
 
+  // Always bootstrap with a fresh state so the session is immediately usable
+  // (characters Map populated, focusedCharId set). If a save exists, the async
+  // tryLoad will overwrite this via loadFromSave; if not, we're already good.
+  session.resetToFresh();
+
   if (opts.autoLoad !== false) {
-    // If there was no save, bootstrap a brand-new game using the content's
-    // StartingConfig. If load fails (e.g. corrupted), `tryLoad` already
-    // logged the error and we fall through to the fresh path.
-    void tryLoad().then((loaded) => {
-      if (!loaded) session.resetToFresh();
-    });
+    void tryLoad();
   }
 
   return store;
