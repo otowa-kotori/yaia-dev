@@ -78,6 +78,8 @@ describe("GameSession location flow", () => {
     cc.startFight(forestEncounter.id);
 
     const stageId = cc.hero.stageId!;
+    session.engine.step(10);
+
     const spawnedIds = session.state.stages[stageId]?.spawnedActorIds.slice() ?? [];
     expect(spawnedIds.length).toBeGreaterThan(0);
     expect(session.state.actors.some((a) => a.kind === "enemy")).toBe(true);
