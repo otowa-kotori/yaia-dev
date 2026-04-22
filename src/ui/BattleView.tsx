@@ -19,6 +19,7 @@ import {
 import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
+import { T } from "./text";
 
 const ATTR_DEFS = buildDefaultContent().attributes;
 
@@ -34,7 +35,7 @@ export function BattleView({ store }: { store: GameStore }) {
     return (
       <div>
         {heroRow}
-        <Idle msg="Pick a location to begin." />
+        <Idle msg={T.pickLocation} />
       </div>
     );
   }
@@ -88,12 +89,12 @@ function CombatPanel({
       : null;
   const phaseLabel =
     activity.phase === "recovering"
-      ? "Recovering from defeat..."
+      ? T.recovering
       : activity.phase === "waitingForEnemies"
-      ? "Waiting for enemies to respawn..."
+      ? T.waitingForEnemies
       : activity.phase === "fighting"
-      ? "In combat"
-      : "Stopped";
+      ? T.inCombat
+      : T.stopped;
 
   if (!battle) {
     return (
@@ -113,7 +114,7 @@ function CombatPanel({
     <div>
       <div style={{ marginTop: 12 }}>
         <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
-          Enemies
+          {T.enemies}
         </div>
         {enemies.map((a) => (
           <ActorRow key={a.id} actor={a} />
@@ -136,7 +137,7 @@ function GatherPanel({
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
-        Gathering
+        {T.gatheringLabel}
       </div>
       <div style={{ padding: 8, background: "#222", borderRadius: 4 }}>
         <div style={{ fontWeight: 600 }}>{def?.name ?? activity.nodeId}</div>
@@ -156,12 +157,12 @@ function StageRoster({ store }: { store: GameStore }) {
     .map((id) => store.state.actors.find((a) => a.id === id))
     .filter((a): a is NonNullable<typeof a> => a !== undefined);
   if (roster.length === 0) {
-    return <Idle msg="Stage is empty — waiting for a spawn..." />;
+    return <Idle msg={T.stageEmpty} />;
   }
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
-        In this stage
+        {T.inThisStage}
       </div>
       {roster.map((a) => {
         if (isCharacter(a)) return <ActorRow key={a.id} actor={a} />;
@@ -200,18 +201,18 @@ function HeroCard({
   const dead = hero.currentHp <= 0;
   const xp = xpProgressToNextLevel(hero.level, hero.exp, hero.xpCurve);
 
-  let statusLabel = "idle";
+  let statusLabel: string = T.status_hero_idle;
   if (activity?.kind === ACTIVITY_COMBAT_KIND) {
     statusLabel =
       activity.phase === "fighting"
-        ? "in combat"
+        ? T.status_hero_inCombat
         : activity.phase === "recovering"
-        ? "recovering"
+        ? T.status_hero_recovering
         : activity.phase === "waitingForEnemies"
-        ? "waiting"
-        : "idle";
+        ? T.status_hero_waiting
+        : T.status_hero_idle;
   } else if (activity?.kind === ACTIVITY_GATHER_KIND) {
-    statusLabel = "gathering";
+    statusLabel = T.status_hero_gathering;
   }
 
   return (
@@ -226,7 +227,7 @@ function HeroCard({
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontWeight: 600 }}>
           {hero.name} · Lv {hero.level}
-          {dead ? " (KO)" : ""}
+          {dead ? ` (${T.ko})` : ""}
         </span>
         <span style={{ fontSize: 12, opacity: 0.7 }}>{statusLabel}</span>
       </div>
@@ -265,7 +266,7 @@ function ActorRow({ actor }: { actor: Character }) {
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontWeight: 500 }}>
           {actor.name}
-          {dead ? " (KO)" : ""}
+          {dead ? ` (${T.ko})` : ""}
         </span>
         <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 12 }}>
           {Math.round(actor.currentHp)} / {Math.round(maxHp)}

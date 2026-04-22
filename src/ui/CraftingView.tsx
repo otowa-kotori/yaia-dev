@@ -16,6 +16,7 @@ import type { RecipeDef } from "../core/content/types";
 import type { Inventory, InventorySlot } from "../core/inventory";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
+import { T, slotLabel } from "./text";
 
 export function CraftingView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
@@ -33,19 +34,19 @@ export function CraftingView({ store }: { store: GameStore }) {
 
   const inventory = s.state.inventories[hero.id] ?? null;
   if (!inventory) {
-    return <EmptyState title="合成" message="角色背包不存在，无法进行合成。" />;
+    return <EmptyState title={T.craftingTitle} message={T.craftingNoBag} />;
   }
 
   if (recipes.length === 0) {
-    return <EmptyState title="合成" message="当前还没有可用配方。" />;
+    return <EmptyState title={T.craftingTitle} message={T.craftingNoRecipes} />;
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={sectionStyle}>
-        <div style={headerStyle}>合成台</div>
+        <div style={headerStyle}>{T.craftingBench}</div>
         <div style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.68 }}>
-          用背包里的材料直接制作装备。当前制作会立刻完成；后续如果做排队或耗时条，再接到同一套配方数据上。
+          {T.craftingBenchHint}
         </div>
       </div>
 
@@ -75,7 +76,7 @@ export function CraftingView({ store }: { store: GameStore }) {
                 cc.craftRecipe(recipe.id);
                 setActionError(null);
               } catch (error) {
-                setActionError(error instanceof Error ? error.message : "合成失败");
+                setActionError(error instanceof Error ? error.message : T.craftFailed);
               }
             }}
           />
@@ -125,12 +126,12 @@ function RecipeCard({
             cursor: disabled ? "default" : "pointer",
           }}
         >
-          合成
+          {T.btn_craft}
         </button>
       </div>
 
       <div style={gridStyle}>
-        <RecipeGroup title="材料需求">
+        <RecipeGroup title={T.materialsRequired}>
           {recipe.inputs.map((input) => {
             const held = countItemInInventory(inventory, input.itemId);
             const ok = held >= input.qty;
@@ -145,7 +146,7 @@ function RecipeCard({
           })}
         </RecipeGroup>
 
-        <RecipeGroup title="产出结果">
+        <RecipeGroup title={T.outputResults}>
           {recipe.outputs.map((output) => {
             const item = content.items[output.itemId];
             const label = item?.slot ? `${item.name}（${slotLabel(item.slot)}）` : item?.name ?? output.itemId;
@@ -162,9 +163,9 @@ function RecipeCard({
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-        <HintPill active={!blockedBySkill}>当前技能 Lv {skillLevel}</HintPill>
-        <HintPill active={!blockedByMaterials}>材料齐全</HintPill>
-        <HintPill active={!blockedByActivity}>当前未在活动中</HintPill>
+        <HintPill active={!blockedBySkill}>{T.currentSkillLv} {skillLevel}</HintPill>
+        <HintPill active={!blockedByMaterials}>{T.materialsSufficient}</HintPill>
+        <HintPill active={!blockedByActivity}>{T.notInActivity}</HintPill>
       </div>
     </div>
   );
@@ -246,29 +247,6 @@ function countItemInSlot(slot: InventorySlot, itemId: string): number {
   if (!slot) return 0;
   if (slot.kind === "stack") return slot.itemId === itemId ? slot.qty : 0;
   return slot.instance.itemId === itemId ? 1 : 0;
-}
-
-function slotLabel(slot: string): string {
-  switch (slot) {
-    case "weapon":
-      return "武器";
-    case "offhand":
-      return "副手";
-    case "helmet":
-      return "头部";
-    case "chest":
-      return "胸甲";
-    case "gloves":
-      return "手部";
-    case "boots":
-      return "鞋子";
-    case "ring":
-      return "戒指";
-    case "amulet":
-      return "项链";
-    default:
-      return slot;
-  }
 }
 
 const sectionStyle: React.CSSProperties = {

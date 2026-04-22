@@ -16,11 +16,7 @@ import { ATTR } from "../core/attribute";
 import type { Modifier } from "../core/content/types";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
-
-// Currency display name map — extend as new currencies are added.
-const CURRENCY_NAMES: Record<string, string> = {
-  "currency.gold": "金币",
-};
+import { T, currencyName } from "./text";
 
 export function UpgradesView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
@@ -38,7 +34,7 @@ export function UpgradesView({ store }: { store: GameStore }) {
         {Object.entries(currencies).map(([id, amount]) => (
           <span key={id} style={{ fontSize: 14 }}>
             <span style={{ color: "#f0c040", fontWeight: 600 }}>
-              {CURRENCY_NAMES[id] ?? id}
+              {currencyName(id)}
             </span>
             <span style={{ marginLeft: 6, fontVariantNumeric: "tabular-nums" }}>
               {amount}
@@ -47,7 +43,7 @@ export function UpgradesView({ store }: { store: GameStore }) {
         ))}
         {Object.keys(currencies).length === 0 && (
           <span style={{ opacity: 0.45, fontSize: 13 }}>
-            尚无货币 — 打怪获得金币！
+            {T.noCurrencyHint}
           </span>
         )}
       </div>
@@ -71,7 +67,7 @@ export function UpgradesView({ store }: { store: GameStore }) {
               maxLevel={def.maxLevel}
               modifiers={def.modifierPerLevel}
               cost={cost}
-              costCurrencyName={CURRENCY_NAMES[def.costCurrency] ?? def.costCurrency}
+              costCurrencyName={currencyName(def.costCurrency)}
               maxed={maxed}
               canAfford={canAfford}
               onBuy={() => s.purchaseUpgrade(id)}
@@ -81,7 +77,7 @@ export function UpgradesView({ store }: { store: GameStore }) {
       </div>
 
       {upgradeIds.length === 0 && (
-        <div style={{ opacity: 0.45, fontSize: 13 }}>暂无可用升级。</div>
+        <div style={{ opacity: 0.45, fontSize: 13 }}>{T.noUpgrades}</div>
       )}
     </div>
   );
@@ -152,14 +148,14 @@ function UpgradeCard({
       {/* Current bonus summary */}
       {currentLevel > 0 && (
         <div style={{ fontSize: 11, color: "#a9d", opacity: 0.9 }}>
-          当前加成：{modifiers.map((m) => formatBonus(m, currentLevel)).join("，")}
+          {T.currentBonus}{modifiers.map((m) => formatBonus(m, currentLevel)).join("，")}
         </div>
       )}
 
       {/* Buy button */}
       {maxed ? (
         <div style={{ fontSize: 12, color: "#4a9", fontWeight: 500, textAlign: "center", marginTop: 2 }}>
-          已满级
+          {T.maxLevel}
         </div>
       ) : (
         <button
@@ -181,7 +177,7 @@ function UpgradeCard({
             gap: 4,
           }}
         >
-          <span style={{ color: "#f0c040" }}>升级</span>
+          <span style={{ color: "#f0c040" }}>{T.btn_upgrade}</span>
           <span style={{ opacity: 0.8 }}>—</span>
           <span style={{ fontVariantNumeric: "tabular-nums", color: "#f0c040" }}>{cost}</span>
           <span style={{ opacity: 0.65 }}>{costCurrencyName}</span>

@@ -24,6 +24,7 @@ import type {
 import { SHARED_INVENTORY_KEY } from "../core/state";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
+import { T, slotLabel, fmt } from "./text";
 
 // ---------- Layout constants ----------
 
@@ -69,7 +70,7 @@ export function InventoryView({ store }: { store: GameStore }) {
       clearError();
       setSelected(null);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "装备失败");
+      setActionError(error instanceof Error ? error.message : T.equipFailed);
     }
   }
 
@@ -78,7 +79,7 @@ export function InventoryView({ store }: { store: GameStore }) {
       cc.unequipItem(slot);
       clearError();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "卸下失败");
+      setActionError(error instanceof Error ? error.message : T.unequipFailed);
     }
   }
 
@@ -87,7 +88,7 @@ export function InventoryView({ store }: { store: GameStore }) {
       <div style={{ flex: "1 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 12 }}>
         {actionError && <ErrorBanner message={actionError} />}
         <BagGrid
-          title={`${hero.name}'s Bag`}
+          title={fmt(T.heroBag, { name: hero.name })}
           inventoryOwnerId={hero.id}
           inv={personal}
           cols={COLS}
@@ -95,7 +96,7 @@ export function InventoryView({ store }: { store: GameStore }) {
           onSelect={selectSlot}
         />
         <BagGrid
-          title="Shared"
+          title={T.bagShared}
           inventoryOwnerId={SHARED_INVENTORY_KEY}
           inv={shared}
           cols={COLS}
@@ -107,6 +108,7 @@ export function InventoryView({ store }: { store: GameStore }) {
       <div style={{ flex: "0 0 260px", width: 260, display: "flex", flexDirection: "column", gap: 12 }}>
         <ItemDetailsPanel
           heroName={hero.name}
+          heroInventoryOwnerId={hero.id}
           selected={selected}
           selectedSlot={selectedSlot}
           onEquip={handleEquip}
@@ -138,7 +140,7 @@ function BagGrid({
     return (
       <div style={sectionStyle}>
         <div style={headerStyle}>{title}</div>
-        <div style={{ fontSize: 12, opacity: 0.5 }}>— no bag —</div>
+        <div style={{ fontSize: 12, opacity: 0.5 }}>{T.noBag}</div>
       </div>
     );
   }
@@ -299,11 +301,13 @@ function GearContent({
 
 function ItemDetailsPanel({
   heroName,
+  heroInventoryOwnerId,
   selected,
   selectedSlot,
   onEquip,
 }: {
   heroName: string;
+  heroInventoryOwnerId: string;
   selected: SelectionState | null;
   selectedSlot: InventorySlot;
   onEquip: () => void;
@@ -311,9 +315,9 @@ function ItemDetailsPanel({
   if (!selected || !selectedSlot) {
     return (
       <div style={sectionStyle}>
-        <div style={headerStyle}>物品详情</div>
+        <div style={headerStyle}>{T.itemDetails}</div>
         <div style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.68 }}>
-          点击背包中的物品后，这里会显示它的来源、类型、属性和操作入口。
+          {T.itemDetailsHint}
         </div>
       </div>
     );
@@ -324,8 +328,8 @@ function ItemDetailsPanel({
   if (!def) {
     return (
       <div style={sectionStyle}>
-        <div style={headerStyle}>物品详情</div>
-        <div style={{ fontSize: 12, color: "#f88" }}>缺少物品定义：{itemId}</div>
+        <div style={headerStyle}>{T.itemDetails}</div>
+        <div style={{ fontSize: 12, color: "#f88" }}>{T.missingItemDef}{itemId}</div>
       </div>
     );
   }
@@ -333,11 +337,14 @@ function ItemDetailsPanel({
   const isGear = selectedSlot.kind === "gear";
   const rolledMods = isGear ? selectedSlot.instance.rolledMods : [];
   const allMods = [...(def.modifiers ?? []), ...rolledMods];
-  const canEquip = isGear && Boolean(def.slot);
+  const canEquip =
+    isGear &&
+    Boolean(def.slot) &&
+    selected.inventoryOwnerId === heroNameToInventoryOwnerId(heroName);
 
   return (
     <div style={sectionStyle}>
-      <div style={headerStyle}>物品详情</div>
+      <div style={headerStyle}>{T.itemDetails}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{def.name}</div>
@@ -350,19 +357,19 @@ function ItemDetailsPanel({
           <div style={{ fontSize: 12, lineHeight: 1.6, color: "#cfcfcf" }}>{def.description}</div>
         )}
 
-        <InfoRow label="类型" value={def.stackable ? "材料" : "装备"} />
-        {selectedSlot.kind === "stack" && <InfoRow label="数量" value={`×${selectedSlot.qty}`} />}
-        {def.slot && <InfoRow label="装备槽位" value={slotLabel(def.slot)} />}
+        <InfoRow label={T.label_type} value={def.stackable ? T.type_material : T.type_equipment} />
+        {selectedSlot.kind === "stack" && <InfoRow label={T.label_quantity} value={`×${selectedSlot.qty}`} />}
+        {def.slot && <InfoRow label={T.label_equipSlot} value={slotLabel(def.slot)} />}
         {selectedSlot.kind === "gear" && (
-          <InfoRow label="实例" value={shortTail(selectedSlot.instance.instanceId)} />
+          <InfoRow label={T.label_instance} value={shortTail(selectedSlot.instance.instanceId)} />
         )}
-        {def.tags?.length ? <InfoRow label="标签" value={def.tags.join(" / ")} /> : null}
+        {def.tags?.length ? <InfoRow label={T.label_tags} value={def.tags.join(" / ")} /> : null}
 
-        <ModifierList title="属性效果" modifiers={allMods} emptyLabel="无属性加成" />
+        <ModifierList title={T.modifierEffects} modifiers={allMods} emptyLabel={T.noModifiers} />
 
         {canEquip && (
           <button onClick={onEquip} style={primaryButtonStyle}>
-            装备到{heroName}
+            {fmt(T.equipTo, { name: heroName })}
           </button>
         )}
       </div>
@@ -385,7 +392,7 @@ function EquipmentPanel({
 
   return (
     <div style={sectionStyle}>
-      <div style={headerStyle}>装备面板</div>
+      <div style={headerStyle}>{T.equipPanel}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {slots.map((slot) => {
           const equipped = hero.equipped[slot] ?? null;
@@ -395,7 +402,7 @@ function EquipmentPanel({
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <div style={{ fontSize: 12, opacity: 0.55 }}>{slotLabel(slot)}</div>
                 <div style={{ fontSize: 13, color: equipped ? "#fff" : "#777" }}>
-                  {equipped && def ? def.name : "未装备"}
+                  {equipped && def ? def.name : T.unequipped}
                 </div>
                 {equipped && def?.modifiers?.length ? (
                   <div style={{ fontSize: 11, opacity: 0.65 }}>
@@ -412,7 +419,7 @@ function EquipmentPanel({
                   cursor: equipped ? "pointer" : "default",
                 }}
               >
-                卸下
+                {T.btn_unequip}
               </button>
             </div>
           );
@@ -525,28 +532,6 @@ function shortTail(instanceId: string): string {
   return `#${instanceId.slice(-6)}`;
 }
 
-function slotLabel(slot: string): string {
-  switch (slot) {
-    case "weapon":
-      return "武器";
-    case "offhand":
-      return "副手";
-    case "helmet":
-      return "头部";
-    case "chest":
-      return "胸甲";
-    case "gloves":
-      return "手部";
-    case "boots":
-      return "鞋子";
-    case "ring":
-      return "戒指";
-    case "amulet":
-      return "项链";
-    default:
-      return slot;
-  }
-}
 
 function sortEquipmentSlots(slots: string[]): string[] {
   const order = ["weapon", "offhand", "helmet", "chest", "gloves", "boots", "ring", "amulet"];

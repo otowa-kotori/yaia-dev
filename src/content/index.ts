@@ -40,59 +40,59 @@ export const CURRENCY_GOLD = "currency.gold";
 const attrDefs: Record<string, AttrDef> = {
   [ATTR.MAX_HP]: {
     id: ATTR.MAX_HP,
-    name: "Max HP",
+    name: "生命上限",
     defaultBase: 50,
     integer: true,
     clampMin: 0,
   },
   [ATTR.MAX_MP]: {
     id: ATTR.MAX_MP,
-    name: "Max MP",
+    name: "魔力上限",
     defaultBase: 10,
     integer: true,
     clampMin: 0,
   },
   [ATTR.ATK]: {
     id: ATTR.ATK,
-    name: "Atk",
+    name: "攻击",
     defaultBase: 8,
     integer: true,
     clampMin: 0,
   },
   [ATTR.DEF]: {
     id: ATTR.DEF,
-    name: "Def",
+    name: "防御",
     defaultBase: 0,
     integer: true,
     clampMin: 0,
   },
-  [ATTR.STR]: { id: ATTR.STR, name: "Str", defaultBase: 5, integer: true },
-  [ATTR.DEX]: { id: ATTR.DEX, name: "Dex", defaultBase: 5, integer: true },
-  [ATTR.INT]: { id: ATTR.INT, name: "Int", defaultBase: 5, integer: true },
-  [ATTR.WIS]: { id: ATTR.WIS, name: "Wis", defaultBase: 5, integer: true },
+  [ATTR.STR]: { id: ATTR.STR, name: "力量", defaultBase: 5, integer: true },
+  [ATTR.DEX]: { id: ATTR.DEX, name: "敏捷", defaultBase: 5, integer: true },
+  [ATTR.INT]: { id: ATTR.INT, name: "智力", defaultBase: 5, integer: true },
+  [ATTR.WIS]: { id: ATTR.WIS, name: "感知", defaultBase: 5, integer: true },
   [ATTR.CRIT_RATE]: {
     id: ATTR.CRIT_RATE,
-    name: "Crit Rate",
+    name: "暴击率",
     defaultBase: 0,
     clampMin: 0,
     clampMax: 1,
   },
   [ATTR.CRIT_MULT]: {
     id: ATTR.CRIT_MULT,
-    name: "Crit Mult",
+    name: "暴击倍率",
     defaultBase: 1.5,
     clampMin: 1,
   },
   [ATTR.SPEED]: {
     id: ATTR.SPEED,
-    name: "Speed",
+    name: "速度",
     defaultBase: 10,
     integer: true,
     clampMin: 1,
   },
   [ATTR.INVENTORY_STACK_LIMIT]: {
     id: ATTR.INVENTORY_STACK_LIMIT,
-    name: "Inventory Stack Limit",
+    name: "背包堆叠上限",
     defaultBase: DEFAULT_CHAR_STACK_LIMIT,
     integer: true,
     clampMin: 1,
@@ -121,7 +121,7 @@ export const strikeEffect: EffectDef = {
 
 export const basicAttack: AbilityDef = {
   id: "ability.basic.attack" as AbilityId,
-  name: "Attack",
+  name: "攻击",
   targetKind: "single_enemy",
   effects: [strikeEffect.id],
 };
@@ -130,7 +130,7 @@ export const basicAttack: AbilityDef = {
 
 export const slime: MonsterDef = {
   id: "monster.slime" as MonsterId,
-  name: "Slime",
+  name: "史莱姆",
   level: 1,
   baseAttrs: {
     [ATTR.MAX_HP]: 30,
@@ -146,7 +146,7 @@ export const slime: MonsterDef = {
 
 export const goblin: MonsterDef = {
   id: "monster.goblin" as MonsterId,
-  name: "Goblin",
+  name: "哥布林",
   level: 1,
   baseAttrs: {
     [ATTR.MAX_HP]: 24,
@@ -164,7 +164,7 @@ export const goblin: MonsterDef = {
 
 export const copperOre: ItemDef = {
   id: "item.ore.copper" as ItemId,
-  name: "Copper Ore",
+  name: "铜矿石",
   description: "刚挖出来的粗铜矿石，是最基础的金属材料之一。",
   stackable: true,
   tags: ["ore"],
@@ -173,7 +173,7 @@ export const copperOre: ItemDef = {
 
 export const slimeGel: ItemDef = {
   id: "item.monster.slime_gel" as ItemId,
-  name: "Slime Gel",
+  name: "史莱姆胶",
   description: "一团黏糊糊的史莱姆胶，常用来当作低阶黏结材料。",
   stackable: true,
   tags: ["monster_drop"],
@@ -181,7 +181,7 @@ export const slimeGel: ItemDef = {
 
 export const trainingSword: ItemDef = {
   id: "item.weapon.training_sword" as ItemId,
-  name: "Training Sword",
+  name: "训练木剑",
   description: "给新手练手用的木制短剑，虽然朴素，但总比空手强。",
   stackable: false,
   slot: "weapon",
@@ -193,7 +193,7 @@ export const trainingSword: ItemDef = {
 
 export const copperSword: ItemDef = {
   id: "item.weapon.copper_sword" as ItemId,
-  name: "Copper Sword",
+  name: "铜剑",
   description: "用铜矿和史莱姆胶拼成的初阶短剑，刃口粗糙但已经足够实战。",
   stackable: false,
   slot: "weapon",
@@ -216,14 +216,14 @@ export const defaultSkillXpCurve: FormulaRef = {
 
 export const miningSkill: SkillDef = {
   id: "skill.mining" as SkillId,
-  name: "Mining",
+  name: "采矿",
   xpCurve: defaultSkillXpCurve,
   maxLevel: 99,
 };
 
 export const smithingSkill: SkillDef = {
   id: "skill.smithing" as SkillId,
-  name: "Smithing",
+  name: "锻造",
   xpCurve: defaultSkillXpCurve,
   maxLevel: 99,
 };
@@ -232,7 +232,7 @@ export const smithingSkill: SkillDef = {
 
 export const copperSwordRecipe: RecipeDef = {
   id: "recipe.craft.copper_sword" as RecipeId,
-  name: "Forge Copper Sword",
+  name: "锻造铜剑",
   skill: smithingSkill.id,
   requiredLevel: 1,
   durationTicks: 10,
@@ -249,7 +249,7 @@ export const copperSwordRecipe: RecipeDef = {
 
 export const copperVein: ResourceNodeDef = {
   id: "node.copper_vein" as ResourceNodeId,
-  name: "Copper Vein",
+  name: "铜矿脉",
   skill: miningSkill.id,
   swingTicks: 10,
   xpPerSwing: 4,
@@ -261,14 +261,14 @@ export const copperVein: ResourceNodeDef = {
 /** Normal difficulty: single slime per wave. Suitable for beginners. */
 export const slimeNormal: EncounterDef = {
   id: "encounter.forest.slime_normal" as EncounterId,
-  name: "Slime Trail (Normal)",
+  name: "史莱姆小径（普通）",
   waveSelection: "random",
   waveIntervalTicks: 20,
   recoverBelowHpFactor: 0.5,
   waves: [
     {
       id: "wave.forest.lone_slime",
-      name: "Lone Slime",
+      name: "落单史莱姆",
       monsters: [slime.id],
       rewards: {
         drops: [
@@ -283,14 +283,14 @@ export const slimeNormal: EncounterDef = {
 /** Hard difficulty: double slime or mixed pack. Higher rewards. */
 export const slimeHard: EncounterDef = {
   id: "encounter.forest.slime_hard" as EncounterId,
-  name: "Slime Nest (Hard)",
+  name: "史莱姆巢穴（困难）",
   waveSelection: "random",
   waveIntervalTicks: 20,
   recoverBelowHpFactor: 0.5,
   waves: [
     {
       id: "wave.forest.slime_pack",
-      name: "Slime Pack",
+      name: "史莱姆群",
       monsters: [slime.id, slime.id],
       rewards: {
         drops: [
@@ -301,7 +301,7 @@ export const slimeHard: EncounterDef = {
     },
     {
       id: "wave.forest.goblin_patrol",
-      name: "Goblin Patrol",
+      name: "哥布林巡逻队",
       monsters: [slime.id, goblin.id],
       rewards: {
         drops: [
@@ -317,18 +317,18 @@ export const slimeHard: EncounterDef = {
 
 export const forestLocation: LocationDef = {
   id: "location.forest" as LocationId,
-  name: "Sunny Forest",
+  name: "阳光森林",
   entries: [
-    { kind: "combat", encounterId: slimeNormal.id, label: "Slime Trail (Normal)" },
-    { kind: "combat", encounterId: slimeHard.id, label: "Slime Nest (Hard)" },
+    { kind: "combat", encounterId: slimeNormal.id, label: "史莱姆小径（普通）" },
+    { kind: "combat", encounterId: slimeHard.id, label: "史莱姆巢穴（困难）" },
   ],
 };
 
 export const copperMineLocation: LocationDef = {
   id: "location.mine.copper" as LocationId,
-  name: "Copper Mine",
+  name: "铜矿洞",
   entries: [
-    { kind: "gather", resourceNodes: [copperVein.id], label: "Copper Vein" },
+    { kind: "gather", resourceNodes: [copperVein.id], label: "铜矿脉" },
   ],
 };
 

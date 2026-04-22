@@ -40,6 +40,15 @@ Project-specific conventions for Claude. Read before editing code.
 - Persisted actor fields: currentHp, currentMp, activeEffects, cooldowns, attrs.base, per-kind source fields (level/exp/equipped/talents/knownAbilities/xpCurve/skills for PlayerCharacter; defId for Enemy). Derived fields (attrs.modifiers, attrs.cache, runtime abilities list) are rebuilt on load.
 - Content IDs are dot-namespaced (`ability.fire.fireball`, `item.ore.copper`). Coin the ID once; renaming later costs a migration.
 
+## Text
+
+- The game ships in Chinese only. No i18n framework at this stage.
+- **Content-layer text** (`name`, `description` in content definitions): write Chinese directly in `content/index.ts`. Content IDs stay English dot-namespaced.
+- **UI-layer text** (button labels, status messages, section titles, hints): import from `src/ui/text.ts`. Do NOT hardcode bare Chinese literals in `.tsx` files (comments excluded).
+- Shared helpers like `slotLabel()` and `currencyName()` also live in `text.ts` — do not duplicate them in individual views.
+- To audit for leaked bare Chinese in UI files: `rg '[\u4e00-\u9fff]' src/ui/*.tsx --glob '!text.ts' -n`
+- Test fixtures in `tests/` have their own content definitions; those names don't need to match `content/index.ts`.
+
 ## Tests
 
 - bun test. Put new tests under `tests/core/<module>.test.ts` mirroring source layout. Fixtures live in `tests/fixtures/`.

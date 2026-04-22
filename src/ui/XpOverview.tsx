@@ -12,19 +12,20 @@ import { xpProgressToNextLevel } from "../core/progression";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { buildDefaultContent } from "../content";
+import { T } from "./text";
 
 const ATTR_DEFS = buildDefaultContent().attributes;
 
 /** Attribute ids we want to display, in order. */
 const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [
-  { id: ATTR.MAX_HP, label: "Max HP" },
-  { id: ATTR.ATK,    label: "ATK" },
-  { id: ATTR.DEF,    label: "DEF" },
-  { id: ATTR.STR,    label: "STR" },
-  { id: ATTR.DEX,    label: "DEX" },
-  { id: ATTR.INT,    label: "INT" },
-  { id: ATTR.WIS,    label: "WIS" },
-  { id: ATTR.SPEED,  label: "SPD" },
+  { id: ATTR.MAX_HP, label: T.label_maxHp },
+  { id: ATTR.ATK,    label: T.label_atk },
+  { id: ATTR.DEF,    label: T.label_def },
+  { id: ATTR.STR,    label: T.label_str },
+  { id: ATTR.DEX,    label: T.label_dex },
+  { id: ATTR.INT,    label: T.label_int },
+  { id: ATTR.WIS,    label: T.label_wis },
+  { id: ATTR.SPEED,  label: T.label_spd },
 ];
 
 export function XpOverview({ store }: { store: GameStore }) {
@@ -33,7 +34,7 @@ export function XpOverview({ store }: { store: GameStore }) {
   if (!hero) {
     return (
       <div style={{ opacity: 0.5, fontSize: 14, marginTop: 12 }}>
-        No hero yet.
+        {T.noHeroYet}
       </div>
     );
   }
@@ -45,7 +46,7 @@ export function XpOverview({ store }: { store: GameStore }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* ── Hero level + XP ── */}
-      <Section title="Character">
+      <Section title={T.section_character}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={{ fontWeight: 600 }}>
             {hero.name} · Lv {hero.level}
@@ -58,7 +59,7 @@ export function XpOverview({ store }: { store: GameStore }) {
       </Section>
 
       {/* ── Attributes ── */}
-      <Section title="Attributes">
+      <Section title={T.section_attributes}>
         <div
           style={{
             display: "grid",
@@ -83,9 +84,9 @@ export function XpOverview({ store }: { store: GameStore }) {
       </Section>
 
       {/* ── Skills ── */}
-      <Section title="Skills">
+      <Section title={T.section_skills}>
         {skillEntries.length === 0 ? (
-          <div style={{ opacity: 0.45, fontSize: 12 }}>No skills yet. Try gathering!</div>
+          <div style={{ opacity: 0.45, fontSize: 12 }}>{T.noSkillsYet}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {skillEntries.map(([skillId, sp]) => {

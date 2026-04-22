@@ -25,6 +25,7 @@ import { XpOverview } from "./XpOverview";
 import { UpgradesView } from "./UpgradesView";
 import { useStore } from "./useStore";
 import { ACTIVITY_COMBAT_KIND, ACTIVITY_GATHER_KIND } from "../core/activity";
+import { T } from "./text";
 
 // ---------- Container ----------
 
@@ -44,12 +45,12 @@ const containerStyle: React.CSSProperties = {
 type TabId = "map" | "inventory" | "crafting" | "xp" | "upgrades" | "settings";
 
 const TABS: Array<{ id: TabId; label: string }> = [
-  { id: "map",       label: "地图 & 战斗" },
-  { id: "inventory", label: "背包" },
-  { id: "crafting",  label: "合成" },
-  { id: "xp",        label: "经验总览" },
-  { id: "upgrades",  label: "全局升级" },
-  { id: "settings",  label: "设置" },
+  { id: "map",       label: T.tab_map },
+  { id: "inventory", label: T.tab_inventory },
+  { id: "crafting",  label: T.tab_crafting },
+  { id: "xp",        label: T.tab_xp },
+  { id: "upgrades",  label: T.tab_upgrades },
+  { id: "settings",  label: T.tab_settings },
 ];
 
 // ---------- App ----------
@@ -91,13 +92,13 @@ function CharacterBar({ store }: { store: GameStore }) {
       {heroes.map((hero) => {
         const active = hero.id === focusedId;
         const cc = s.getCharacter(hero.id);
-        let statusLabel = "idle";
+        let statusLabel: string = T.status_idle;
         if (cc.activity?.kind === ACTIVITY_COMBAT_KIND) {
-          statusLabel = "战斗中";
+          statusLabel = T.status_inCombat;
         } else if (cc.activity?.kind === ACTIVITY_GATHER_KIND) {
-          statusLabel = "采集中";
+          statusLabel = T.status_gathering;
         } else if (hero.locationId) {
-          statusLabel = "待命";
+          statusLabel = T.status_idle;
         }
         return (
           <button
@@ -223,7 +224,7 @@ function LocationSelector({ store }: { store: GameStore }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>地点:</span>
+        <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>{T.label_location}</span>
         {locationIds.map((id) => (
           <button
             key={id}
@@ -258,7 +259,7 @@ function EntryList({
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginLeft: 4 }}>
       {loc.entries.map((entry, i) => {
-        const label = entry.label ?? (entry.kind === "combat" ? "战斗" : "采集");
+        const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : T.entry_gather);
         return (
           <button
             key={i}
@@ -298,7 +299,7 @@ function Controls({ store }: { store: GameStore }) {
       }}
     >
       <button onClick={() => cc.stopActivity()} style={btnStyle(false)}>
-        停止
+        {T.btn_stop}
       </button>
     </div>
   );
@@ -315,7 +316,7 @@ function SettingsTab({ store }: { store: GameStore }) {
       {/* Speed */}
       <div style={{ background: "#222", borderRadius: 4, padding: 10 }}>
         <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
-          速度
+          {T.speed}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[0, 1, 2, 5].map((m) => (
@@ -324,7 +325,7 @@ function SettingsTab({ store }: { store: GameStore }) {
               onClick={() => s.setSpeedMultiplier(m)}
               style={btnStyle(speed === m, true)}
             >
-              {m === 0 ? "暂停" : `${m}x`}
+              {m === 0 ? T.pause : `${m}x`}
             </button>
           ))}
         </div>
@@ -333,17 +334,17 @@ function SettingsTab({ store }: { store: GameStore }) {
       {/* Danger zone */}
       <div style={{ background: "#222", borderRadius: 4, padding: 10 }}>
         <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
-          危险区域
+          {T.dangerZone}
         </div>
         <button
           onClick={() => {
-            if (confirm("清除存档并重置？此操作不可撤销。")) {
+            if (confirm(T.confirmClearSave)) {
               void s.clearSaveAndReset();
             }
           }}
           style={{ ...btnStyle(false, true), borderColor: "#733", color: "#f88" }}
         >
-          清除存档
+          {T.btn_clearSave}
         </button>
       </div>
     </div>
