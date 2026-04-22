@@ -78,7 +78,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      combatZoneId: forestCombatZone.id,
+      mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
       ctxProvider,
     });
     engine.register(controller);
@@ -129,7 +129,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      combatZoneId: forestCombatZone.id,
+      mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
       ctxProvider,
     });
     engine.register(controller);
@@ -177,7 +177,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      combatZoneId: forestCombatZone.id,
+      mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
       ctxProvider,
     });
     engine.register(controller);
@@ -226,7 +226,7 @@ describe("CombatActivity + Stage integration", () => {
       const controller = enterStage({
         stageId: STAGE_ID,
         locationId: forestLocation.id,
-        combatZoneId: forestCombatZone.id,
+        mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
         ctxProvider,
       });
       engine.register(controller);
@@ -282,7 +282,7 @@ describe("CombatActivity + Stage integration", () => {
       const controller = enterStage({
         stageId: STAGE_ID,
         locationId: forestLocation.id,
-        combatZoneId: forestCombatZone.id,
+        mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
         ctxProvider,
       });
       engine.register(controller);
@@ -344,7 +344,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      combatZoneId: forestCombatZone.id,
+      mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
       ctxProvider,
     });
     engine.register(controller);
@@ -387,7 +387,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      combatZoneId: forestCombatZone.id,
+      mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
       ctxProvider,
     });
     engine.register(controller);

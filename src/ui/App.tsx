@@ -353,9 +353,12 @@ function EntryList({
             onClick={() => {
               if (entry.kind === "combat") {
                 cc.startFight(entry.combatZoneId);
-              } else {
+              } else if (entry.kind === "gather") {
                 const nodeId = entry.resourceNodes[0];
                 if (nodeId) cc.startGather(nodeId);
+              } else if (entry.kind === "dungeon") {
+                const allHeroIds = s.listHeroes().map((h) => h.id);
+                s.startDungeon(entry.dungeonId, allHeroIds);
               }
             }}
             style={btnStyle(false, true)}

@@ -38,10 +38,11 @@ import { createRng, restoreRng, type Rng } from "../rng";
 import {
   createEmptyState,
   type GameState,
+  type DungeonSession,
 } from "../state";
 import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
-import { getItem, getLocation, getRecipe, getSkill, setContent } from "../content";
+import { getItem, getLocation, getRecipe, getSkill, getDungeon, setContent } from "../content";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
@@ -50,6 +51,11 @@ import {
   type CombatActivity,
   type CombatActivityPhase,
   type GatherActivity,
+  ACTIVITY_DUNGEON_KIND,
+  createDungeonActivity,
+  abandonDungeon as abandonDungeonCore,
+  type DungeonActivity,
+  type DungeonPhase,
 } from "../activity";
 import {
   createPlayerCharacter,
@@ -76,6 +82,7 @@ import {
   type StageController,
 } from "../stage";
 import type { StageSession } from "../stage/types";
+import type { StageMode } from "../stage/types";
 
 // ---------- Persisted activity pointers ----------
 // The resume payload stored in PlayerCharacter.activity.data. Mirrored in
@@ -85,6 +92,12 @@ interface CombatActivityData extends Record<string, unknown> {
   phase: CombatActivityPhase;
   currentBattleId: string | null;
   lastTransitionTick: number;
+}
+
+interface DungeonActivityData extends Record<string, unknown> {
+  phase: DungeonPhase;
+  currentBattleId: string | null;
+  transitionTick: number;
 }
 
 interface GatherActivityData extends Record<string, unknown> {
@@ -131,6 +144,11 @@ export interface GameSession {
   getFocusedCharacter(): CharacterController;
   setFocusedChar(charId: string): void;
   listHeroes(): PlayerCharacter[];
+
+  /** Start a dungeon run with the given party. All characters must be idle. */
+  startDungeon(dungeonId: string, partyCharIds: string[]): void;
+  /** Abandon the currently active dungeon run for a character. No completion rewards. */
+  abandonDungeon(charId: string): void;
 
   // Global commands.
   setSpeedMultiplier(mul: number): void;
@@ -184,6 +202,9 @@ export function createGameSession(
       if (cc) cc._activity = null;
     }
   });
+
+  // Active dungeon world activities, keyed by dungeonSessionId.
+  const dungeonActivities = new Map<string, DungeonActivity>();
 
   // ---------- Context builder ----------
 
@@ -383,7 +404,7 @@ export function createGameSession(
     cc: CharacterControllerImpl,
     opts: {
       locationId: string;
-      combatZoneId?: string | null;
+      mode?: StageMode;
       resourceNodes?: string[];
     },
   ): string {
@@ -392,7 +413,7 @@ export function createGameSession(
     const ctrl = enterStageCore({
       stageId,
       locationId: opts.locationId,
-      combatZoneId: opts.combatZoneId,
+      mode: opts.mode,
       resourceNodes: opts.resourceNodes,
       ctxProvider: buildCtx,
     });
@@ -465,7 +486,7 @@ export function createGameSession(
         }
         const stageId = startStageInstance(cc, {
           locationId: cc.hero.locationId,
-          combatZoneId,
+          mode: { kind: "combatZone", combatZoneId },
         });
         void stageId; // stageId is set on hero by startStageInstance
         cc._activity = createCombatActivity({
@@ -680,7 +701,7 @@ export function createGameSession(
       const ctrl = enterStageCore({
         stageId,
         locationId: session.locationId,
-        combatZoneId: session.combatZoneId,
+        mode: session.mode,
         ctxProvider: buildCtx,
         resume: true,
       });
@@ -692,6 +713,23 @@ export function createGameSession(
         const n = parseInt(numMatch[1]!, 10);
         if (n > stageIdCounter) stageIdCounter = n;
       }
+    }
+
+    // Rehydrate dungeon world activities from state.dungeons.
+    for (const [dsId, ds] of Object.entries(state.dungeons)) {
+      if (ds.status !== "in_progress") continue;
+      const da = createDungeonActivity({
+        dungeonSessionId: dsId,
+        ctxProvider: buildCtx,
+        restoreParty: () => restoreDungeonParty(dsId, { state }),
+        resume: {
+          phase: "spawningWave", // conservative: restart from spawning
+          currentBattleId: null,
+          transitionTick: engine.currentTick,
+        },
+      });
+      dungeonActivities.set(dsId, da);
+      engine.register(da);
     }
 
     // Rehydrate activities for each character.
@@ -723,6 +761,170 @@ export function createGameSession(
     }
   }
 
+  // ---------- Dungeon lifecycle ----------
+
+  function restoreDungeonParty(
+    dungeonSessionId: string,
+    ctx: { state: GameState },
+  ): void {
+    const ds = ctx.state.dungeons[dungeonSessionId];
+    if (!ds) return;
+
+    for (const charId of ds.partyCharIds) {
+      const cc = characters.get(charId);
+      if (!cc) continue;
+      const saved = ds.savedActivities[charId];
+      // Remove any dungeon-participant activity.
+      if (cc._activity) {
+        engine.unregister(cc._activity.id);
+        cc._activity = null;
+      }
+      cc.hero.activity = saved?.activity ?? null;
+      cc.hero.locationId = saved?.locationId ?? null;
+      cc.hero.stageId = saved?.stageId ?? null;
+      cc.hero.dungeonSessionId = null;
+      // Note: we do NOT restore old stage controllers or activities here.
+      // The character returns to idle at their saved location. If they had an
+      // activity before, it was snapshot'd as data; we'd need rehydration to
+      // actually resume it. For alpha, just restoring location is sufficient.
+      // Clear the persisted activity since we can't seamlessly resume it.
+      cc.hero.activity = null;
+      cc.hero.stageId = null;
+    }
+
+    // Tear down dungeon stage.
+    const stageId = ds.stageId;
+    const ctrl = stageControllers.get(stageId);
+    if (ctrl) {
+      engine.unregister(ctrl.id);
+      stageControllers.delete(stageId);
+    }
+    leaveStageCore(stageId, buildCtx());
+
+    // Clean up dungeon activity.
+    const da = dungeonActivities.get(dungeonSessionId);
+    if (da) {
+      engine.unregister(da.id);
+      dungeonActivities.delete(dungeonSessionId);
+    }
+
+    // Remove the dungeon session.
+    delete ctx.state.dungeons[dungeonSessionId];
+  }
+
+  function startDungeonImpl(
+    dungeonId: string,
+    partyCharIds: string[],
+  ): void {
+    const def = getDungeon(dungeonId);
+
+    if (partyCharIds.length === 0) {
+      throw new Error("session.startDungeon: partyCharIds must not be empty");
+    }
+    if (def.minPartySize && partyCharIds.length < def.minPartySize) {
+      throw new Error(
+        `session.startDungeon: need at least ${def.minPartySize} characters, got ${partyCharIds.length}`,
+      );
+    }
+    if (def.maxPartySize && partyCharIds.length > def.maxPartySize) {
+      throw new Error(
+        `session.startDungeon: max ${def.maxPartySize} characters, got ${partyCharIds.length}`,
+      );
+    }
+
+    // Validate all characters exist and are idle.
+    const ccs: CharacterControllerImpl[] = [];
+    for (const charId of partyCharIds) {
+      const cc = characters.get(charId);
+      if (!cc) throw new Error(`session.startDungeon: no character "${charId}"`);
+      ccs.push(cc);
+    }
+
+    // Save current states and tear down existing activities.
+    const savedActivities: Record<string, { locationId: string | null; stageId: string | null; activity: typeof ccs[0]["hero"]["activity"] }> = {};
+    for (const cc of ccs) {
+      savedActivities[cc.hero.id] = {
+        locationId: cc.hero.locationId,
+        stageId: cc.hero.stageId,
+        activity: cc.hero.activity
+          ? { ...cc.hero.activity, data: { ...cc.hero.activity.data } }
+          : null,
+      };
+      tearDownCharInstance(cc);
+    }
+
+    // Create shared stage for the dungeon.
+    const stageId = nextStageId(`dungeon.${dungeonId}`);
+    const locationId = `dungeon.${dungeonId}`;
+    const dungeonSessionId = `dungeon:${dungeonId}:${engine.currentTick}`;
+
+    const ctrl = enterStageCore({
+      stageId,
+      locationId,
+      mode: { kind: "dungeon", dungeonSessionId },
+      ctxProvider: buildCtx,
+    });
+    stageControllers.set(stageId, ctrl);
+    engine.register(ctrl);
+
+    // Create DungeonSession in state.
+    const ds: DungeonSession = {
+      dungeonId,
+      partyCharIds: partyCharIds.slice(),
+      savedActivities,
+      currentWaveIndex: 0,
+      status: "in_progress",
+      startedAtTick: engine.currentTick,
+      stageId,
+    };
+    state.dungeons[dungeonSessionId] = ds;
+
+    // Point all characters to the dungeon.
+    for (const cc of ccs) {
+      cc.hero.locationId = locationId;
+      cc.hero.stageId = stageId;
+      cc.hero.dungeonSessionId = dungeonSessionId;
+      // Set a dungeon participant activity on the hero.
+      cc.hero.activity = {
+        kind: ACTIVITY_DUNGEON_KIND,
+        startedAtTick: engine.currentTick,
+        data: {
+          dungeonSessionId,
+          phase: "spawningWave",
+          currentBattleId: null,
+          transitionTick: engine.currentTick,
+        },
+      };
+    }
+
+    // Create and register the DungeonWorldActivity.
+    const dungeonActivity = createDungeonActivity({
+      dungeonSessionId,
+      ctxProvider: buildCtx,
+      restoreParty: () => restoreDungeonParty(dungeonSessionId, { state }),
+    });
+    dungeonActivities.set(dungeonSessionId, dungeonActivity);
+    engine.register(dungeonActivity);
+  }
+
+  function abandonDungeonImpl(charId: string): void {
+    const cc = characters.get(charId);
+    if (!cc) throw new Error(`session.abandonDungeon: no character "${charId}"`);
+    const dsId = cc.hero.dungeonSessionId;
+    if (!dsId) throw new Error(`session.abandonDungeon: character "${charId}" is not in a dungeon`);
+    const ds = state.dungeons[dsId];
+    if (!ds) throw new Error(`session.abandonDungeon: no dungeon session "${dsId}"`);
+    const da = dungeonActivities.get(dsId);
+    if (da) {
+      abandonDungeonCore(da, ds, buildCtx(), () =>
+        restoreDungeonParty(dsId, { state }),
+      );
+    } else {
+      // No activity found — just clean up.
+      restoreDungeonParty(dsId, { state });
+    }
+  }
+
   // ---------- Public lifecycle ----------
 
   function loadFromSave(loaded: GameState): void {
@@ -739,6 +941,8 @@ export function createGameSession(
     }
     characters.clear();
     stageControllers.clear();
+    for (const da of dungeonActivities.values()) engine.unregister(da.id);
+    dungeonActivities.clear();
     stageIdCounter = 0;
 
     state = createEmptyState(seed, SAVE_VERSION);
@@ -835,6 +1039,8 @@ export function createGameSession(
       return Array.from(characters.values()).map((cc) => cc.hero);
     },
 
+    startDungeon: startDungeonImpl,
+    abandonDungeon: abandonDungeonImpl,
     setSpeedMultiplier,
     getSpeedMultiplier,
     loadFromSave,

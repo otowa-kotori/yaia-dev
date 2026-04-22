@@ -203,8 +203,8 @@ function stepSearching(
   const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
   if (!session) return;
 
-  if (!session.currentWave && !session.pendingCombatWaveSearch && session.combatZoneId) {
-    const zone = getCombatZone(session.combatZoneId);
+  if (!session.currentWave && !session.pendingCombatWaveSearch && session.mode.kind === "combatZone") {
+    const zone = getCombatZone(session.mode.combatZoneId);
     beginCombatWaveSearch(zone, session, ctx.currentTick);
   }
 
@@ -484,8 +484,8 @@ function shouldRecoverAfterBattle(
 ): boolean {
   if (hero.currentHp <= 0) return true;
   const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
-  if (!session || !session.combatZoneId) return false;
-  const zone = getCombatZone(session.combatZoneId);
+  if (!session || session.mode.kind !== "combatZone") return false;
+  const zone = getCombatZone(session.mode.combatZoneId);
   const threshold = zone.recoverBelowHpFactor ?? 0;
   if (threshold <= 0) return false;
 

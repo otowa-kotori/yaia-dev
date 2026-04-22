@@ -44,7 +44,7 @@ function setupHeroInStage(h: TestHarness): {
 
   const session: StageSession = {
     locationId: forestLocation.id,
-    combatZoneId: forestCombatZone.id,
+    mode: { kind: "combatZone", combatZoneId: forestCombatZone.id },
     enteredAtTick: 0,
     spawnedActorIds: [],
     combatWaveIndex: 0,

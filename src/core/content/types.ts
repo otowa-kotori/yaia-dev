@@ -21,6 +21,7 @@ export type EffectId = string & { readonly __brand: "EffectId" };
 export type SkillId = string & { readonly __brand: "SkillId" };
 export type LocationId = string & { readonly __brand: "LocationId" };
 export type CombatZoneId = string & { readonly __brand: "CombatZoneId" };
+export type DungeonId = string & { readonly __brand: "DungeonId" };
 export type RecipeId = string & { readonly __brand: "RecipeId" };
 export type AttrId = string & { readonly __brand: "AttrId" };
 export type TalentId = string & { readonly __brand: "TalentId" };
@@ -219,11 +220,44 @@ export interface CombatZoneDef {
   combatSkill?: SkillId;
 }
 
+
+// ---------- Dungeons ----------
+//
+// A dungeon is a linear sequence of fixed waves. Unlike CombatZone (infinite
+// random loop), a dungeon has an end: clear the last wave to complete it.
+// Multiple characters enter as a party and share one Stage + Battle.
+
+export interface DungeonWaveDef {
+  id: string;
+  name: string;
+  /** Exact enemy lineup for this wave. */
+  monsters: MonsterId[];
+  /** Rewards granted when this wave is cleared. */
+  rewards?: WaveRewardDef;
+}
+
+export interface DungeonDef {
+  id: DungeonId;
+  name: string;
+  /** Fixed-order wave sequence. Players fight wave[0], then wave[1], etc. */
+  waves: DungeonWaveDef[];
+  /** After each wave, heal if HP ratio is at or below this threshold. */
+  recoverBelowHpFactor: number;
+  /** Ticks to wait between waves (transition / search animation). */
+  waveTransitionTicks: number;
+  /** Bonus rewards granted on full dungeon completion. */
+  completionRewards?: WaveRewardDef;
+  /** Minimum party size required to enter. */
+  minPartySize?: number;
+  /** Maximum party size allowed. */
+  maxPartySize?: number;
+}
 // ---------- Location entries ----------
 
 export type LocationEntryDef =
   | { kind: "combat"; combatZoneId: CombatZoneId; label?: string }
-  | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string };
+  | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string }
+  | { kind: "dungeon"; dungeonId: DungeonId; label?: string };
 
 /** A physical location / map area. Contains a menu of available entries
  *  the player can choose from. The actual running instance (actor spawning,
@@ -350,6 +384,7 @@ export interface ContentDb {
   skills: Readonly<Record<string, SkillDef>>;
   locations: Readonly<Record<string, LocationDef>>;
   combatZones: Readonly<Record<string, CombatZoneDef>>;
+  dungeons: Readonly<Record<string, DungeonDef>>;
   recipes: Readonly<Record<string, RecipeDef>>;
   talents: Readonly<Record<string, TalentDef>>;
   upgrades: Readonly<Record<string, UpgradeDef>>;
@@ -372,6 +407,7 @@ export function emptyContentDb(): ContentDb {
     skills: {},
     locations: {},
     combatZones: {},
+    dungeons: {},
     recipes: {},
     talents: {},
     upgrades: {},

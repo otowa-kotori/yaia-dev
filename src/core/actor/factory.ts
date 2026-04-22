@@ -85,6 +85,7 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     side: "player",
     locationId: null,
     stageId: null,
+    dungeonSessionId: null,
   };
   rebuildCharacterDerived(pc, opts.attrDefs);
   pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, opts.attrDefs);

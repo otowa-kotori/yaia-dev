@@ -24,6 +24,7 @@ export function patchContent(partial: Partial<ContentDb>): void {
     skills: { ...current.skills, ...(partial.skills ?? {}) },
     locations: { ...current.locations, ...(partial.locations ?? {}) },
     combatZones: { ...current.combatZones, ...(partial.combatZones ?? {}) },
+    dungeons: { ...current.dungeons, ...(partial.dungeons ?? {}) },
     recipes: { ...current.recipes, ...(partial.recipes ?? {}) },
     talents: { ...current.talents, ...(partial.talents ?? {}) },
     upgrades: { ...current.upgrades, ...(partial.upgrades ?? {}) },
@@ -76,6 +77,11 @@ export function getLocation(id: string) {
 export function getCombatZone(id: string) {
   const v = current.combatZones[id];
   if (!v) throw new Error(`content: no combatZone "${id}"`);
+  return v;
+}
+export function getDungeon(id: string) {
+  const v = current.dungeons[id];
+  if (!v) throw new Error(`content: no dungeon "${id}"`);
   return v;
 }
 export function getRecipe(id: string) {

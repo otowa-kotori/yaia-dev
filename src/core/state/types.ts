@@ -58,6 +58,29 @@ export interface WorldActivityState {
   data: Record<string, unknown>;
 }
 
+
+// ---------- Dungeon sessions ----------
+
+export interface DungeonSavedCharState {
+  locationId: string | null;
+  stageId: string | null;
+  activity: CharacterActivityState | null;
+}
+
+export interface DungeonSession {
+  dungeonId: string;
+  /** Character ids participating in this dungeon run. */
+  partyCharIds: string[];
+  /** Snapshot of each character's state before entering. Used to restore on exit. */
+  savedActivities: Record<string, DungeonSavedCharState>;
+  /** Current wave index (0-based) into the DungeonDef.waves array. */
+  currentWaveIndex: number;
+  /** Overall dungeon run status. */
+  status: "in_progress" | "completed" | "failed" | "abandoned";
+  startedAtTick: number;
+  /** The shared stage instance id for this dungeon run. */
+  stageId: string;
+}
 // ---------- WorldRecord (cross-run permanent progress) ----------
 //
 // Stored alongside GameState but semantically separate: WorldRecord survives
@@ -100,6 +123,8 @@ export interface GameState {
    *  references its current stage via `hero.stageId`. Multiple characters
    *  may reference the same stageId (future: co-op). */
   stages: Record<string, StageSession>;
+  /** Active dungeon sessions, keyed by dungeonSessionId. */
+  dungeons: Record<string, DungeonSession>;
   /** Which character the UI is currently focused on. Persisted for reload. */
   focusedCharId: string;
   /** Inventories keyed by charId OR the literal "shared" key. Fixed-capacity
@@ -138,6 +163,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     actors: [],
     battles: [],
     stages: {},
+    dungeons: {},
     focusedCharId: "",
     inventories: {
       [SHARED_INVENTORY_KEY]: createInventory(DEFAULT_SHARED_INVENTORY_CAPACITY),

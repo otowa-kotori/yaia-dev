@@ -9,6 +9,8 @@ import type {
   EffectId,
   CombatZoneDef,
   CombatZoneId,
+  DungeonDef,
+  DungeonId,
   ItemDef,
   ItemId,
   LocationDef,
@@ -236,6 +238,37 @@ export const forestCombatZone: CombatZoneDef = {
   ],
 };
 
+// ---------- Dungeons ----------
+
+export const testDungeon: DungeonDef = {
+  id: "dungeon.test.slime_cave" as DungeonId,
+  name: "Test Slime Cave",
+  recoverBelowHpFactor: 0.5,
+  waveTransitionTicks: 2,
+  waves: [
+    {
+      id: "dungeon.wave.0",
+      name: "Slime Vanguard",
+      monsters: [slimeMonster.id],
+      rewards: {
+        drops: [
+          { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
+        ],
+      },
+    },
+    {
+      id: "dungeon.wave.1",
+      name: "Slime Boss",
+      monsters: [slimeMonster.id, slimeMonster.id],
+      rewards: {
+        drops: [
+          { itemId: waveTrophyItem.id, chance: 1, minQty: 2, maxQty: 2 },
+        ],
+      },
+    },
+  ],
+};
+
 // ---------- Locations ----------
 
 export const forestLocation: LocationDef = {
@@ -292,6 +325,9 @@ export function loadFixtureContent(): ContentDb {
     },
     combatZones: {
       [forestCombatZone.id]: forestCombatZone,
+    },
+    dungeons: {
+      [testDungeon.id]: testDungeon,
     },
   };
   setContent(db);

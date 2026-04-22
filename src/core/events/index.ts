@@ -63,6 +63,28 @@ export type GameEvents = {
     outcome: "players_won" | "enemies_won";
   };
   activityComplete: { charId: string | null; kind: string };
+  /** A dungeon wave was cleared by the party. */
+  dungeonWaveCleared: {
+    dungeonSessionId: string;
+    dungeonId: string;
+    waveIndex: number;
+  };
+  /** The dungeon run completed successfully (all waves cleared). */
+  dungeonCompleted: {
+    dungeonSessionId: string;
+    dungeonId: string;
+  };
+  /** The dungeon run failed (party wipe). */
+  dungeonFailed: {
+    dungeonSessionId: string;
+    dungeonId: string;
+    waveIndex: number;
+  };
+  /** The dungeon run was abandoned by the player. */
+  dungeonAbandoned: {
+    dungeonSessionId: string;
+    dungeonId: string;
+  };
   /** Emitted each slice during chunked catch-up, so UI can render a progress bar. */
   catchUpProgress: { done: number; total: number };
   /** Emitted once after catch-up completes (or is cancelled). */

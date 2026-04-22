@@ -99,8 +99,11 @@ export interface PlayerCharacter extends Character {
   locationId: string | null;
   /** Key into GameState.stages for the running instance this character is in.
    *  null = not in any stage. Multiple characters may reference the same
-   *  stageId (future: co-op dungeons). (persisted) */
+   *  stageId (co-op dungeons). (persisted) */
   stageId: string | null;
+  /** Key into GameState.dungeons for the active dungeon run this character is
+   *  participating in. null = not in a dungeon. (persisted) */
+  dungeonSessionId: string | null;
 }
 
 // ---------- Enemy ----------

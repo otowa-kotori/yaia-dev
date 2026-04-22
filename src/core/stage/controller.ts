@@ -33,7 +33,7 @@ import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
 import type { Tickable } from "../tick";
-import type { StageSession } from "./types";
+import type { StageMode, StageSession } from "./types";
 
 export interface StageControllerContext {
   state: GameState;
@@ -45,15 +45,15 @@ export interface StageControllerContext {
 
 export interface StageController extends Tickable {
   readonly locationId: string;
-  readonly combatZoneId: string | null;
+  readonly mode: StageMode;
 }
 
 export interface CreateStageControllerOptions {
   /** Unique id for this stage instance, used as key in state.stages. */
   stageId: string;
   locationId: string;
-  /** Combat zone to fight. Null for gather-only instances. */
-  combatZoneId?: string | null;
+  /** What kind of activity this stage runs. Default: gather. */
+  mode?: StageMode;
   /** Resource nodes to spawn (for gather entries). */
   resourceNodes?: string[];
   ctxProvider: () => StageControllerContext;
@@ -67,7 +67,7 @@ export const DEFAULT_WAVE_SEARCH_TICKS = 20;
 /** Enter an instance: create session, spawn initial population, return a
  *  Tickable controller you should register on the tick engine. */
 export function enterStage(opts: CreateStageControllerOptions): StageController {
-  const zoneId = opts.combatZoneId ?? null;
+  const mode: StageMode = opts.mode ?? { kind: "gather" };
   const stageId = opts.stageId;
   const initialCtx = opts.ctxProvider();
 
@@ -79,7 +79,7 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
     }
     const session = freshSession(
       opts.locationId,
-      zoneId,
+      mode,
       initialCtx.currentTick,
     );
     initialCtx.state.stages[stageId] = session;
@@ -90,13 +90,14 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
     }
   }
 
-  // Capture combat zone def once for the tick closure (null for gather).
-  const zoneDef = zoneId ? getCombatZone(zoneId) : null;
+  // Capture combat zone def once for the tick closure (null for non-combatZone).
+  const zoneDef =
+    mode.kind === "combatZone" ? getCombatZone(mode.combatZoneId) : null;
 
   const controller: StageController = {
     id: `stage:${stageId}`,
     locationId: opts.locationId,
-    combatZoneId: zoneId,
+    mode,
     tick() {
       const ctx = opts.ctxProvider();
       const session = ctx.state.stages[stageId];
@@ -321,12 +322,12 @@ function progressWaveSearch(
 
 function freshSession(
   locationId: string,
-  combatZoneId: string | null,
+  mode: StageMode,
   currentTick: number,
 ): StageSession {
   return {
     locationId,
-    combatZoneId,
+    mode,
     enteredAtTick: currentTick,
     spawnedActorIds: [],
     combatWaveIndex: 0,

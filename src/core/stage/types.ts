@@ -46,6 +46,8 @@ export type PendingLootEntry = PendingLootStack | PendingLootGear;
 
 export interface ActiveCombatWaveSession {
   combatZoneId: string;
+  /** Set only for dungeon waves. */
+  dungeonId?: string;
   waveId: string;
   waveIndex: number;
   enemyIds: string[];
@@ -62,14 +64,24 @@ export interface PendingCombatWaveSearch {
 }
 
 /**
+ * Discriminated union describing what kind of activity this stage instance
+ * is running. Used instead of nullable fields so each mode carries only
+ * the data it needs and TypeScript can narrow exhaustively.
+ */
+export type StageMode =
+  | { kind: "combatZone"; combatZoneId: string }
+  | { kind: "gather" }
+  | { kind: "dungeon"; dungeonSessionId: string };
+
+/**
  * Per-instance state stored in GameState.stages[stageId]. Minimal bookkeeping
  * for actor ownership + combat-wave search so leaveStage can clean up.
  */
 export interface StageSession {
   /** The location this instance belongs to. */
   locationId: string;
-  /** The combat zone being played (null for gather-only instances). */
-  combatZoneId: string | null;
+  /** What kind of activity this instance is running. */
+  mode: StageMode;
   enteredAtTick: number;
   /** Ids of actors spawned BY this instance (so we know what to clean up on
    *  leave). Actors that pre-date the instance, like the player character,
