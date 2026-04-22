@@ -81,6 +81,11 @@ import {
   leaveStage as leaveStageCore,
   type StageController,
 } from "../stage";
+import {
+  assertRuntimeIdState,
+  mintDungeonSessionId,
+  mintStageId,
+} from "../runtime-ids";
 import type { StageSession } from "../stage/types";
 import type { StageMode } from "../stage/types";
 
@@ -361,13 +366,6 @@ export function createGameSession(
 
   // ---------- Stage lifecycle helpers ----------
 
-  /** Generate a unique stageId for a new stage instance. */
-  let stageIdCounter = 0;
-  function nextStageId(locationId: string): string {
-    stageIdCounter += 1;
-    return `stage:${locationId}:${stageIdCounter}`;
-  }
-
   /** Tear down a character's current stage + activity. */
   function tearDownCharInstance(cc: CharacterControllerImpl): void {
     // Stop activity.
@@ -409,7 +407,7 @@ export function createGameSession(
     },
   ): string {
     tearDownCharInstance(cc);
-    const stageId = nextStageId(opts.locationId);
+    const stageId = mintStageId(state);
     const ctrl = enterStageCore({
       stageId,
       locationId: opts.locationId,
@@ -686,7 +684,7 @@ export function createGameSession(
     }
     characters.clear();
     stageControllers.clear();
-    stageIdCounter = 0;
+    assertRuntimeIdState(state);
 
     // Rebuild character controllers.
     for (const actor of state.actors) {
@@ -707,12 +705,6 @@ export function createGameSession(
       });
       stageControllers.set(stageId, ctrl);
       engine.register(ctrl);
-      // Track stageId counter to avoid collision with future stages.
-      const numMatch = stageId.match(/:(\d+)$/);
-      if (numMatch) {
-        const n = parseInt(numMatch[1]!, 10);
-        if (n > stageIdCounter) stageIdCounter = n;
-      }
     }
 
     // Rehydrate dungeon world activities from state.dungeons.
@@ -854,9 +846,9 @@ export function createGameSession(
     }
 
     // Create shared stage for the dungeon.
-    const stageId = nextStageId(`dungeon.${dungeonId}`);
+    const stageId = mintStageId(state);
     const locationId = `dungeon.${dungeonId}`;
-    const dungeonSessionId = `dungeon:${dungeonId}:${engine.currentTick}`;
+    const dungeonSessionId = mintDungeonSessionId(state);
 
     const ctrl = enterStageCore({
       stageId,
@@ -929,6 +921,7 @@ export function createGameSession(
 
   function loadFromSave(loaded: GameState): void {
     state = loaded;
+    assertRuntimeIdState(state);
     rng = restoreRng(loaded.rngState);
     engine.setTick(loaded.tick);
     rehydrateAll();
@@ -943,7 +936,6 @@ export function createGameSession(
     stageControllers.clear();
     for (const da of dungeonActivities.values()) engine.unregister(da.id);
     dungeonActivities.clear();
-    stageIdCounter = 0;
 
     state = createEmptyState(seed, SAVE_VERSION);
     rng = createRng(seed);

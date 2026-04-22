@@ -7,3 +7,5 @@ coverage
 bun.lockb
 *.tsbuildinfo
 .claude/settings.local.json
+.playwright-cli
+.codebuddy/plans

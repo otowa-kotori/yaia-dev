@@ -28,9 +28,7 @@
 
 ### 🔴 核心循环
 
-1. **装备系统**：补齐 Store 的 `equip` / `unequip`、UI 槽位，以及一件带属性的武器。数据层已经具备基础能力。
-2. **合成系统**：加入 `CraftingActivity` 与对应 UI，先做第一个配方「铜矿 → 铜剑」，并统一走 `createGearInstance`。目标是打通“挖矿 → 合成 → 装备 → 战斗”的循环。
-3. ~~**多角色**：支持多个 PlayerCharacter 并行活动、列表切换与 3–9 的上限。该项会明显改动 UI，因此放在 1 和 2 之后。~~ ✅ 已完成：2 个初始英雄，CharacterController 两层接口，Stage 独立于角色。
+
 
 ### 🟡 打磨
 
@@ -42,9 +40,8 @@
 ### 🟢 后续
 
 - **怪物掉落**：把 `MonsterDef.drops` 接入击杀奖励流程。装备路径已经通过 `addItemToInventory` 自动分流到实例工厂。
-- **更多内容**：补充更多 location、combat zone、怪物、配方与装备梯度。
+- **更多内容**：补充更多 location、combat zone、dungeon、怪物、配方与装备梯度。
 - **天赋系统**：实现树状 DAG；相关字段已经预留。
-- **WorldActivity**：加入不绑定单个 PlayerCharacter 的后台活动；接口已经存在。
 - **数据驱动 Intent**、**公式字符串 parser**、**IndexedDB 存档**：接口都已预留，后续接入。
 
 ## 下一个 PR

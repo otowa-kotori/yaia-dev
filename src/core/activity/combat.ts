@@ -66,6 +66,7 @@ import {
   lookupWave,
   stageEnemies,
 } from "../stage";
+import { mintBattleId } from "../runtime-ids";
 import type { StageSession } from "../stage/types";
 import type { CharacterActivity, ActivityContext } from "./types";
 
@@ -323,13 +324,11 @@ function openBattle(
   ctx: ActivityContext,
   params: StepParams,
 ): void {
-  const session = ctx.state.stages[hero.stageId!]!;
-  const waveIndex = session.currentWave?.waveIndex ?? session.combatWaveIndex;
   const intents: Record<string, string> = {};
   intents[hero.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
 
-  const battleId = `battle.${activity.id}.${session.locationId}.w${waveIndex}`;
+  const battleId = mintBattleId(ctx.state);
   const battle = createBattle({
     id: battleId,
     mode: "solo",

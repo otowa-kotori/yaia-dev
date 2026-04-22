@@ -54,6 +54,7 @@ Project-specific conventions for Claude. Read before editing code.
 
 - bun test. Put new tests under `tests/core/<module>.test.ts` mirroring source layout. Fixtures live in `tests/fixtures/`.
 - Typecheck (`bun run typecheck`) must be clean on commit.
+- Use `playwright-cli` to run E2E tests when you need to finally test the feature in the browser.
 
 ## Commits
 

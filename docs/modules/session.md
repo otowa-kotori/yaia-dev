@@ -54,6 +54,7 @@
 - **角色作用域清晰**：`CharacterController` 的命令只作用于自己绑定的 hero。
 - **同一角色单活动**：每个角色同一时刻最多只有一个运行中的 activity。
 - **Stage 独立管理**：stage controller 放在 session 层的 `Map<stageId, StageController>` 中，而不是挂在角色身上。
+- **运行时 ID 单一来源**：stage / battle / dungeon session / spawned actor 的实例 ID 全都从 `GameState.runtimeIds.nextSeq` 继续发号；`loadFromSave` / `resetToFresh` 不再重建各自模块的本地计数器。
 - **恢复不重复副作用**：从存档恢复 activity 时，不重复触发只应在首次启动时执行的 `onStart` 副作用。
 
 ## 入口

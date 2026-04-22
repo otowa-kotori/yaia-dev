@@ -4,6 +4,7 @@ import { getAttr, isResourceNode } from "../../src/core/actor";
 import { ATTR } from "../../src/core/attribute";
 import { resetContent } from "../../src/core/content";
 import { addStack, countItem } from "../../src/core/inventory";
+import { deserialize, serialize } from "../../src/core/save";
 import { createGameSession, type GameSession } from "../../src/core/session";
 import {
   buildDefaultContent,
@@ -15,6 +16,7 @@ import {
   trainingSword,
 } from "../../src/content/index";
 import {
+  attrDefs,
   basicAttackAbility,
   forestCombatZone,
   forestLocation,
@@ -108,6 +110,7 @@ describe("GameSession location flow", () => {
 
     const gather = cc.activity;
     expect(gather.nodeId).not.toBe(testVein.id);
+    expect(gather.nodeId).toMatch(/^node\.test_vein\.[0-9A-Za-z]{5}$/);
 
     const nodeActor = session.state.actors.find((a) => a.id === gather.nodeId);
     expect(nodeActor).toBeDefined();
@@ -121,6 +124,52 @@ describe("GameSession location flow", () => {
     expect(
       countItem(session.state.inventories[hero.id]!, testOreItem.id),
     ).toBeGreaterThan(0);
+  });
+
+  test("loadFromSave continues runtime ids without colliding with existing instances", () => {
+    const session = createSession(forestLocation.id);
+    const cc = session.getFocusedCharacter();
+
+    cc.startFight(forestCombatZone.id);
+    session.engine.step((forestCombatZone.waveSearchTicks ?? 0) + 1);
+
+    const firstStageId = cc.hero.stageId!;
+    const firstStage = session.state.stages[firstStageId]!;
+    expect(firstStageId).toMatch(/^stage\.[0-9A-Za-z]{5}$/);
+    expect(firstStage.spawnedActorIds.length).toBeGreaterThan(0);
+    expect(session.state.battles.length).toBeGreaterThan(0);
+
+    const firstIds = new Set<string>([
+      firstStageId,
+      ...firstStage.spawnedActorIds,
+      ...session.state.battles.map((battle) => battle.id),
+    ]);
+
+    const loaded = deserialize(serialize(session.state), { attrDefs });
+    session.loadFromSave(loaded);
+
+    const rehydrated = session.getFocusedCharacter();
+    rehydrated.stopActivity();
+    rehydrated.startFight(forestCombatZone.id);
+    session.engine.step((forestCombatZone.waveSearchTicks ?? 0) + 1);
+
+    const secondStageId = rehydrated.hero.stageId!;
+    const secondStage = session.state.stages[secondStageId]!;
+    expect(secondStageId).toMatch(/^stage\.[0-9A-Za-z]{5}$/);
+    expect(session.state.battles.length).toBeGreaterThan(0);
+    expect(session.state.battles[0]!.id).toMatch(/^battle\.[0-9A-Za-z]{5}$/);
+
+    const secondIds = [
+      secondStageId,
+      ...secondStage.spawnedActorIds,
+      ...session.state.battles.map((battle) => battle.id),
+    ];
+    for (const id of secondIds) {
+      expect(firstIds.has(id)).toBe(false);
+    }
+    for (const actorId of secondStage.spawnedActorIds) {
+      expect(actorId).toMatch(/^monster\.[A-Za-z0-9_.]+\.[0-9A-Za-z]{5}$/);
+    }
   });
 
   test("fresh hero gets a starter weapon that can be equipped and unequipped", () => {

@@ -116,7 +116,8 @@ StageSession 通过 `session.mode` 判断当前运行类型，代替旧的 `comb
 - **UI 副本入口**：已改为先打开组选弹窗，再调用 `startDungeon(dungeonId, partyCharIds)` 进入副本。组选界面复用公共 `Modal` 与角色选择按钮组件。
 - **UI 副本状态展示**：已提供专用状态面板，展示副本名称、波次进度、当前阶段、队伍成员、敌人列表与放弃副本入口。
 - **角色恢复的活动续接**：`restoreParty` 当前只恢复 locationId，不续接之前的 activity（角色回到闲置状态）。后续可考虑完整恢复。
-- **文档**：stage-activity.md 待同步更新 StageMode 联合类型和 dungeon 相关内容。
+- **读档恢复粒度**：当前仍然采用保守恢复策略；副本世界活动读档后会从可安全继续的阶段恢复，而不是精确回到 battle 中间帧。
+
 
 ## 入口
 

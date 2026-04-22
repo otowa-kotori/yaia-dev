@@ -87,7 +87,7 @@ export interface StageSession {
    *  leave). Actors that pre-date the instance, like the player character,
    *  are not in this list. */
   spawnedActorIds: string[];
-  /** Monotonically increasing wave counter. Used to build unique enemy ids. */
+  /** Monotonically increasing wave counter. Used for wave bookkeeping and UI order. */
   combatWaveIndex: number;
   /** Non-null while the player is actively searching for the next combat wave. */
   pendingCombatWaveSearch: PendingCombatWaveSearch | null;

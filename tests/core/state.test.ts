@@ -9,6 +9,7 @@ describe("state", () => {
     expect(s.rngSeed).toBe(12345);
     expect(s.rngState).toBe(12345);
     expect(s.tick).toBe(0);
+    expect(s.runtimeIds).toEqual({ nextSeq: 0 });
     expect(s.actors).toEqual([]);
     expect(s.battles).toEqual([]);
     const shared = s.inventories[SHARED_INVENTORY_KEY]!;

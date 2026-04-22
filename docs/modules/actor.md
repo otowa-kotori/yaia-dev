@@ -39,6 +39,12 @@ Actor                      任何世界实体
 - `locationId: string | null` — 该角色当前所在地点。每个角色独立，支持多角色并行在不同地点挂机
 - `stageId: string | null` — 引用 `GameState.stages` 中的 stage 实例。null 表示不在任何 stage。多个角色可以引用同一个 stageId（未来多人副本）
 
+**运行时 actor ID 约定**：
+
+- 运行时生成的 `Enemy` / `ResourceNode` 都从 `GameState.runtimeIds.nextSeq` 这一条共享序列发号。
+- 完整 ID 只保留最小来源语义，不再拼入 location、wave、tick 等上下文。
+- 典型形式是 `monster.slime.A1b2C`、`node.test_vein.Z9xY0`。
+
 ### 派生字段
 
 以下内容不直接进入存档，而是在读档时重建：

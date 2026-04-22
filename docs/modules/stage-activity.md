@@ -24,6 +24,7 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 - `StageMode` 是联合类型：`{ kind: "combatZone"; combatZoneId }` / `{ kind: "gather" }` / `{ kind: "dungeon"; dungeonSessionId }`
 - 每个角色同一时刻只能在一个运行实例中，但多个角色可以各自拥有独立的 stage
 - Stage 只负责 actor 生命周期，不负责战斗推进
+- 运行时实例 ID 统一由 `GameState.runtimeIds.nextSeq` 分配：`stage` 形如 `stage.A1b2C`，spawn 出来的 actor 形如 `<defId>.<suffix>`；不再按模块各自拼接 location / wave / tick
 
 ### CombatZone / Wave
 

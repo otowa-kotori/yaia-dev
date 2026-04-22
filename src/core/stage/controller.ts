@@ -31,6 +31,10 @@ import type { AttrDef, CombatZoneDef, WaveDef } from "../content/types";
 import { getCombatZone, getMonster, getResourceNode } from "../content/registry";
 import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
+import {
+  mintMonsterInstanceId,
+  mintResourceNodeInstanceId,
+} from "../runtime-ids";
 import type { GameState } from "../state/types";
 import type { Tickable } from "../tick";
 import type { StageMode, StageSession } from "./types";
@@ -207,14 +211,14 @@ function spawnResourceNodes(
   for (let i = 0; i < nodeIds.length; i++) {
     const defId = nodeIds[i]!;
     const nodeDef = getResourceNode(defId);
-    const instanceId = `node.${defId}.${session.locationId}.${i}`;
+    const instanceId = mintResourceNodeInstanceId(ctx.state, nodeDef.id);
     const actor = createResourceNode({ instanceId, def: nodeDef });
     ctx.state.actors.push(actor);
     session.spawnedActorIds.push(instanceId);
   }
 }
 
-function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageControllerContext, stageId: string): void {
+function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageControllerContext): void {
   const wave = pickCombatZoneWave(zone, ctx.rng);
 
   session.combatWaveIndex += 1;
@@ -222,10 +226,7 @@ function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageC
   for (let i = 0; i < wave.monsters.length; i++) {
     const monsterId = wave.monsters[i]!;
     const mdef = getMonster(monsterId);
-    // Include stageId to guarantee uniqueness when multiple characters
-    // fight in the same zone concurrently (each gets its own stage).
-    const instanceId =
-      `enemy.${monsterId}.${stageId}.${zone.id}.w${session.combatWaveIndex}.${i}`;
+    const instanceId = mintMonsterInstanceId(ctx.state, mdef.id);
     const enemy = createEnemy({
       instanceId,
       def: mdef,

@@ -58,8 +58,15 @@ export interface WorldActivityState {
   data: Record<string, unknown>;
 }
 
+// ---------- Runtime instance ids ----------
+
+export interface RuntimeIdState {
+  /** Shared sequence for runtime instances such as stage / battle / dungeon session / spawned actors. */
+  nextSeq: number;
+}
 
 // ---------- Dungeon sessions ----------
+
 
 export interface DungeonSavedCharState {
   locationId: string | null;
@@ -110,6 +117,10 @@ export interface GameState {
   rngState: number;
   /** Logic ticks since this save was first created. Monotonic. */
   tick: number;
+  /** Shared allocator state for runtime instance ids. Persisted so load/reset
+   *  paths keep minting from one source of truth instead of reconstructing
+   *  per-module counters. */
+  runtimeIds: RuntimeIdState;
   /**
    * All world actors (PlayerCharacter + Enemy + future kinds).
    * Source of truth. Battles reference participants by id; they do NOT
@@ -160,6 +171,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     rngSeed: seed >>> 0,
     rngState: seed >>> 0,
     tick: 0,
+    runtimeIds: { nextSeq: 0 },
     actors: [],
     battles: [],
     stages: {},

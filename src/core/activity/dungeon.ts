@@ -47,6 +47,7 @@ import {
 import { createEnemy } from "../actor";
 import { INTENT } from "../intent";
 import { applyEffect, type EffectContext } from "../effect";
+import { mintBattleId, mintMonsterInstanceId } from "../runtime-ids";
 import { stageEnemies } from "../stage";
 import type { StageSession } from "../stage/types";
 import type { WorldActivity, ActivityContext } from "./types";
@@ -411,8 +412,7 @@ function spawnDungeonWave(
   for (let i = 0; i < waveDef.monsters.length; i++) {
     const monsterId = waveDef.monsters[i]!;
     const mdef = getMonster(monsterId);
-    const instanceId =
-      `enemy.${monsterId}.dungeon.${ds.dungeonId}.w${ds.currentWaveIndex}.${i}`;
+    const instanceId = mintMonsterInstanceId(ctx.state, mdef.id);
     const enemy = createEnemy({
       instanceId,
       def: mdef,
@@ -458,7 +458,7 @@ function openPartyBattle(
   for (const h of heroes) intents[h.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
 
-  const battleId = `battle.dungeon.${ds.dungeonId}.w${ds.currentWaveIndex}`;
+  const battleId = mintBattleId(ctx.state);
   const battle = createBattle({
     id: battleId,
     mode: heroes.length > 1 ? "party" : "solo",
