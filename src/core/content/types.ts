@@ -59,7 +59,9 @@ export interface Modifier {
 export interface ItemDef {
   id: ItemId;
   name: string;
+  description?: string;
   stackable: boolean;
+
   /** Equip slot if this is gear (e.g. "weapon", "helmet"). */
   slot?: string;
   /** Modifiers this item grants when equipped. */
@@ -330,7 +332,10 @@ export interface StartingConfig {
     knownAbilities: AbilityId[];
     /** Per-character bag capacity. Falls back to DEFAULT_CHAR_INVENTORY_CAPACITY. */
     inventoryCapacity?: number;
+    /** Items granted into the hero's personal bag on a brand-new save. */
+    startingItems?: { itemId: ItemId; qty: number }[];
   };
+
   initialLocationId: LocationId;
 }
 

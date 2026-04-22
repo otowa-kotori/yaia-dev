@@ -40,8 +40,8 @@ import {
   createEmptyState,
   type GameState,
 } from "../state";
-import type { ContentDb } from "../content";
-import { getLocation, setContent } from "../content";
+import type { ContentDb, ItemId, RecipeDef } from "../content";
+import { getItem, getLocation, getRecipe, getSkill, setContent } from "../content";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
@@ -55,18 +55,26 @@ import {
   createPlayerCharacter,
   isPlayer,
   isResourceNode,
+  rebuildCharacterDerived,
   type PlayerCharacter,
 } from "../actor";
 import { registerBuiltinIntents } from "../intent";
+import {
+  addGear,
+  addStack,
+  createInventory,
+  DEFAULT_CHAR_INVENTORY_CAPACITY,
+  removeAtSlot,
+  type Inventory,
+} from "../inventory";
+import { getInventoryStackLimit } from "../inventory/stack-limit";
+import { createGearInstance, type GearInstance } from "../item";
+import { grantSkillXp } from "../progression";
 import {
   enterStage as enterStageCore,
   leaveStage as leaveStageCore,
   type StageController,
 } from "../stage";
-import {
-  createInventory,
-  DEFAULT_CHAR_INVENTORY_CAPACITY,
-} from "../inventory";
 
 // ---------- Persisted activity pointers ----------
 // The resume payload stored in PlayerCharacter.activity.data. Mirrored in
@@ -104,6 +112,9 @@ export interface GameSession {
   startFight(encounterId: string): void;
   startGather(nodeId: string): void;
   stopActivity(): void;
+  equipItem(inventoryOwnerId: string, slotIndex: number): void;
+  unequipItem(slot: string): void;
+  craftRecipe(recipeId: string): void;
 
   // Queries.
   getHero(): PlayerCharacter | null;
@@ -200,7 +211,138 @@ export function createGameSession(
         starting.hero.inventoryCapacity ?? DEFAULT_CHAR_INVENTORY_CAPACITY,
       );
     }
+    if (starting.hero.startingItems?.length) {
+      for (const entry of starting.hero.startingItems) {
+        addItemToInventory(hero.id, entry.itemId, entry.qty);
+      }
+    }
     return hero;
+  }
+
+  function getRequiredHero(): PlayerCharacter {
+    const hero = getHeroInternal();
+    if (!hero) {
+      throw new Error("session: hero is missing from state");
+    }
+    return hero;
+  }
+
+  function getInventoryByOwner(inventoryOwnerId: string): Inventory {
+    const inventory = state.inventories[inventoryOwnerId];
+    if (!inventory) {
+      throw new Error(
+        `session: no inventory found for owner "${inventoryOwnerId}"`,
+      );
+    }
+    return inventory;
+  }
+
+  function addItemToInventory(
+    inventoryOwnerId: string,
+    itemId: ItemId | string,
+    qty: number,
+  ): void {
+    const inventory = getInventoryByOwner(inventoryOwnerId);
+    const def = getItem(itemId);
+    if (def.stackable) {
+      addStack(
+        inventory,
+        itemId,
+        qty,
+        getInventoryStackLimit(state, inventoryOwnerId, attrDefs),
+      );
+      return;
+    }
+    for (let i = 0; i < qty; i += 1) {
+      addGear(inventory, createGearInstance(itemId, { rng }));
+    }
+  }
+
+  function getSkillLevel(hero: PlayerCharacter, skillId: string): number {
+    const key = skillId as keyof PlayerCharacter["skills"];
+    return hero.skills[key]?.level ?? 1;
+  }
+
+  function rebuildHeroDerived(hero: PlayerCharacter): void {
+    rebuildCharacterDerived(hero, attrDefs, state.worldRecord);
+  }
+
+  function cloneInventory(inv: Inventory): Inventory {
+    return {
+      capacity: inv.capacity,
+      slots: inv.slots.map((slot) => {
+        if (slot === null) return null;
+        if (slot.kind === "stack") return { ...slot };
+        return {
+          kind: "gear",
+          instance: {
+            ...slot.instance,
+            rolledMods: slot.instance.rolledMods.map((mod) => ({ ...mod })),
+          },
+        };
+      }),
+    };
+  }
+
+  function removeItemFromInventoryByItemId(
+    inventory: Inventory,
+    itemId: ItemId | string,
+    qty: number,
+  ): void {
+    if (qty <= 0) {
+      throw new Error(
+        `session.removeItemFromInventoryByItemId: qty must be positive, got ${qty}`,
+      );
+    }
+    let remaining = qty;
+    for (let i = 0; i < inventory.slots.length && remaining > 0; i += 1) {
+      const slot = inventory.slots[i];
+      if (!slot) continue;
+      const slotItemId = slot.kind === "stack" ? slot.itemId : slot.instance.itemId;
+      if (slotItemId !== itemId) continue;
+      if (slot.kind === "stack") {
+        const take = Math.min(remaining, slot.qty);
+        removeAtSlot(inventory, i, take);
+        remaining -= take;
+        continue;
+      }
+      removeAtSlot(inventory, i);
+      remaining -= 1;
+    }
+    if (remaining > 0) {
+      throw new Error(
+        `session.removeItemFromInventoryByItemId: inventory is missing ${remaining} of "${itemId}"`,
+      );
+    }
+  }
+
+  function simulateRecipeInventoryChange(
+    inventory: Inventory,
+    recipe: RecipeDef,
+  ): void {
+    const draft = cloneInventory(inventory);
+    for (const input of recipe.inputs) {
+      removeItemFromInventoryByItemId(draft, input.itemId, input.qty);
+    }
+    for (const output of recipe.outputs) {
+      const def = getItem(output.itemId);
+      if (def.stackable) {
+        addStack(
+          draft,
+          output.itemId,
+          output.qty,
+          getInventoryStackLimit(state, getRequiredHero().id, attrDefs),
+        );
+        continue;
+      }
+      for (let i = 0; i < output.qty; i += 1) {
+        addGear(draft, {
+          instanceId: `preview.${recipe.id}.${i}`,
+          itemId: output.itemId,
+          rolledMods: [],
+        } satisfies GearInstance);
+      }
+    }
   }
 
   // ---------- Activity lifecycle ----------
@@ -317,6 +459,83 @@ export function createGameSession(
     tearDownInstance();
   }
 
+  function equipItem(inventoryOwnerId: string, slotIndex: number): void {
+    const hero = getRequiredHero();
+    const inventory = getInventoryByOwner(inventoryOwnerId);
+    const slot = inventory.slots[slotIndex];
+    if (!slot) {
+      throw new Error(`session.equipItem: slot ${slotIndex} is empty`);
+    }
+    if (slot.kind !== "gear") {
+      throw new Error(
+        `session.equipItem: slot ${slotIndex} does not contain gear`,
+      );
+    }
+
+    const def = getItem(slot.instance.itemId);
+    if (!def.slot) {
+      throw new Error(
+        `session.equipItem: item "${slot.instance.itemId}" is not equippable`,
+      );
+    }
+
+    const removed = removeAtSlot(inventory, slotIndex);
+    if (removed.kind !== "gear") {
+      throw new Error("session.equipItem: expected gear removal result");
+    }
+
+    const previous = hero.equipped[def.slot] ?? null;
+    hero.equipped[def.slot] = removed.instance;
+    if (previous) {
+      inventory.slots[slotIndex] = { kind: "gear", instance: previous };
+    }
+
+    rebuildHeroDerived(hero);
+    bus.emit("equipmentChanged", { charId: hero.id, slot: def.slot });
+  }
+
+  function unequipItem(slot: string): void {
+    const hero = getRequiredHero();
+    const equipped = hero.equipped[slot] ?? null;
+    if (!equipped) {
+      throw new Error(`session.unequipItem: slot "${slot}" is empty`);
+    }
+    addGear(getInventoryByOwner(hero.id), equipped);
+    hero.equipped[slot] = null;
+    rebuildHeroDerived(hero);
+    bus.emit("equipmentChanged", { charId: hero.id, slot });
+  }
+
+  function craftRecipe(recipeId: string): void {
+    if (activity) {
+      throw new Error("session.craftRecipe: stop the current activity before crafting");
+    }
+
+    const hero = getRequiredHero();
+    const recipe = getRecipe(recipeId);
+    const skillDef = getSkill(recipe.skill);
+    const currentLevel = getSkillLevel(hero, recipe.skill);
+    if (currentLevel < recipe.requiredLevel) {
+      throw new Error(
+        `session.craftRecipe: recipe "${recipeId}" requires ${recipe.skill} level ${recipe.requiredLevel}, got ${currentLevel}`,
+      );
+    }
+
+    const inventory = getInventoryByOwner(hero.id);
+    simulateRecipeInventoryChange(inventory, recipe);
+
+    for (const input of recipe.inputs) {
+      removeItemFromInventoryByItemId(inventory, input.itemId, input.qty);
+    }
+    for (const output of recipe.outputs) {
+      addItemToInventory(hero.id, output.itemId, output.qty);
+    }
+    grantSkillXp(hero, skillDef, recipe.xpReward, { bus });
+
+    bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
+    bus.emit("crafted", { charId: hero.id, recipeId });
+  }
+
   // ---------- Rehydrate after load ----------
 
   function rehydrateStage(): void {
@@ -425,6 +644,9 @@ export function createGameSession(
     startFight,
     startGather,
     stopActivity,
+    equipItem,
+    unequipItem,
+    craftRecipe,
     getHero: getHeroInternal,
     isRunning(): boolean {
       if (!activity) return false;

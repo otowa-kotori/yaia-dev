@@ -2,9 +2,10 @@
 //
 // Tabs:
 //   0: 地图 & 战斗  — StageSelector + Controls + BattleView
-//   1: 背包         — InventoryView (grid)
-//   2: 经验总览      — XpOverview (level / attrs / skills)
-//   3: 设置         — speed selector + clear save
+//   1: 背包         — InventoryView（含装备面板）
+//   2: 合成         — CraftingView（配方与制作）
+//   3: 经验总览      — XpOverview (level / attrs / skills)
+//   4: 设置         — speed selector + clear save
 //
 // Tab state is purely local to this component; it does not touch core or
 // the store. The store is created once (useMemo), shared to all children.
@@ -15,6 +16,7 @@ import { getContent } from "../core/content";
 import { createGameStore, type GameStore } from "./store";
 import { BattleView } from "./BattleView";
 import { InventoryView } from "./InventoryView";
+import { CraftingView } from "./CraftingView";
 import { XpOverview } from "./XpOverview";
 import { UpgradesView } from "./UpgradesView";
 import { useStore } from "./useStore";
@@ -34,11 +36,12 @@ const containerStyle: React.CSSProperties = {
 
 // ---------- Tab definitions ----------
 
-type TabId = "map" | "inventory" | "xp" | "upgrades" | "settings";
+type TabId = "map" | "inventory" | "crafting" | "xp" | "upgrades" | "settings";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "map",       label: "地图 & 战斗" },
   { id: "inventory", label: "背包" },
+  { id: "crafting",  label: "合成" },
   { id: "xp",        label: "经验总览" },
   { id: "upgrades",  label: "全局升级" },
   { id: "settings",  label: "设置" },
@@ -120,6 +123,8 @@ function TabPanel({
       return <MapTab store={store} />;
     case "inventory":
       return <InventoryView store={store} />;
+    case "crafting":
+      return <CraftingView store={store} />;
     case "xp":
       return <XpOverview store={store} />;
     case "upgrades":

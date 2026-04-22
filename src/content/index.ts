@@ -17,12 +17,15 @@ import type {
   LocationId,
   MonsterDef,
   MonsterId,
+  RecipeDef,
+  RecipeId,
   ResourceNodeDef,
   ResourceNodeId,
   SkillDef,
   SkillId,
   UpgradeDef,
 } from "../core/content";
+
 import { emptyContentDb } from "../core/content";
 import type { FormulaRef } from "../core/formula";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
@@ -162,18 +165,46 @@ export const goblin: MonsterDef = {
 export const copperOre: ItemDef = {
   id: "item.ore.copper" as ItemId,
   name: "Copper Ore",
+  description: "刚挖出来的粗铜矿石，是最基础的金属材料之一。",
   stackable: true,
   tags: ["ore"],
 };
 
+
 export const slimeGel: ItemDef = {
   id: "item.monster.slime_gel" as ItemId,
   name: "Slime Gel",
+  description: "一团黏糊糊的史莱姆胶，常用来当作低阶黏结材料。",
   stackable: true,
   tags: ["monster_drop"],
 };
 
+export const trainingSword: ItemDef = {
+  id: "item.weapon.training_sword" as ItemId,
+  name: "Training Sword",
+  description: "给新手练手用的木制短剑，虽然朴素，但总比空手强。",
+  stackable: false,
+  slot: "weapon",
+  modifiers: [
+    { stat: ATTR.ATK, op: "flat", value: 2, sourceId: "item.weapon.training_sword" },
+  ],
+  tags: ["weapon", "starter"],
+};
+
+export const copperSword: ItemDef = {
+  id: "item.weapon.copper_sword" as ItemId,
+  name: "Copper Sword",
+  description: "用铜矿和史莱姆胶拼成的初阶短剑，刃口粗糙但已经足够实战。",
+  stackable: false,
+  slot: "weapon",
+  modifiers: [
+    { stat: ATTR.ATK, op: "flat", value: 5, sourceId: "item.weapon.copper_sword" },
+  ],
+  tags: ["weapon", "crafted"],
+};
+
 // ---------- Skills ----------
+
 
 /** Skill XP curve: same shape as char curve but a bit steeper so leveling a
  *  skill feels distinct from leveling character. Tuning pass later. */
@@ -190,7 +221,31 @@ export const miningSkill: SkillDef = {
   maxLevel: 99,
 };
 
+export const smithingSkill: SkillDef = {
+  id: "skill.smithing" as SkillId,
+  name: "Smithing",
+  xpCurve: defaultSkillXpCurve,
+  maxLevel: 99,
+};
+
+// ---------- Recipes ----------
+
+export const copperSwordRecipe: RecipeDef = {
+  id: "recipe.craft.copper_sword" as RecipeId,
+  name: "Forge Copper Sword",
+  skill: smithingSkill.id,
+  requiredLevel: 1,
+  durationTicks: 10,
+  inputs: [
+    { itemId: copperOre.id, qty: 3 },
+    { itemId: slimeGel.id, qty: 2 },
+  ],
+  outputs: [{ itemId: copperSword.id, qty: 1 }],
+  xpReward: 8,
+};
+
 // ---------- Resource Nodes ----------
+
 
 export const copperVein: ResourceNodeDef = {
   id: "node.copper_vein" as ResourceNodeId,
@@ -334,9 +389,18 @@ export function buildDefaultContent(): ContentDb {
     items: {
       [copperOre.id]: copperOre,
       [slimeGel.id]: slimeGel,
+      [trainingSword.id]: trainingSword,
+      [copperSword.id]: copperSword,
     },
-    skills: { [miningSkill.id]: miningSkill },
+    skills: {
+      [miningSkill.id]: miningSkill,
+      [smithingSkill.id]: smithingSkill,
+    },
+    recipes: {
+      [copperSwordRecipe.id]: copperSwordRecipe,
+    },
     resourceNodes: { [copperVein.id]: copperVein },
+
     upgrades: {
       [atkUpgrade.id]: atkUpgrade,
       [defUpgrade.id]: defUpgrade,
@@ -347,7 +411,9 @@ export function buildDefaultContent(): ContentDb {
         name: "Hero",
         xpCurve: defaultCharXpCurve,
         knownAbilities: [basicAttack.id],
+        startingItems: [{ itemId: trainingSword.id, qty: 1 }],
       },
+
       initialLocationId: forestLocation.id,
     },
   };

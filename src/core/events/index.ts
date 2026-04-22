@@ -49,6 +49,9 @@ export type GameEvents = {
   kill: { attackerId: string; victimId: string };
   damage: { attackerId: string; targetId: string; amount: number };
   loot: { charId: string; itemId: string; qty: number };
+  inventoryChanged: { charId: string; inventoryId: string };
+  equipmentChanged: { charId: string; slot: string };
+  crafted: { charId: string; recipeId: string };
   waveResolved: {
     charId: string;
     locationId: string;

@@ -143,10 +143,23 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     persistSoon();
   });
   bus.on("loot", notify);
+  bus.on("inventoryChanged", () => {
+    notify();
+    persistSoon();
+  });
+  bus.on("equipmentChanged", () => {
+    notify();
+    persistSoon();
+  });
+  bus.on("crafted", () => {
+    notify();
+    persistSoon();
+  });
   bus.on("activityComplete", () => {
     notify();
     persistSoon();
   });
+
 
   // ---------- Load flow ----------
 
