@@ -20,8 +20,8 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 
 - `StageController` 是一个 `Tickable`
 - 它负责管理当前实例中的 actor，包括生成、重生和离开时的清理
-- `state.currentStage` 记录当前实例的 `locationId`、`encounterId`、`spawnedActorIds`、当前波次 `currentWave`
-- 同一时刻只能有一个运行实例
+- 每个 `StageSession` 记录 `locationId`、`encounterId`、`spawnedActorIds`、当前波次 `currentWave`
+- 每个角色同一时刻只能在一个运行实例中，但多个角色可以各自拥有独立的 stage
 - Stage 只负责 actor 生命周期，不负责战斗推进
 
 ### Encounter / Wave
@@ -48,7 +48,7 @@ Activity 表示玩家当前在实例中做的事。它本身也是 `Tickable`。
 ### CombatActivity
 
 - 使用 `waitingForEnemies → fighting → recovering → stopped` 状态机
-- 只从 `state.currentStage` 中读取仍然存活的 enemy，并据此创建 `Battle`
+- 只从 `state.stages[hero.stageId]` 中读取仍然存活的 enemy，并据此创建 `Battle`
 - 每次 phase 切换后，activity 都会把当前状态同步回 `hero.activity`
 - `hero.activity` 遵循单一写入者约束：只有 activity 自己会写这个字段
 - 首次启动时，`onStart` 会重置战斗前的 HP / MP，并清空 effects 与 cooldowns

@@ -30,7 +30,7 @@
 ## state
 
 - `GameState` 是根状态容器，且必须保持为可序列化的纯数据
-- 它聚合 `actors`、`inventories`、`currencies`、`battles`、`currentStage`、`worldRecord` 等子状态
+- 它聚合 `actors`、`inventories`、`currencies`、`battles`、`stages`、`worldRecord` 等子状态
 - 所有进入存档的字段都必须能进行 JSON 往返
 - 派生字段应只存在于内存中，不直接写入序列化结果
 
