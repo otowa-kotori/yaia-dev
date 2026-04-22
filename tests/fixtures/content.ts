@@ -210,7 +210,7 @@ export const forestEncounter: EncounterDef = {
   id: "encounter.forest.test_path" as EncounterId,
   name: "Test Path",
   waveSelection: "random",
-  waveIntervalTicks: 5,
+  waveSearchTicks: 5,
   recoverBelowHpFactor: 0.5,
   waves: [
     {

@@ -10,7 +10,7 @@
 // layer. Its responsibilities:
 //
 //   - spawning the initial population on enter
-//   - keeping the active encounter's wave loop running
+//   - progressing an explicitly requested combat-wave search
 //   - cleaning up its population on leave
 //
 // The player can be in at most one running instance per character:
@@ -26,15 +26,21 @@ export interface ActiveCombatWaveSession {
   waveId: string;
   waveIndex: number;
   enemyIds: string[];
-  /** active = unresolved, victory/defeat = battle resolved and waiting for next spawn. */
+  /** active = unresolved, victory/defeat = battle resolved and awaiting cleanup. */
   status: "active" | "victory" | "defeat";
   rewardGranted: boolean;
 }
 
+export interface PendingCombatWaveSearch {
+  /** Tick at which the current search started. */
+  startedAtTick: number;
+  /** Tick at or after which the next wave becomes spawnable. */
+  readyAtTick: number;
+}
+
 /**
  * Per-instance state stored in GameState.stages[stageId]. Minimal bookkeeping
- * for respawn timers + tracking which actors belong to this instance so
- * leaveStage can clean up.
+ * for actor ownership + combat-wave search so leaveStage can clean up.
  */
 export interface StageSession {
   /** The location this instance belongs to. */
@@ -46,11 +52,10 @@ export interface StageSession {
    *  leave). Actors that pre-date the instance, like the player character,
    *  are not in this list. */
   spawnedActorIds: string[];
-  // ---------- Respawn bookkeeping ----------
-  /** If > 0, number of ticks remaining until the next combat wave spawns. */
-  combatWaveCooldownTicks: number;
   /** Monotonically increasing wave counter. Used to build unique enemy ids. */
   combatWaveIndex: number;
-  /** The wave currently spawned (or most recently resolved while cooling down). */
+  /** Non-null while the player is actively searching for the next combat wave. */
+  pendingCombatWaveSearch: PendingCombatWaveSearch | null;
+  /** The wave currently spawned, or the most recently resolved wave before cleanup finishes. */
   currentWave: ActiveCombatWaveSession | null;
 }

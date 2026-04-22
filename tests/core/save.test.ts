@@ -129,6 +129,8 @@ describe("save / serialize+deserialize", () => {
     expect(restoredSlime.currentHp).toBe(17);
   });
 
+
+
   test("version mismatch throws when no migration exists", () => {
     const bad = JSON.stringify({ version: SAVE_VERSION + 99, state: {} });
     expect(() => deserialize(bad, { attrDefs })).toThrow();

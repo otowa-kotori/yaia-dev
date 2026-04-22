@@ -35,7 +35,8 @@
 ## 约定
 
 - `GameState` 必须能进行 JSON 往返
-- 新增持久化字段时，需要同步加入 migration
+- Alpha 阶段默认不补 migration；旧档版本不匹配时直接报错并清档
+
 - `save` 允许单向读取 content 注册表，用于补回派生字段
 - 新游戏初始化不走 save 管线，而是由 `session.resetToFresh` 读取 `ContentDb.starting`
 

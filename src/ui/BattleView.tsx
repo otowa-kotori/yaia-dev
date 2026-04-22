@@ -90,8 +90,8 @@ function CombatPanel({
   const phaseLabel =
     activity.phase === "recovering"
       ? T.recovering
-      : activity.phase === "waitingForEnemies"
-      ? T.waitingForEnemies
+      : activity.phase === "searchingEnemies"
+      ? T.searchingEnemies
       : activity.phase === "fighting"
       ? T.inCombat
       : T.stopped;
@@ -208,8 +208,8 @@ function HeroCard({
         ? T.status_hero_inCombat
         : activity.phase === "recovering"
         ? T.status_hero_recovering
-        : activity.phase === "waitingForEnemies"
-        ? T.status_hero_waiting
+        : activity.phase === "searchingEnemies"
+        ? T.status_hero_searching
         : T.status_hero_idle;
   } else if (activity?.kind === ACTIVITY_GATHER_KIND) {
     statusLabel = T.status_hero_gathering;

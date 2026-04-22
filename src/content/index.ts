@@ -263,7 +263,7 @@ export const slimeNormal: EncounterDef = {
   id: "encounter.forest.slime_normal" as EncounterId,
   name: "史莱姆小径（普通）",
   waveSelection: "random",
-  waveIntervalTicks: 20,
+  waveSearchTicks: 20,
   recoverBelowHpFactor: 0.5,
   waves: [
     {
@@ -285,7 +285,7 @@ export const slimeHard: EncounterDef = {
   id: "encounter.forest.slime_hard" as EncounterId,
   name: "史莱姆巢穴（困难）",
   waveSelection: "random",
-  waveIntervalTicks: 20,
+  waveSearchTicks: 20,
   recoverBelowHpFactor: 0.5,
   waves: [
     {

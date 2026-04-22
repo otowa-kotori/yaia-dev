@@ -1,16 +1,17 @@
-// StageController — spawn/respawn engine for the current running instance.
+// StageController — spawn/search engine for the current running instance.
 //
 // With the Location / Entry / Instance split, this controller no longer
 // knows about "stages" in the old sense. It manages the actor population
 // of a single chosen entry (combat encounter or gather site).
 //
 // Ticking responsibilities:
-//   1. At enter: spawn the encounter's first combat wave (or resource nodes
-//      for a gather entry).
+//   1. At enter: spawn gather nodes immediately. Combat entries start empty;
+//      CombatActivity explicitly requests a wave search when it wants the
+//      next encounter to begin.
 //   2. Each tick: reap dead instance-owned enemies that are no longer
 //      referenced by any ongoing battle.
-//   3. When the current wave resolves, wait for combatWaveCooldownTicks and
-//      then spawn the next randomly selected wave from the encounter.
+//   3. When a requested wave search reaches its ready tick, spawn the next
+//      randomly selected wave from the encounter.
 //   4. On leave: remove every actor whose id is in spawnedActorIds.
 //
 // The controller does NOT run combat. CombatActivity reads the living
@@ -32,7 +33,7 @@ import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
 import type { Tickable } from "../tick";
-import type { ActiveCombatWaveSession, StageSession } from "./types";
+import type { StageSession } from "./types";
 
 export interface StageControllerContext {
   state: GameState;
@@ -61,6 +62,8 @@ export interface CreateStageControllerOptions {
   resume?: boolean;
 }
 
+export const DEFAULT_WAVE_SEARCH_TICKS = 20;
+
 /** Enter an instance: create session, spawn initial population, return a
  *  Tickable controller you should register on the tick engine. */
 export function enterStage(opts: CreateStageControllerOptions): StageController {
@@ -84,12 +87,6 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
     // Spawn resource nodes if this is a gather entry.
     if (opts.resourceNodes && opts.resourceNodes.length > 0) {
       spawnResourceNodes(opts.resourceNodes, session, initialCtx);
-    }
-
-    // Spawn the first combat wave if this is a combat entry.
-    if (encId) {
-      const encounter = getEncounter(encId);
-      spawnCombatWave(encounter, session, initialCtx);
     }
   }
 
@@ -126,6 +123,23 @@ export function leaveStage(stageId: string, ctx: StageControllerContext): void {
   delete ctx.state.stages[stageId];
 }
 
+export function beginCombatWaveSearch(
+  encounter: EncounterDef,
+  session: StageSession,
+  currentTick: number,
+): void {
+  if (session.currentWave) return;
+  if (session.pendingCombatWaveSearch) return;
+  const waveSearchTicks = Math.max(
+    0,
+    encounter.waveSearchTicks ?? DEFAULT_WAVE_SEARCH_TICKS,
+  );
+  session.pendingCombatWaveSearch = {
+    startedAtTick: currentTick,
+    readyAtTick: currentTick + waveSearchTicks,
+  };
+}
+
 // ---------- Step ----------
 
 function stepController(
@@ -138,24 +152,17 @@ function stepController(
 
   if (!encounter) return; // gather-only — nothing to step
 
-  if (!session.currentWave) {
-    if (session.combatWaveCooldownTicks > 0) {
-      tickWaveCooldown(encounter, session, ctx);
-      return;
-    }
-    spawnCombatWave(encounter, session, ctx);
+  if (session.currentWave?.status === "active") {
     return;
   }
 
-  if (session.currentWave.status === "active") {
-    return;
+  if (session.currentWave) {
+    clearResolvedWaveActors(session, ctx);
+    session.currentWave = null;
   }
 
-  clearResolvedWaveActors(session, ctx);
-  tickWaveCooldown(encounter, session, ctx);
+  progressWaveSearch(encounter, session, ctx);
 }
-
-const DEFAULT_WAVE_INTERVAL = 20;
 
 // ---------- Reaping ----------
 
@@ -234,7 +241,7 @@ function spawnCombatWave(encounter: EncounterDef, session: StageSession, ctx: St
     status: "active",
     rewardGranted: false,
   };
-  session.combatWaveCooldownTicks = 0;
+  session.pendingCombatWaveSearch = null;
 }
 
 // ---------- Queries (consumed by Activities) ----------
@@ -300,21 +307,16 @@ function clearResolvedWaveActors(
   wave.enemyIds = [];
 }
 
-function tickWaveCooldown(
+function progressWaveSearch(
   encounter: EncounterDef,
   session: StageSession,
   ctx: StageControllerContext,
 ): void {
-  if (session.combatWaveCooldownTicks <= 0) {
-    session.combatWaveCooldownTicks =
-      encounter.waveIntervalTicks ?? DEFAULT_WAVE_INTERVAL;
-    return;
-  }
-
-  session.combatWaveCooldownTicks -= 1;
-  if (session.combatWaveCooldownTicks === 0) {
-    spawnCombatWave(encounter, session, ctx);
-  }
+  const pending = session.pendingCombatWaveSearch;
+  if (!pending) return;
+  if (ctx.currentTick < pending.readyAtTick) return;
+  session.pendingCombatWaveSearch = null;
+  spawnCombatWave(encounter, session, ctx);
 }
 
 function freshSession(
@@ -327,8 +329,8 @@ function freshSession(
     encounterId,
     enteredAtTick: currentTick,
     spawnedActorIds: [],
-    combatWaveCooldownTicks: 0,
     combatWaveIndex: 0,
+    pendingCombatWaveSearch: null,
     currentWave: null,
   };
 }

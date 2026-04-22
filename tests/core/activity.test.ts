@@ -83,8 +83,8 @@ describe("CombatActivity + Stage integration", () => {
     });
     engine.register(controller);
 
-    expect(state.stages[STAGE_ID]?.currentWave).not.toBeNull();
-    expect(state.stages[STAGE_ID]?.currentWave?.enemyIds.length).toBe(2);
+    expect(state.stages[STAGE_ID]?.currentWave).toBeNull();
+    expect(state.stages[STAGE_ID]?.pendingCombatWaveSearch).toBeNull();
 
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
@@ -195,7 +195,7 @@ describe("CombatActivity + Stage integration", () => {
     expect(resolvedOutcomes).toContain("enemies_won");
     expect(countItem(state.inventories[hero.id]!, waveTrophyItem.id)).toBe(0);
     expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThanOrEqual(2);
-    expect(["recovering", "fighting", "waitingForEnemies"]).toContain(
+    expect(["recovering", "fighting", "searchingEnemies"]).toContain(
       activity.phase,
     );
   });
@@ -255,6 +255,75 @@ describe("CombatActivity + Stage integration", () => {
     }
   });
 
+  test("hero fully recovers before the next wave search begins", () => {
+    const state = createEmptyState(42, SAVE_VERSION);
+    const bus = createGameEventBus();
+    const rng = createRng(42);
+    const hero = makePlayer({
+      id: "hero",
+      abilities: [basicAttackAbility.id],
+      atk: 999,
+      def: 0,
+      speed: 10,
+      maxHp: 100,
+    });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
+    installHero(state, hero);
+
+    const prevThreshold = forestEncounter.recoverBelowHpFactor;
+    const prevSearchTicks = forestEncounter.waveSearchTicks;
+    forestEncounter.recoverBelowHpFactor = 1;
+    forestEncounter.waveSearchTicks = 1;
+
+    try {
+      const engine = createTickEngine();
+      const ctxProvider = makeCtxProvider(state, bus, rng, engine);
+      const controller = enterStage({
+        stageId: STAGE_ID,
+        locationId: forestLocation.id,
+        encounterId: forestEncounter.id,
+        ctxProvider,
+      });
+      engine.register(controller);
+
+      const activity = createCombatActivity({
+        ownerCharacterId: hero.id,
+        ctxProvider,
+        actionDelayTicks: 1,
+        recoverHpPctPerTick: 0.1,
+      });
+      engine.register(activity);
+
+      for (let i = 0; i < 40 && activity.phase !== "recovering"; i++) {
+        engine.step(1);
+      }
+
+      expect(activity.phase).toBe("recovering");
+      hero.currentHp = 10;
+      expect(state.stages[STAGE_ID]!.pendingCombatWaveSearch).toBeNull();
+
+      engine.step(1);
+      expect(activity.phase).toBe("recovering");
+      expect(state.stages[STAGE_ID]!.pendingCombatWaveSearch).toBeNull();
+
+      while (activity.phase === "recovering") {
+        engine.step(1);
+      }
+
+      expect(activity.phase).toBe("searchingEnemies");
+      expect(state.stages[STAGE_ID]!.pendingCombatWaveSearch).toBeNull();
+      expect(state.stages[STAGE_ID]!.currentWave).toBeNull();
+
+      engine.step(1);
+      expect(state.stages[STAGE_ID]!.pendingCombatWaveSearch).not.toBeNull();
+
+    } finally {
+      forestEncounter.recoverBelowHpFactor = prevThreshold;
+      forestEncounter.waveSearchTicks = prevSearchTicks;
+    }
+  });
+
   test("leaveStage removes spawned actors", () => {
     const state = createEmptyState(42, SAVE_VERSION);
     const bus = createGameEventBus();
@@ -279,7 +348,13 @@ describe("CombatActivity + Stage integration", () => {
       ctxProvider,
     });
     engine.register(controller);
-    engine.step(3);
+    const activity = createCombatActivity({
+      ownerCharacterId: hero.id,
+      ctxProvider,
+      actionDelayTicks: 1,
+    });
+    engine.register(activity);
+    engine.step(10);
     const beforeCount = state.actors.length;
     expect(beforeCount).toBeGreaterThan(1);
 

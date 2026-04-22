@@ -1,23 +1,24 @@
 // CombatActivity — player "I am actively fighting in the current instance".
 //
 // This is strictly the ACTIVITY layer: it drives battle ticks, handles
-// hero recovery, and issues stop cleanup. The ACTOR POPULATION of the
-// instance (spawning and respawning waves of enemies) is the StageController's
-// job — CombatActivity just looks at the world and fights whatever enemies
-// are currently in the running instance.
+// hero recovery, explicitly requests enemy searches, and issues stop cleanup.
+// The ACTOR POPULATION of the instance (spawning/searching waves of enemies)
+// is the StageController's job — CombatActivity just looks at the world and
+// fights whatever enemies are currently in the running instance.
 //
 // State machine:
 //
-//   waitingForEnemies — no enemies alive in the current instance. The stage
-//                       controller will respawn them; we idle until it does.
+//   searchingEnemies — the hero is actively looking for the next encounter.
+//                      StageController only starts / progresses a wave search
+//                      when this phase requests it.
 //     | enemies appear -> fighting
 //     | stopRequested   -> stopped
 //   fighting          — a Battle is active; delegate ticks to tickBattle.
-//     | battle ends players_won -> waitingForEnemies / recovering
+//     | battle ends players_won -> searchingEnemies / recovering
 //     | battle ends enemies_won -> recovering
 //     | stopRequested (and battle ends) -> stopped
 //   recovering        — hero HP too low after battle. Regen HP per tick until full.
-//     | hero full-hp -> waitingForEnemies
+//     | hero full-hp -> searchingEnemies
 //     | stopRequested (at full-hp) -> stopped
 //   stopped           — terminal.
 //
@@ -60,7 +61,11 @@ import {
 } from "../combat";
 import { INTENT } from "../intent";
 import { applyEffect, type EffectContext } from "../effect";
-import { lookupWave, stageEnemies } from "../stage";
+import {
+  beginCombatWaveSearch,
+  lookupWave,
+  stageEnemies,
+} from "../stage";
 import type { StageSession } from "../stage/types";
 import type { CharacterActivity, ActivityContext } from "./types";
 
@@ -82,7 +87,7 @@ export interface CombatActivityOptions {
 }
 
 export type CombatActivityPhase =
-  | "waitingForEnemies"
+  | "searchingEnemies"
   | "fighting"
   | "recovering"
   | "stopped";
@@ -115,7 +120,7 @@ export function createCombatActivity(
     kind: ACTIVITY_COMBAT_KIND,
     startedAtTick: initialCtx.currentTick,
     ownerCharacterId: opts.ownerCharacterId,
-    phase: resume?.phase ?? "waitingForEnemies",
+    phase: resume?.phase ?? "searchingEnemies",
     currentBattleId: resume?.currentBattleId ?? null,
     lastTransitionTick: resume?.lastTransitionTick ?? initialCtx.currentTick,
     stopRequested: false,
@@ -168,8 +173,8 @@ function stepPhase(
   params: StepParams,
 ): void {
   switch (activity.phase) {
-    case "waitingForEnemies":
-      stepWaiting(activity, ctx, params);
+    case "searchingEnemies":
+      stepSearching(activity, ctx, params);
       return;
     case "fighting":
       stepFighting(activity, ctx, params);
@@ -182,9 +187,9 @@ function stepPhase(
   }
 }
 
-/** Poll the current stage for alive enemies. When any appear, open a battle
- *  against them. */
-function stepWaiting(
+/** While searching, request the next wave search if needed and poll the current
+ *  stage for alive enemies. When any appear, open a battle against them. */
+function stepSearching(
   activity: CombatActivity,
   ctx: ActivityContext,
   params: StepParams,
@@ -197,6 +202,12 @@ function stepWaiting(
   if (!hero) return;
   const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
   if (!session) return;
+
+  if (!session.currentWave && !session.pendingCombatWaveSearch && session.encounterId) {
+    const encounter = getEncounter(session.encounterId);
+    beginCombatWaveSearch(encounter, session, ctx.currentTick);
+  }
+
   const enemies = stageEnemies(session, ctx.state).filter((e) => e.currentHp > 0);
   if (enemies.length === 0) return;
 
@@ -210,8 +221,8 @@ function stepFighting(
 ): void {
   const battle = lookupBattle(activity, ctx.state);
   if (!battle) {
-    // Lost the battle reference somehow — fall back to waiting.
-    activity.phase = "waitingForEnemies";
+    // Lost the battle reference somehow — fall back to searching.
+    activity.phase = "searchingEnemies";
     activity.currentBattleId = null;
     const hero = findHero(activity, ctx.state);
     if (hero) syncCombatToHero(activity, hero);
@@ -255,7 +266,6 @@ function stepFighting(
     });
   }
 
-
   activity.currentBattleId = null;
   activity.lastTransitionTick = ctx.currentTick;
 
@@ -271,7 +281,7 @@ function stepFighting(
 
   activity.phase = shouldRecoverAfterBattle(hero, ctx)
     ? "recovering"
-    : "waitingForEnemies";
+    : "searchingEnemies";
   syncCombatToHero(activity, hero);
 }
 
@@ -298,7 +308,7 @@ function stepRecovering(
       enterStopped(activity, ctx);
       return;
     }
-    activity.phase = "waitingForEnemies";
+    activity.phase = "searchingEnemies";
     activity.lastTransitionTick = ctx.currentTick;
     syncCombatToHero(activity, hero);
   }

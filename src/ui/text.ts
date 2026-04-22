@@ -30,8 +30,8 @@ export const T = {
 
   // ── Battle view ──
   pickLocation: "选择一个地点开始冒险。",
-  recovering: "从战败中恢复...",
-  waitingForEnemies: "等待敌人刷新...",
+  recovering: "恢复生命中...",
+  searchingEnemies: "搜索敌人中...",
   inCombat: "战斗中",
   stopped: "已停止",
   enemies: "敌人",
@@ -42,7 +42,7 @@ export const T = {
   // ── Hero card ──
   status_hero_inCombat: "战斗中",
   status_hero_recovering: "恢复中",
-  status_hero_waiting: "等待中",
+  status_hero_searching: "搜索中",
   status_hero_idle: "待命",
   status_hero_gathering: "采集中",
   ko: "阵亡",

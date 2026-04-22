@@ -20,7 +20,7 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 
 - `StageController` 是一个 `Tickable`
 - 它负责管理当前实例中的 actor，包括生成、重生和离开时的清理
-- 每个 `StageSession` 记录 `locationId`、`encounterId`、`spawnedActorIds`、当前波次 `currentWave`
+- 每个 `StageSession` 记录 `locationId`、`encounterId`、`spawnedActorIds`、当前波次 `currentWave`，以及进行中的 `pendingCombatWaveSearch`
 - 每个角色同一时刻只能在一个运行实例中，但多个角色可以各自拥有独立的 stage
 - Stage 只负责 actor 生命周期，不负责战斗推进
 
@@ -29,8 +29,8 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 - `EncounterDef` 是 ContentDb 的顶层注册表，通过 `getEncounter(id)` 查找
 - 每个 encounter 包含若干候选 `waves`
 - 每次刷怪时，会按 `waveSelection` 选择一个 wave；当前只支持 `random`
-- `currentWave.status` 表示这一波当前还在战斗中，还是已经以胜利 / 失败结算并进入冷却
-- 波次结算后，StageController 会清掉这一波的敌人，然后等待 `waveIntervalTicks` 再刷下一波
+- `currentWave.status` 表示这一波当前还在战斗中，还是已经以胜利 / 失败结算并等待清理
+- `pendingCombatWaveSearch` 表示玩家已经进入“搜索敌人”流程，StageController 会在 `waveSearchTicks` 到达后生成下一波
 - 难度差异体现在入口层：同一个 Location 可以有"普通"和"困难"两个战斗入口，指向不同的 EncounterDef
 
 ## CharacterController 命令流程
@@ -47,7 +47,7 @@ Activity 表示玩家当前在实例中做的事。它本身也是 `Tickable`。
 
 ### CombatActivity
 
-- 使用 `waitingForEnemies → fighting → recovering → stopped` 状态机
+- 使用 `searchingEnemies → fighting → recovering → stopped` 状态机
 - 只从 `state.stages[hero.stageId]` 中读取仍然存活的 enemy，并据此创建 `Battle`
 - 每次 phase 切换后，activity 都会把当前状态同步回 `hero.activity`
 - `hero.activity` 遵循单一写入者约束：只有 activity 自己会写这个字段

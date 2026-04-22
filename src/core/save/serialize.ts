@@ -93,6 +93,7 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
   }
 
   const state = data as unknown as GameState;
+  state.version = SAVE_VERSION;
 
   // Rebuild derived state on every character. Non-character actors pass
   // through untouched.

@@ -210,8 +210,8 @@ export interface EncounterDef {
   waves: WaveDef[];
   /** Selection strategy hook for future encounter-specific logic. */
   waveSelection?: EncounterWaveSelection;
-  /** Ticks between one wave resolving and the next wave spawning. */
-  waveIntervalTicks?: number;
+  /** Ticks spent searching before the next combat wave may spawn. */
+  waveSearchTicks?: number;
   /** After a battle ends, pause to heal if HP ratio is at or below this threshold.
    *  Different difficulty encounters can use different thresholds. */
   recoverBelowHpFactor?: number;
