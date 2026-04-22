@@ -29,11 +29,11 @@ export function BattleView({ store }: { store: GameStore }) {
 
   const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
 
-  if (!s.stageId) {
+  if (!s.locationId) {
     return (
       <div>
         {heroRow}
-        <Idle msg="Pick a stage to begin." />
+        <Idle msg="Pick a location to begin." />
       </div>
     );
   }

@@ -51,7 +51,7 @@ export type GameEvents = {
   loot: { charId: string; itemId: string; qty: number };
   waveResolved: {
     charId: string;
-    stageId: string;
+    locationId: string;
     encounterId: string;
     waveId: string;
     waveIndex: number;

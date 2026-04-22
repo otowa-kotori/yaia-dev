@@ -1,14 +1,14 @@
-// CombatActivity — player "I am actively fighting in the current stage".
+// CombatActivity — player "I am actively fighting in the current instance".
 //
 // This is strictly the ACTIVITY layer: it drives battle ticks, handles
 // hero recovery, and issues stop cleanup. The ACTOR POPULATION of the
-// stage (spawning and respawning waves of enemies) is the StageController's
+// instance (spawning and respawning waves of enemies) is the StageController's
 // job — CombatActivity just looks at the world and fights whatever enemies
-// are currently in the current stage.
+// are currently in the running instance.
 //
 // State machine:
 //
-//   waitingForEnemies — no enemies alive in the current stage. The stage
+//   waitingForEnemies — no enemies alive in the current instance. The stage
 //                       controller will respawn them; we idle until it does.
 //     | enemies appear -> fighting
 //     | stopRequested   -> stopped
@@ -27,9 +27,9 @@
 // players_won. See onParticipantKilled / grantWaveRewards below.
 //
 // Save/load: persisted in PlayerCharacter.activity.data = { phase,
-// currentBattleId, lastTransitionTick }. The stage the player is in is
+// currentBattleId, lastTransitionTick }. The instance the player is in is
 // persisted separately on GameState.currentStage; the activity does not
-// own stage state.
+// own instance state.
 //
 // hero.activity self-sync: every phase transition calls syncCombatToHero so
 // the persisted snapshot is always fresh. Session layer must NOT manually
@@ -48,7 +48,7 @@ import {
   type PlayerCharacter,
 } from "../actor";
 import { ATTR } from "../attribute";
-import { getMonster, getStage } from "../content/registry";
+import { getMonster, getEncounter } from "../content/registry";
 import type { EffectDef, ItemId, WaveRewardDef } from "../content/types";
 
 import type { GameState } from "../state/types";
@@ -60,7 +60,7 @@ import {
 } from "../combat";
 import { INTENT } from "../intent";
 import { applyEffect, type EffectContext } from "../effect";
-import { lookupEncounter, lookupWave, stageEnemies } from "../stage";
+import { lookupWave, stageEnemies } from "../stage";
 import type { CharacterActivity, ActivityContext } from "./types";
 
 export const ACTIVITY_COMBAT_KIND = "activity.combat";
@@ -247,7 +247,7 @@ function stepFighting(
     }
     ctx.bus.emit("waveResolved", {
       charId: activity.ownerCharacterId,
-      stageId: session.stageId,
+      locationId: session.locationId,
       encounterId: session.currentWave.encounterId,
       waveId: session.currentWave.waveId,
       waveIndex: session.currentWave.waveIndex,
@@ -319,7 +319,7 @@ function openBattle(
   intents[hero.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
 
-  const battleId = `battle.${activity.id}.${session.stageId}.w${waveIndex}`;
+  const battleId = `battle.${activity.id}.${session.locationId}.w${waveIndex}`;
   const battle = createBattle({
     id: battleId,
     mode: "solo",
@@ -396,11 +396,10 @@ function grantWaveRewards(
   const activeWave = session.currentWave;
   if (!activeWave || activeWave.rewardGranted) return;
 
-  const stageDef = getStage(session.stageId);
-  const encounter = lookupEncounter(stageDef, activeWave.encounterId);
+  const encounter = getEncounter(activeWave.encounterId);
   const wave = lookupWave(encounter, activeWave.waveId);
   const rewardEffect = buildWaveRewardEffect(
-    session.stageId,
+    session.locationId,
     activeWave.waveIndex,
     wave.rewards,
     ctx,
@@ -419,7 +418,7 @@ function grantWaveRewards(
 }
 
 function buildWaveRewardEffect(
-  stageId: string,
+  locationId: string,
   waveIndex: number,
   rewards: WaveRewardDef | undefined,
   ctx: ActivityContext,
@@ -441,7 +440,7 @@ function buildWaveRewardEffect(
   if (!hasItems && !hasCurrencies) return null;
 
   return {
-    id: `effect.runtime.wave_reward.${stageId}.${waveIndex}` as never,
+    id: `effect.runtime.wave_reward.${locationId}.${waveIndex}` as never,
     kind: "instant",
     rewards: {
       items: hasItems ? items : undefined,
@@ -475,9 +474,9 @@ function shouldRecoverAfterBattle(
 ): boolean {
   if (hero.currentHp <= 0) return true;
   const session = ctx.state.currentStage;
-  if (!session) return false;
-  const stage = getStage(session.stageId);
-  const threshold = stage.recoverBelowHpFactor ?? 0;
+  if (!session || !session.encounterId) return false;
+  const encounter = getEncounter(session.encounterId);
+  const threshold = encounter.recoverBelowHpFactor ?? 0;
   if (threshold <= 0) return false;
 
   const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);

@@ -96,9 +96,12 @@ export interface GameState {
   /** Active battles indexed by id. Battle is plain data so it round-trips
    *  through the save file. Activities reference battles by id. */
   battles: Battle[];
-  /** The scene the player is currently in. At most one — switching stages
-   *  leaveStage()s the current session first. Null when the player is not
-   *  in any stage. */
+  /** The location (map area) the player is currently in. Null when not in
+   *  any location. Persisted so we know where the player was on reload. */
+  currentLocationId: string | null;
+  /** The running instance (combat / gather) within the current location.
+   *  At most one — switching instances leaveStage()s the current session
+   *  first. Null when the player hasn't picked an entry yet. */
   currentStage: StageSession | null;
   /** Inventories keyed by charId OR the literal "shared" key. Fixed-capacity
    *  grid: each Inventory has a `capacity` and a dense `slots` array whose
@@ -132,6 +135,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     tick: 0,
     actors: [],
     battles: [],
+    currentLocationId: null,
     currentStage: null,
     inventories: {
       [SHARED_INVENTORY_KEY]: createInventory(DEFAULT_SHARED_INVENTORY_CAPACITY),

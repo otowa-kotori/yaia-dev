@@ -3,17 +3,23 @@
 // Responsibilities:
 // - Own the live runtime graph: tick engine, event bus, rng, state, stage
 //   controller, and the active character activity.
-// - Expose gameplay commands (enterStage, startFight, startGather, …) as
-//   direct methods. These methods encode the rules for each action (e.g. a
-//   CombatActivity needs to be registered on the engine, rehydration skips
-//   the onStart reset, etc).
+// - Expose gameplay commands (enterLocation, startFight, startGather, …) as
+//   direct methods. These methods encode the rules for each action.
 // - Take a ContentDb and optional seed; nothing else.
+//
+// Location / Entry / Instance flow:
+//   1. enterLocation(locationId) — set state.currentLocationId, stop any
+//      running activity + instance. No actors are spawned yet.
+//   2. startFight(encounterId) — create a StageSession + StageController for
+//      the chosen combat entry. Spawn first wave. Create CombatActivity.
+//   3. startGather(nodeId) — create a StageSession + StageController for
+//      the chosen gather entry. Spawn resource nodes. Create GatherActivity.
+//   4. stopActivity / leaveLocation — tear down in reverse.
 //
 // What it is NOT:
 // - Not a React bridge. It does not publish a revision counter, does not
 //   manage subscriptions, does not schedule autosave. Those live in the UI
-//   Store adapter (src/ui/store.ts), which wraps a GameSession and mixes
-//   subscribe/getRevision/clearSaveAndReset on top of it via Object.assign.
+//   Store adapter (src/ui/store.ts).
 // - Not a save adapter. It exposes loadFromSave(state) / resetToFresh() as
 //   lifecycle hooks; the Store decides when/how to persist.
 //
@@ -34,8 +40,8 @@ import {
   createEmptyState,
   type GameState,
 } from "../state";
-import type { ContentDb } from "../content";
-import { setContent } from "../content";
+import type { ContentDb, LocationEntryDef } from "../content";
+import { getLocation, setContent } from "../content";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
@@ -84,7 +90,7 @@ export interface GameSession {
   // backing slots are replaced on loadFromSave / resetToFresh.
   readonly state: GameState;
   readonly activity: CombatActivity | GatherActivity | null;
-  readonly stageId: string | null;
+  readonly locationId: string | null;
 
   // Runtime handles the Store (or any adapter) needs to wire up its own
   // side effects. Stable across reloads.
@@ -92,9 +98,9 @@ export interface GameSession {
   readonly bus: GameEventBus;
 
   // Gameplay commands.
-  enterStage(stageId: string): void;
-  leaveStage(): void;
-  startFight(): void;
+  enterLocation(locationId: string): void;
+  leaveLocation(): void;
+  startFight(encounterId: string): void;
   startGather(nodeId: string): void;
   stopActivity(): void;
 
@@ -109,7 +115,7 @@ export interface GameSession {
   /** Swap in a freshly deserialized GameState. Rehydrates stage + activity. */
   loadFromSave(loaded: GameState): void;
   /** Reset to a brand-new game using content.starting. Installs the hero,
-   *  seeds an empty inventory, and enters the initial stage. Throws if
+   *  seeds an empty inventory, and enters the initial location. Throws if
    *  content.starting is missing. */
   resetToFresh(): void;
 
@@ -146,10 +152,7 @@ export function createGameSession(
   // The engine runs in real time; Store attaches __ui_notifier on top.
   const stopLoop = engine.start();
 
-  // Activity self-completion cleanup. An activity may transition itself to
-  // stopped/done from inside its own tick (e.g. combat enters stopped on
-  // stopRequested). We don't notify here — the Store listens on the same
-  // bus and handles UI side effects.
+  // Activity self-completion cleanup.
   bus.on("activityComplete", () => {
     activity = null;
   });
@@ -203,9 +206,6 @@ export function createGameSession(
 
   function stopRunningActivity(): void {
     if (!activity) return;
-    // Flip the activity's terminal flag so isDone() reports true on the
-    // next tick; then unregister preemptively so the UI sees it gone this
-    // frame. Keep hero.activity in sync for autosave.
     if (activity.kind === ACTIVITY_COMBAT_KIND) activity.phase = "stopped";
     else if (activity.kind === ACTIVITY_GATHER_KIND) activity.stopRequested = true;
     engine.unregister(activity.id);
@@ -214,51 +214,59 @@ export function createGameSession(
     if (hero) hero.activity = null;
   }
 
-  // ---------- Stage ----------
+  // ---------- Instance (stage) lifecycle ----------
 
-  function enterStage(stageId: string): void {
+  function tearDownInstance(): void {
     stopRunningActivity();
     if (stageController) {
       engine.unregister(stageController.id);
       leaveStageCore(buildCtx());
       stageController = null;
     }
+  }
 
-    // Guarantee a hero exists before a stage uses it (resetToFresh already
-    // installed one; this covers any call-path that enters a stage without
-    // going through reset, e.g. UI flows in the future).
+  function startInstance(opts: {
+    locationId: string;
+    encounterId?: string | null;
+    resourceNodes?: string[];
+  }): void {
+    tearDownInstance();
     ensureHeroFromContent();
-
     stageController = enterStageCore({
-      stageId,
+      locationId: opts.locationId,
+      encounterId: opts.encounterId,
+      resourceNodes: opts.resourceNodes,
       ctxProvider: buildCtx,
     });
     engine.register(stageController);
   }
 
-  function leaveStage(): void {
-    stopRunningActivity();
-    if (stageController) {
-      engine.unregister(stageController.id);
-      leaveStageCore(buildCtx());
-      stageController = null;
-    }
+  // ---------- Location ----------
+
+  function enterLocation(locationId: string): void {
+    // Validate the location exists in content.
+    getLocation(locationId);
+    tearDownInstance();
+    state.currentLocationId = locationId;
+  }
+
+  function leaveLocation(): void {
+    tearDownInstance();
+    state.currentLocationId = null;
   }
 
   // ---------- Activities ----------
 
-  function startFight(): void {
-    if (!state.currentStage) {
-      console.warn("session.startFight: not in a stage");
+  function startFight(encounterId: string): void {
+    if (!state.currentLocationId) {
+      console.warn("session.startFight: not in a location");
       return;
     }
-    stopRunningActivity();
+    startInstance({
+      locationId: state.currentLocationId,
+      encounterId,
+    });
     const hero = ensureHeroFromContent();
-
-    // CombatActivity owns the pre-fight reset (HP/MP refill, wipe
-    // effects/cooldowns) in its onStart hook. We call it explicitly for
-    // fresh starts; rehydrateActivity below skips onStart so a reload
-    // doesn't clobber a mid-fight HP bar.
     activity = createCombatActivity({
       ownerCharacterId: hero.id,
       ctxProvider: buildCtx,
@@ -268,11 +276,14 @@ export function createGameSession(
   }
 
   function startGather(nodeId: string): void {
-    if (!state.currentStage) {
-      console.warn("session.startGather: not in a stage");
+    if (!state.currentLocationId) {
+      console.warn("session.startGather: not in a location");
       return;
     }
-    stopRunningActivity();
+    startInstance({
+      locationId: state.currentLocationId,
+      resourceNodes: [nodeId],
+    });
     const hero = ensureHeroFromContent();
     activity = createGatherActivity({
       ownerCharacterId: hero.id,
@@ -291,7 +302,8 @@ export function createGameSession(
   function rehydrateStage(): void {
     if (!state.currentStage) return;
     stageController = enterStageCore({
-      stageId: state.currentStage.stageId,
+      locationId: state.currentStage.locationId,
+      encounterId: state.currentStage.encounterId,
       ctxProvider: buildCtx,
       resume: true,
     });
@@ -312,8 +324,6 @@ export function createGameSession(
           lastTransitionTick: data.lastTransitionTick,
         },
       });
-      // Resume path: do NOT call onStart — the hero's currentHp / cooldowns
-      // in the save file are the truth.
       if (activity.phase !== "stopped") engine.register(activity);
     } else if (hero.activity.kind === ACTIVITY_GATHER_KIND) {
       const data = hero.activity.data as GatherActivityData;
@@ -330,8 +340,6 @@ export function createGameSession(
   // ---------- Public lifecycle ----------
 
   function loadFromSave(loaded: GameState): void {
-    // Drop any live tickables that reference the old state. __ui_notifier
-    // (owned by the Store) stays put.
     if (stageController) {
       engine.unregister(stageController.id);
       stageController = null;
@@ -348,13 +356,7 @@ export function createGameSession(
   }
 
   function resetToFresh(): void {
-    // Tear down everything except the engine itself. Caller is the Store,
-    // which keeps __ui_notifier running across resets.
-    stopRunningActivity();
-    if (stageController) {
-      engine.unregister(stageController.id);
-      stageController = null;
-    }
+    tearDownInstance();
     state = createEmptyState(seed, 1);
     rng = createRng(seed);
     engine.setTick(0);
@@ -365,7 +367,7 @@ export function createGameSession(
       );
     }
     ensureHeroFromContent();
-    enterStage(starting.initialStageId);
+    enterLocation(starting.initialLocationId);
   }
 
   // ---------- Speed ----------
@@ -382,8 +384,6 @@ export function createGameSession(
 
   const session: GameSession = {
     get state() {
-      // Keep tick / rngState fresh on the state object so any
-      // out-of-band read (serialize from anywhere) sees current values.
       state.tick = engine.currentTick;
       state.rngState = rng.state;
       return state;
@@ -391,8 +391,8 @@ export function createGameSession(
     get activity() {
       return activity;
     },
-    get stageId() {
-      return state.currentStage?.stageId ?? null;
+    get locationId() {
+      return state.currentLocationId;
     },
     get engine() {
       return engine;
@@ -400,8 +400,8 @@ export function createGameSession(
     get bus() {
       return bus;
     },
-    enterStage,
-    leaveStage,
+    enterLocation,
+    leaveLocation,
     startFight,
     startGather,
     stopActivity,

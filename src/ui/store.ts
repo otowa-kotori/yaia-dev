@@ -8,11 +8,11 @@
 // - Clear-save flow.
 //
 // What this file is NOT doing any more:
-// - It does NOT encode any game rules. All gameplay logic (enter stage,
+// - It does NOT encode any game rules. All gameplay logic (enter location,
 //   start fight, purchase upgrade, rehydrate activity, etc.) lives in
 //   src/core/session. This file physically is a GameSession with a few
 //   extra methods mixed in — see `Object.assign(session, …)` below — so
-//   `store.enterStage(id)` calls straight through to the session's own
+//   `store.enterLocation(id)` calls straight through to the session's own
 //   method with zero forwarding boilerplate.
 // - It does NOT own GameState, rng, engine, or bus; those belong to the
 //   session.
@@ -52,7 +52,7 @@ export interface GameStore extends GameSession {
   purchaseUpgrade(upgradeId: string): void;
   /** Currently held upgrade ids, for UI listing. Thin pass-through —
    *  future UI may read directly from content. */
-  listStageIds(): string[];
+  listLocationIds(): string[];
   listUpgradeIds(): string[];
   /** Currency / WorldRecord accessors retained for convenience; they are
    *  trivial views on state and let UI components stay unchanged. */
@@ -171,9 +171,9 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   // exactly as before — it now dispatches to session.enterStage directly
   // with no forwarding shim.
   //
-  // Store-owned methods either hook into persist/notify (clearSaveAndReset,
-  // purchaseUpgrade) or expose tiny content lookups the UI already depended
-  // on (listStageIds, getCurrencies, …).
+    // Store-owned methods either hook into persist/notify (clearSaveAndReset,
+    // purchaseUpgrade) or expose tiny content lookups the UI already depended
+    // on (listLocationIds, getCurrencies, …).
 
   const baseDispose = session.dispose.bind(session);
 
@@ -185,7 +185,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       };
     },
     getRevision: () => revision,
-    listStageIds: () => Object.keys(opts.content.stages),
+    listLocationIds: () => Object.keys(opts.content.locations),
     listUpgradeIds: () => Object.keys(opts.content.upgrades),
     getCurrencies: () => session.state.currencies,
     getWorldRecord: () => session.state.worldRecord,

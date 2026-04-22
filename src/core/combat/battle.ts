@@ -17,7 +17,10 @@
 //   Effects still measure durationTicks in logic ticks, but only decrement on
 //   the owner's own turn. Document this in EffectDef authoring notes.
 
-import type { AttrDef, StageMode } from "../content/types";
+import type { AttrDef } from "../content/types";
+
+/** Battle mode: solo (1 player) or party (future multi-character). */
+export type BattleMode = "solo" | "party";
 import { getAbility } from "../content/registry";
 import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
@@ -51,7 +54,7 @@ export interface BattleLogEntry {
 
 export interface Battle {
   id: string;
-  mode: StageMode;
+  mode: BattleMode;
   /** All actors involved. IDs only — resolved against GameState.actors. */
   participantIds: string[];
   scheduler: SchedulerState;
@@ -77,7 +80,7 @@ export interface Battle {
 
 export interface CreateBattleOptions {
   id: string;
-  mode: StageMode;
+  mode: BattleMode;
   participantIds: string[];
   scheduler?: SchedulerState;
   actionDelayTicks?: number;

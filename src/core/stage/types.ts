@@ -1,16 +1,21 @@
 // Stage session primitives.
 //
-// A Stage is a scene that owns a population of Actors (enemies, resource
-// nodes). Stages do NOT run battles or gather loops — those belong to the
-// Activity layer. A stage is responsible for:
+// With the Location / Entry / Instance split:
+//   - LocationDef      — "where am I" (physical place)
+//   - LocationEntryDef — "what can I do here" (combat / gather entry)
+//   - StageSession     — the running instance after the player picks an entry
 //
-//   - spawning its initial population on enter
-//   - keeping the active encounter's wave loop moving over time
-//   - cleaning up its population on leave (so actors don't pile up in the
-//     world forever)
+// A StageSession owns a population of Actors (enemies, resource nodes).
+// It does NOT run battles or gather loops — those belong to the Activity
+// layer. Its responsibilities:
 //
-// The player can be in at most one stage at a time: state.currentStage.
-// Entering a new stage leaves the current one first.
+//   - spawning the initial population on enter
+//   - keeping the active encounter's wave loop running
+//   - cleaning up its population on leave
+//
+// The player can be in at most one running instance at a time:
+// state.currentStage. state.currentLocationId records which location
+// they're in (survives stopping an activity).
 //
 // Stage state is JSON-safe (plain data) so it round-trips through saves.
 // Runtime logic (the "controller") is not persisted; it's re-instantiated
@@ -27,19 +32,20 @@ export interface ActiveCombatWaveSession {
 }
 
 /**
- * Per-session state stored in GameState.currentStage. Minimal bookkeeping
- * for respawn timers + tracking which actors belong to this stage so
+ * Per-instance state stored in GameState.currentStage. Minimal bookkeeping
+ * for respawn timers + tracking which actors belong to this instance so
  * leaveStage can clean up.
  */
 export interface StageSession {
-  stageId: string;
+  /** The location this instance belongs to. */
+  locationId: string;
+  /** The encounter being played (null for gather-only instances). */
+  encounterId: string | null;
   enteredAtTick: number;
-  /** Ids of actors spawned BY this stage (so we know what to clean up on
-   *  leave). Actors that pre-date the stage, like the player character,
+  /** Ids of actors spawned BY this instance (so we know what to clean up on
+   *  leave). Actors that pre-date the instance, like the player character,
    *  are not in this list. */
   spawnedActorIds: string[];
-  /** Currently selected encounter in this stage. MVP enters the first encounter. */
-  activeEncounterId: string | null;
   // ---------- Respawn bookkeeping ----------
   /** If > 0, number of ticks remaining until the next combat wave spawns. */
   combatWaveCooldownTicks: number;

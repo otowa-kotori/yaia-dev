@@ -19,7 +19,8 @@ export type MonsterId = string & { readonly __brand: "MonsterId" };
 export type AbilityId = string & { readonly __brand: "AbilityId" };
 export type EffectId = string & { readonly __brand: "EffectId" };
 export type SkillId = string & { readonly __brand: "SkillId" };
-export type StageId = string & { readonly __brand: "StageId" };
+export type LocationId = string & { readonly __brand: "LocationId" };
+export type EncounterId = string & { readonly __brand: "EncounterId" };
 export type RecipeId = string & { readonly __brand: "RecipeId" };
 export type AttrId = string & { readonly __brand: "AttrId" };
 export type TalentId = string & { readonly __brand: "TalentId" };
@@ -165,9 +166,16 @@ export interface SkillDef {
   maxLevel?: number;
 }
 
-// ---------- Stages ----------
+// ---------- Encounters & Locations ----------
+//
+// Three-layer model:
+//   LocationDef   — "where am I" (physical place / map area)
+//   LocationEntry — "what can I do here" (combat / gather / npc entries)
+//   EncounterDef  — "how does this fight work" (waves, rewards, thresholds)
+//
+// EncounterDef is a top-level ContentDb citizen so it can be looked up by
+// id without knowing which Location it belongs to.
 
-export type StageMode = "solo" | "party";
 export type EncounterWaveSelection = "random";
 
 export interface WaveRewardDropDef {
@@ -194,7 +202,7 @@ export interface WaveDef {
 }
 
 export interface EncounterDef {
-  id: string;
+  id: EncounterId;
   name: string;
   /** Candidate waves for this encounter. Current MVP only supports random pick. */
   waves: WaveDef[];
@@ -202,26 +210,27 @@ export interface EncounterDef {
   waveSelection?: EncounterWaveSelection;
   /** Ticks between one wave resolving and the next wave spawning. */
   waveIntervalTicks?: number;
+  /** After a battle ends, pause to heal if HP ratio is at or below this threshold.
+   *  Different difficulty encounters can use different thresholds. */
+  recoverBelowHpFactor?: number;
+  /** Which skill's XP this encounter grants on kill (e.g. "skill.swordsmanship"). */
+  combatSkill?: SkillId;
 }
 
-/** Scene manifest. A Stage can contain any mix of combat encounters and
- *  resource nodes; which of those the player actually engages with is
- *  decided by the Activity they start. */
-export interface StageDef {
-  id: StageId;
+// ---------- Location entries ----------
+
+export type LocationEntryDef =
+  | { kind: "combat"; encounterId: EncounterId; label?: string }
+  | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string };
+
+/** A physical location / map area. Contains a menu of available entries
+ *  the player can choose from. The actual running instance (actor spawning,
+ *  battle ticking) happens in StageSession / StageController after the
+ *  player picks an entry. */
+export interface LocationDef {
+  id: LocationId;
   name: string;
-  mode: StageMode;
-  // ---------- Combat aspect (optional) ----------
-  /** Encounter list available inside this stage. MVP keeps one active encounter at a time. */
-  encounters?: EncounterDef[];
-  /** After a battle ends, pause to heal if HP ratio is at or below this threshold. */
-  recoverBelowHpFactor?: number;
-  /** Which skill's XP this stage grants on kill (e.g. "skill.swordsmanship"). */
-  combatSkill?: SkillId;
-  // ---------- Gather aspect (optional) ----------
-  /** Resource node instances to spawn at stage enter. Each entry becomes one
-   *  ResourceNode actor; use the same nodeDefId twice to get two veins. */
-  resourceNodes?: ResourceNodeId[];
+  entries: LocationEntryDef[];
 }
 
 
@@ -309,7 +318,7 @@ export interface TalentDef {
 // ---------- New game bootstrap ----------
 //
 // Configures how a brand-new save is populated: the starting PlayerCharacter
-// and which stage the player lands in. Lives in ContentDb so designers (not
+// and which location the player lands in. Lives in ContentDb so designers (not
 // code) own the decision. Optional for tests / fixture DBs; resetToFresh
 // throws loudly if a session tries to boot without it.
 
@@ -322,7 +331,7 @@ export interface StartingConfig {
     /** Per-character bag capacity. Falls back to DEFAULT_CHAR_INVENTORY_CAPACITY. */
     inventoryCapacity?: number;
   };
-  initialStageId: StageId;
+  initialLocationId: LocationId;
 }
 
 // ---------- ContentDb ----------
@@ -333,7 +342,8 @@ export interface ContentDb {
   abilities: Readonly<Record<string, AbilityDef>>;
   effects: Readonly<Record<string, EffectDef>>;
   skills: Readonly<Record<string, SkillDef>>;
-  stages: Readonly<Record<string, StageDef>>;
+  locations: Readonly<Record<string, LocationDef>>;
+  encounters: Readonly<Record<string, EncounterDef>>;
   recipes: Readonly<Record<string, RecipeDef>>;
   talents: Readonly<Record<string, TalentDef>>;
   upgrades: Readonly<Record<string, UpgradeDef>>;
@@ -354,7 +364,8 @@ export function emptyContentDb(): ContentDb {
     abilities: {},
     effects: {},
     skills: {},
-    stages: {},
+    locations: {},
+    encounters: {},
     recipes: {},
     talents: {},
     upgrades: {},

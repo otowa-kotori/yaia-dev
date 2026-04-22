@@ -7,16 +7,18 @@ import type {
   AttrId,
   EffectDef,
   EffectId,
+  EncounterDef,
+  EncounterId,
   ItemDef,
   ItemId,
+  LocationDef,
+  LocationId,
   MonsterDef,
   MonsterId,
   ResourceNodeDef,
   ResourceNodeId,
   SkillDef,
   SkillId,
-  StageDef,
-  StageId,
 } from "../../src/core/content/types";
 import { createGameEventBus } from "../../src/core/events";
 import type { GameEventBus } from "../../src/core/events";
@@ -201,50 +203,54 @@ export const testVein: ResourceNodeDef = {
   drops: [{ itemId: testOreItem.id, chance: 1, minQty: 1, maxQty: 2 }],
 };
 
-// ---------- Common fixture stages ----------
+// ---------- Encounters ----------
 
-export const forestStage: StageDef = {
-  id: "stage.forest.test" as StageId,
-  name: "Test Forest",
-  mode: "solo",
+export const forestEncounter: EncounterDef = {
+  id: "encounter.forest.test_path" as EncounterId,
+  name: "Test Path",
+  waveSelection: "random",
+  waveIntervalTicks: 5,
   recoverBelowHpFactor: 0.5,
-  encounters: [
+  waves: [
     {
-      id: "encounter.forest.test_path",
-      name: "Test Path",
-      waveSelection: "random",
-      waveIntervalTicks: 5,
-      waves: [
-        {
-          id: "wave.forest.test_slimes",
-          name: "Twin Slimes",
-          monsters: [slimeMonster.id, slimeMonster.id],
-          rewards: {
-            drops: [
-              { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
-            ],
-          },
-        },
-        {
-          id: "wave.forest.test_mix",
-          name: "Slime and Goblin",
-          monsters: [slimeMonster.id, goblinMonster.id],
-          rewards: {
-            drops: [
-              { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
-            ],
-          },
-        },
-      ],
+      id: "wave.forest.test_slimes",
+      name: "Twin Slimes",
+      monsters: [slimeMonster.id, slimeMonster.id],
+      rewards: {
+        drops: [
+          { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
+        ],
+      },
+    },
+    {
+      id: "wave.forest.test_mix",
+      name: "Slime and Goblin",
+      monsters: [slimeMonster.id, goblinMonster.id],
+      rewards: {
+        drops: [
+          { itemId: waveTrophyItem.id, chance: 1, minQty: 1, maxQty: 1 },
+        ],
+      },
     },
   ],
 };
 
-export const mineStage: StageDef = {
-  id: "stage.mine.test" as StageId,
+// ---------- Locations ----------
+
+export const forestLocation: LocationDef = {
+  id: "location.forest.test" as LocationId,
+  name: "Test Forest",
+  entries: [
+    { kind: "combat", encounterId: forestEncounter.id, label: "Test Path" },
+  ],
+};
+
+export const mineLocation: LocationDef = {
+  id: "location.mine.test" as LocationId,
   name: "Test Mine",
-  mode: "solo",
-  resourceNodes: [testVein.id],
+  entries: [
+    { kind: "gather", resourceNodes: [testVein.id], label: "Test Vein" },
+  ],
 };
 
 // ---------- Loader ----------
@@ -279,13 +285,15 @@ export function loadFixtureContent(): ContentDb {
     resourceNodes: {
       [testVein.id]: testVein,
     },
-    stages: {
-      [forestStage.id]: forestStage,
-      [mineStage.id]: mineStage,
+    locations: {
+      [forestLocation.id]: forestLocation,
+      [mineLocation.id]: mineLocation,
+    },
+    encounters: {
+      [forestEncounter.id]: forestEncounter,
     },
   };
   setContent(db);
-  // Tests relying on Battle dispatching intents need the registry populated.
   registerBuiltinIntents();
   return db;
 }

@@ -1,18 +1,20 @@
-// StageController — spawn/respawn engine for the current stage.
+// StageController — spawn/respawn engine for the current running instance.
+//
+// With the Location / Entry / Instance split, this controller no longer
+// knows about "stages" in the old sense. It manages the actor population
+// of a single chosen entry (combat encounter or gather site).
 //
 // Ticking responsibilities:
-//   1. At enter: spawn the stage's initial ResourceNodes + open the first
-//      combat wave of the active encounter (if the stage has combat configured).
-//   2. Each tick: reap dead stage-owned enemies that are no longer
-//      referenced by any ongoing battle (keeps state.actors + save size
-//      bounded — without this, every slime you kill stays resident forever).
+//   1. At enter: spawn the encounter's first combat wave (or resource nodes
+//      for a gather entry).
+//   2. Each tick: reap dead instance-owned enemies that are no longer
+//      referenced by any ongoing battle.
 //   3. When the current wave resolves, wait for combatWaveCooldownTicks and
-//      then spawn the next randomly selected wave from the active encounter.
+//      then spawn the next randomly selected wave from the encounter.
 //   4. On leave: remove every actor whose id is in spawnedActorIds.
 //
-// The controller does NOT run combat. Whoever wants to fight (a
-// CombatActivity) reads the living enemies out of state.actors filtered
-// by `isEnemy` ∩ `spawnedActorIds`.
+// The controller does NOT run combat. CombatActivity reads the living
+// enemies out of state.actors filtered by isEnemy ∩ spawnedActorIds.
 //
 // The controller also does NOT manage gather progress; GatherActivity does.
 // The controller just spawns the nodes and leaves them in the world.
@@ -24,8 +26,8 @@ import {
   type Actor,
   type Enemy,
 } from "../actor";
-import type { AttrDef, EncounterDef, StageDef, WaveDef } from "../content/types";
-import { getMonster, getResourceNode, getStage } from "../content/registry";
+import type { AttrDef, EncounterDef, WaveDef } from "../content/types";
+import { getEncounter, getMonster, getResourceNode } from "../content/registry";
 import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
@@ -41,51 +43,69 @@ export interface StageControllerContext {
 }
 
 export interface StageController extends Tickable {
-  readonly stageId: string;
+  readonly locationId: string;
+  readonly encounterId: string | null;
 }
 
 export interface CreateStageControllerOptions {
-  stageId: string;
+  locationId: string;
+  /** Encounter to fight. Null for gather-only instances. */
+  encounterId?: string | null;
+  /** Resource nodes to spawn (for gather entries). */
+  resourceNodes?: string[];
   ctxProvider: () => StageControllerContext;
   /** If provided, the session pre-exists (e.g. load-from-save). Otherwise a
    *  fresh session is created and the initial population spawned. */
   resume?: boolean;
 }
 
-/** Enter a stage: create session, spawn initial population, return a
+/** Enter an instance: create session, spawn initial population, return a
  *  Tickable controller you should register on the tick engine. */
 export function enterStage(opts: CreateStageControllerOptions): StageController {
-  const stageDef = getStage(opts.stageId); // throw on typo
+  const encId = opts.encounterId ?? null;
   const initialCtx = opts.ctxProvider();
 
   if (!opts.resume) {
     if (initialCtx.state.currentStage) {
       throw new Error(
-        `stage: cannot enter "${opts.stageId}" — already in "${initialCtx.state.currentStage.stageId}"; leaveStage first`,
+        `stage: cannot enter instance for "${opts.locationId}" — already in "${initialCtx.state.currentStage.locationId}"; leaveStage first`,
       );
     }
-    initialCtx.state.currentStage = freshSession(stageDef, initialCtx.currentTick);
-    // Spawn the initial population.
-    spawnResourceNodes(stageDef, initialCtx);
-    const encounter = currentEncounter(stageDef, initialCtx.state.currentStage);
-    if (encounter) {
+    initialCtx.state.currentStage = freshSession(
+      opts.locationId,
+      encId,
+      initialCtx.currentTick,
+    );
+
+    // Spawn resource nodes if this is a gather entry.
+    if (opts.resourceNodes && opts.resourceNodes.length > 0) {
+      spawnResourceNodes(opts.resourceNodes, initialCtx);
+    }
+
+    // Spawn the first combat wave if this is a combat entry.
+    if (encId) {
+      const encounter = getEncounter(encId);
       spawnCombatWave(encounter, initialCtx);
     }
   }
 
+  // Capture encounter def once for the tick closure (null for gather).
+  const encounterDef = encId ? getEncounter(encId) : null;
+
   const controller: StageController = {
-    id: `stage:${opts.stageId}`,
-    stageId: opts.stageId,
+    id: `stage:${opts.locationId}:${encId ?? "gather"}`,
+    locationId: opts.locationId,
+    encounterId: encId,
     tick() {
       const ctx = opts.ctxProvider();
-      stepController(stageDef, ctx);
+      stepController(encounterDef, ctx);
     },
   };
   return controller;
 }
 
-/** Tear down the current stage: remove all spawned actors, clear the
- *  session. Safe to call when no stage is active (no-op). Removes the
+/** Tear down the current instance: remove all spawned actors, clear the
+ *  session. Safe to call when no instance is active (no-op). Removing the
  *  controller from the tick engine is the caller's job (they have the
  *  handle). */
 export function leaveStage(ctx: StageControllerContext): void {
@@ -102,19 +122,17 @@ export function leaveStage(ctx: StageControllerContext): void {
 
 // ---------- Step ----------
 
-function stepController(def: StageDef, ctx: StageControllerContext): void {
+function stepController(
+  encounter: EncounterDef | null,
+  ctx: StageControllerContext,
+): void {
   const session = ctx.state.currentStage;
   if (!session) return;
 
-  // Reap dead stage-owned enemies first. Anything still referenced by an
-  // ongoing battle stays (so the battle's tick loop can read its corpse
-  // and emit the death/kill events cleanly). CombatActivity removes
-  // finished battles from state.battles, so by the next controller tick
-  // the reference is gone and the enemy is collectible.
+  // Reap dead instance-owned enemies first.
   reapDeadEnemies(session, ctx);
 
-  const encounter = currentEncounter(def, session);
-  if (!encounter) return;
+  if (!encounter) return; // gather-only — nothing to step
 
   if (!session.currentWave) {
     if (session.combatWaveCooldownTicks > 0) {
@@ -137,14 +155,13 @@ const DEFAULT_WAVE_INTERVAL = 20;
 
 // ---------- Reaping ----------
 
-/** Remove stage-owned dead enemies that no ongoing battle still references.
+/** Remove instance-owned dead enemies that no ongoing battle still references.
  *  Without this they accumulate forever and bloat the save file. */
 function reapDeadEnemies(
   session: StageSession,
   ctx: StageControllerContext,
 ): void {
   const owned = new Set(session.spawnedActorIds);
-  // Anything referenced by an ongoing battle is off-limits this tick.
   const heldByBattle = new Set<string>();
   for (const b of ctx.state.battles) {
     if (b.outcome !== "ongoing") continue;
@@ -170,13 +187,15 @@ function reapDeadEnemies(
 
 // ---------- Spawning ----------
 
-function spawnResourceNodes(def: StageDef, ctx: StageControllerContext): void {
+function spawnResourceNodes(
+  nodeIds: string[],
+  ctx: StageControllerContext,
+): void {
   const session = ctx.state.currentStage!;
-  const nodeIds = def.resourceNodes ?? [];
   for (let i = 0; i < nodeIds.length; i++) {
     const defId = nodeIds[i]!;
     const nodeDef = getResourceNode(defId);
-    const instanceId = `node.${defId}.${session.stageId}.${i}`;
+    const instanceId = `node.${defId}.${session.locationId}.${i}`;
     const actor = createResourceNode({ instanceId, def: nodeDef });
     ctx.state.actors.push(actor);
     session.spawnedActorIds.push(instanceId);
@@ -193,7 +212,7 @@ function spawnCombatWave(encounter: EncounterDef, ctx: StageControllerContext): 
     const monsterId = wave.monsters[i]!;
     const mdef = getMonster(monsterId);
     const instanceId =
-      `enemy.${monsterId}.${session.stageId}.${encounter.id}.w${session.combatWaveIndex}.${i}`;
+      `enemy.${monsterId}.${session.locationId}.${encounter.id}.w${session.combatWaveIndex}.${i}`;
     const enemy = createEnemy({
       instanceId,
       def: mdef,
@@ -217,7 +236,7 @@ function spawnCombatWave(encounter: EncounterDef, ctx: StageControllerContext): 
 
 // ---------- Queries (consumed by Activities) ----------
 
-/** All enemies belonging to the current stage, alive or dead. */
+/** All enemies belonging to the current instance, alive or dead. */
 export function stageEnemies(
   session: StageSession,
   state: GameState,
@@ -226,7 +245,7 @@ export function stageEnemies(
   return state.actors.filter((a): a is Enemy => isEnemy(a) && own.has(a.id));
 }
 
-/** All resource nodes belonging to the current stage. */
+/** All resource nodes belonging to the current instance. */
 export function stageResourceNodes(
   session: StageSession,
   state: GameState,
@@ -235,19 +254,6 @@ export function stageResourceNodes(
   return state.actors.filter(
     (a) => a.kind === "resource_node" && own.has(a.id),
   );
-}
-
-export function lookupEncounter(
-  def: StageDef,
-  encounterId: string,
-): EncounterDef {
-  const encounter = (def.encounters ?? []).find((x) => x.id === encounterId);
-  if (!encounter) {
-    throw new Error(
-      `stage: stage "${def.id}" has no encounter "${encounterId}"`,
-    );
-  }
-  return encounter;
 }
 
 export function lookupWave(
@@ -264,18 +270,6 @@ export function lookupWave(
 }
 
 // ---------- Internal ----------
-
-function currentEncounter(
-  def: StageDef,
-  session: StageSession,
-): EncounterDef | null {
-  const encounters = def.encounters ?? [];
-  if (encounters.length === 0) return null;
-  if (!session.activeEncounterId) {
-    session.activeEncounterId = encounters[0]!.id;
-  }
-  return lookupEncounter(def, session.activeEncounterId);
-}
 
 function pickEncounterWave(encounter: EncounterDef, rng: Rng): WaveDef {
   if (encounter.waves.length === 0) {
@@ -320,12 +314,16 @@ function tickWaveCooldown(
   }
 }
 
-function freshSession(def: StageDef, currentTick: number): StageSession {
+function freshSession(
+  locationId: string,
+  encounterId: string | null,
+  currentTick: number,
+): StageSession {
   return {
-    stageId: def.id,
+    locationId,
+    encounterId,
     enteredAtTick: currentTick,
     spawnedActorIds: [],
-    activeEncounterId: def.encounters?.[0]?.id ?? null,
     combatWaveCooldownTicks: 0,
     combatWaveIndex: 0,
     currentWave: null,

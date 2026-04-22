@@ -9,16 +9,18 @@ import type {
   ContentDb,
   EffectDef,
   EffectId,
+  EncounterDef,
+  EncounterId,
   ItemDef,
   ItemId,
+  LocationDef,
+  LocationId,
   MonsterDef,
   MonsterId,
   ResourceNodeDef,
   ResourceNodeId,
   SkillDef,
   SkillId,
-  StageDef,
-  StageId,
   UpgradeDef,
 } from "../core/content";
 import { emptyContentDb } from "../core/content";
@@ -199,53 +201,80 @@ export const copperVein: ResourceNodeDef = {
   drops: [{ itemId: copperOre.id, chance: 1, minQty: 1, maxQty: 1 }],
 };
 
-// ---------- Stages ----------
+// ---------- Encounters ----------
 
-export const forestLv1: StageDef = {
-  id: "stage.forest.lv1" as StageId,
-  name: "Sunny Forest",
-  mode: "solo",
+/** Normal difficulty: single slime per wave. Suitable for beginners. */
+export const slimeNormal: EncounterDef = {
+  id: "encounter.forest.slime_normal" as EncounterId,
+  name: "Slime Trail (Normal)",
+  waveSelection: "random",
+  waveIntervalTicks: 20,
   recoverBelowHpFactor: 0.5,
-  encounters: [
+  waves: [
     {
-      id: "encounter.forest.path",
-      name: "Forest Path",
-      waveSelection: "random",
-      waveIntervalTicks: 20,
-      waves: [
-        {
-          id: "wave.forest.slime_pack",
-          name: "Slime Pack",
-          monsters: [slime.id, slime.id],
-          rewards: {
-            drops: [
-              { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 2 },
-            ],
-            currencies: { [CURRENCY_GOLD]: 2 },
-          },
-        },
-        {
-          id: "wave.forest.goblin_patrol",
-          name: "Goblin Patrol",
-          monsters: [slime.id, goblin.id],
-          rewards: {
-            drops: [
-              { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 },
-            ],
-            currencies: { [CURRENCY_GOLD]: 4 },
-          },
-        },
-      ],
+      id: "wave.forest.lone_slime",
+      name: "Lone Slime",
+      monsters: [slime.id],
+      rewards: {
+        drops: [
+          { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 },
+        ],
+        currencies: { [CURRENCY_GOLD]: 1 },
+      },
     },
   ],
 };
 
-/** A mining-only stage. One copper vein spawns at enter. */
-export const copperMine: StageDef = {
-  id: "stage.mine.copper" as StageId,
+/** Hard difficulty: double slime or mixed pack. Higher rewards. */
+export const slimeHard: EncounterDef = {
+  id: "encounter.forest.slime_hard" as EncounterId,
+  name: "Slime Nest (Hard)",
+  waveSelection: "random",
+  waveIntervalTicks: 20,
+  recoverBelowHpFactor: 0.5,
+  waves: [
+    {
+      id: "wave.forest.slime_pack",
+      name: "Slime Pack",
+      monsters: [slime.id, slime.id],
+      rewards: {
+        drops: [
+          { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 2 },
+        ],
+        currencies: { [CURRENCY_GOLD]: 2 },
+      },
+    },
+    {
+      id: "wave.forest.goblin_patrol",
+      name: "Goblin Patrol",
+      monsters: [slime.id, goblin.id],
+      rewards: {
+        drops: [
+          { itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 },
+        ],
+        currencies: { [CURRENCY_GOLD]: 4 },
+      },
+    },
+  ],
+};
+
+// ---------- Locations ----------
+
+export const forestLocation: LocationDef = {
+  id: "location.forest" as LocationId,
+  name: "Sunny Forest",
+  entries: [
+    { kind: "combat", encounterId: slimeNormal.id, label: "Slime Trail (Normal)" },
+    { kind: "combat", encounterId: slimeHard.id, label: "Slime Nest (Hard)" },
+  ],
+};
+
+export const copperMineLocation: LocationDef = {
+  id: "location.mine.copper" as LocationId,
   name: "Copper Mine",
-  mode: "solo",
-  resourceNodes: [copperVein.id],
+  entries: [
+    { kind: "gather", resourceNodes: [copperVein.id], label: "Copper Vein" },
+  ],
 };
 
 // ---------- Global Upgrades ----------
@@ -294,9 +323,13 @@ export function buildDefaultContent(): ContentDb {
       [slime.id]: slime,
       [goblin.id]: goblin,
     },
-    stages: {
-      [forestLv1.id]: forestLv1,
-      [copperMine.id]: copperMine,
+    locations: {
+      [forestLocation.id]: forestLocation,
+      [copperMineLocation.id]: copperMineLocation,
+    },
+    encounters: {
+      [slimeNormal.id]: slimeNormal,
+      [slimeHard.id]: slimeHard,
     },
     items: {
       [copperOre.id]: copperOre,
@@ -308,8 +341,6 @@ export function buildDefaultContent(): ContentDb {
       [atkUpgrade.id]: atkUpgrade,
       [defUpgrade.id]: defUpgrade,
     },
-    // The hero's starting ability list and landing stage are content
-    // decisions, not engine ones. session.resetToFresh reads this block.
     starting: {
       hero: {
         id: "hero.1",
@@ -317,7 +348,7 @@ export function buildDefaultContent(): ContentDb {
         xpCurve: defaultCharXpCurve,
         knownAbilities: [basicAttack.id],
       },
-      initialStageId: forestLv1.id,
+      initialLocationId: forestLocation.id,
     },
   };
 }

@@ -19,7 +19,7 @@ import {
   attrDefs,
   loadFixtureContent,
   makePlayer,
-  mineStage,
+  mineLocation,
   miningSkill,
   testOreItem,
   testVein,
@@ -27,13 +27,13 @@ import {
 
 function setup() {
   const state = createEmptyState(42, 1);
+  state.currentLocationId = mineLocation.id;
   const bus = createGameEventBus();
   const rng = createRng(42);
   const engine = createTickEngine();
 
   const hero = makePlayer({ id: "hero", abilities: [] });
   state.actors.push(hero);
-  // Hero spawned directly (no store path) — give it its personal inventory bag.
   state.inventories[hero.id] = createInventory(DEFAULT_CHAR_INVENTORY_CAPACITY);
 
   const ctxProvider = () => ({
@@ -44,7 +44,11 @@ function setup() {
     currentTick: engine.currentTick,
   });
 
-  const controller = enterStage({ stageId: mineStage.id, ctxProvider });
+  const controller = enterStage({
+    locationId: mineLocation.id,
+    resourceNodes: [testVein.id],
+    ctxProvider,
+  });
   engine.register(controller);
 
   return { state, bus, rng, engine, hero, ctxProvider };
@@ -159,7 +163,6 @@ describe("GatherActivity + Stage", () => {
     engine.register(activity);
     engine.step(300);
 
-    // Node actor is still there.
     expect(state.actors.find((a) => a.id === nodeId)).toBeDefined();
     expect(activity.swingsCompleted).toBeGreaterThan(10);
   });

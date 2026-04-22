@@ -12,8 +12,7 @@
 import { useMemo, useState } from "react";
 import { buildDefaultContent } from "../content";
 import { getContent } from "../core/content";
-import { isResourceNode } from "../core/actor";
-import { createGameStore } from "./store";
+import { createGameStore, type GameStore } from "./store";
 import { BattleView } from "./BattleView";
 import { InventoryView } from "./InventoryView";
 import { XpOverview } from "./XpOverview";
@@ -135,32 +134,74 @@ function TabPanel({
 function MapTab({ store }: { store: ReturnType<typeof createGameStore> }) {
   return (
     <div>
-      <StageSelector store={store} />
+      <LocationSelector store={store} />
       <Controls store={store} />
       <BattleView store={store} />
     </div>
   );
 }
 
-function StageSelector({ store }: { store: ReturnType<typeof createGameStore> }) {
+function LocationSelector({ store }: { store: ReturnType<typeof createGameStore> }) {
   const { store: s } = useStore(store);
-  const stageIds = s.listStageIds();
-  const current = s.stageId;
+  const locationIds = s.listLocationIds();
+  const currentLocationId = s.locationId;
   const content = getContent();
+  const stage = s.state.currentStage;
 
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-      <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>关卡:</span>
-      {stageIds.map((id) => (
-        <button
-          key={id}
-          onClick={() => s.enterStage(id)}
-          style={btnStyle(current === id, true)}
-          title={id}
-        >
-          {content.stages[id]?.name ?? id}
-        </button>
-      ))}
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <span style={{ fontSize: 12, opacity: 0.6, alignSelf: "center" }}>地点:</span>
+        {locationIds.map((id) => (
+          <button
+            key={id}
+            onClick={() => s.enterLocation(id)}
+            style={btnStyle(currentLocationId === id, true)}
+            title={id}
+          >
+            {content.locations[id]?.name ?? id}
+          </button>
+        ))}
+      </div>
+      {currentLocationId && !stage && (
+        <EntryList locationId={currentLocationId} store={s} />
+      )}
+    </div>
+  );
+}
+
+function EntryList({
+  locationId,
+  store,
+}: {
+  locationId: string;
+  store: GameStore;
+}) {
+  const content = getContent();
+  const loc = content.locations[locationId];
+  if (!loc) return null;
+
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginLeft: 4 }}>
+      {loc.entries.map((entry, i) => {
+        const label = entry.label ?? (entry.kind === "combat" ? "战斗" : "采集");
+        return (
+          <button
+            key={i}
+            onClick={() => {
+              if (entry.kind === "combat") {
+                store.startFight(entry.encounterId);
+              } else {
+                const nodeId = entry.resourceNodes[0];
+                if (nodeId) store.startGather(nodeId);
+              }
+            }}
+            style={btnStyle(false, true)}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -168,17 +209,8 @@ function StageSelector({ store }: { store: ReturnType<typeof createGameStore> })
 function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
   const { store: s } = useStore(store);
   const running = s.isRunning();
-  const hasStage = s.stageId !== null;
-  const stage = s.state.currentStage;
 
-  // List resource node actors currently in this stage so the user can
-  // pick one to gather.
-  const nodes = stage
-    ? stage.spawnedActorIds.flatMap((id) => {
-        const actor = s.state.actors.find((x) => x.id === id);
-        return actor && isResourceNode(actor) ? [actor] : [];
-      })
-    : [];
+  if (!running) return null;
 
   return (
     <div
@@ -190,31 +222,9 @@ function Controls({ store }: { store: ReturnType<typeof createGameStore> }) {
         flexWrap: "wrap",
       }}
     >
-      {!running ? (
-        <>
-          <button
-            onClick={() => s.startFight()}
-            disabled={!hasStage}
-            style={btnStyle(false)}
-          >
-            战斗
-          </button>
-          {nodes.map((node) => (
-            <button
-              key={node.id}
-              onClick={() => s.startGather(node.id)}
-              style={btnStyle(false)}
-              title={node.id}
-            >
-              采集 {node.name}
-            </button>
-          ))}
-        </>
-      ) : (
-        <button onClick={() => s.stopActivity()} style={btnStyle(false)}>
-          停止
-        </button>
-      )}
+      <button onClick={() => s.stopActivity()} style={btnStyle(false)}>
+        停止
+      </button>
     </div>
   );
 }
