@@ -40,7 +40,7 @@ import {
   createEmptyState,
   type GameState,
 } from "../state";
-import type { ContentDb, LocationEntryDef } from "../content";
+import type { ContentDb } from "../content";
 import { getLocation, setContent } from "../content";
 import {
   ACTIVITY_COMBAT_KIND,
@@ -54,6 +54,7 @@ import {
 import {
   createPlayerCharacter,
   isPlayer,
+  isResourceNode,
   type PlayerCharacter,
 } from "../actor";
 import { registerBuiltinIntents } from "../intent";
@@ -241,6 +242,24 @@ export function createGameSession(
     engine.register(stageController);
   }
 
+  function findSpawnedResourceNodeActorId(defId: string): string {
+    const session = state.currentStage;
+    if (!session) {
+      throw new Error(
+        `session.startGather: no active instance while resolving node "${defId}"`,
+      );
+    }
+    for (const actorId of session.spawnedActorIds) {
+      const actor = state.actors.find((a) => a.id === actorId);
+      if (actor && isResourceNode(actor) && actor.defId === defId) {
+        return actor.id;
+      }
+    }
+    throw new Error(
+      `session.startGather: spawned instance has no resource node for def "${defId}"`,
+    );
+  }
+
   // ---------- Location ----------
 
   function enterLocation(locationId: string): void {
@@ -275,26 +294,27 @@ export function createGameSession(
     engine.register(activity);
   }
 
-  function startGather(nodeId: string): void {
+  function startGather(nodeDefId: string): void {
     if (!state.currentLocationId) {
       console.warn("session.startGather: not in a location");
       return;
     }
     startInstance({
       locationId: state.currentLocationId,
-      resourceNodes: [nodeId],
+      resourceNodes: [nodeDefId],
     });
     const hero = ensureHeroFromContent();
+    const nodeActorId = findSpawnedResourceNodeActorId(nodeDefId);
     activity = createGatherActivity({
       ownerCharacterId: hero.id,
-      nodeId,
+      nodeId: nodeActorId,
       ctxProvider: buildCtx,
     });
     engine.register(activity);
   }
 
   function stopActivity(): void {
-    stopRunningActivity();
+    tearDownInstance();
   }
 
   // ---------- Rehydrate after load ----------
