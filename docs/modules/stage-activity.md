@@ -11,8 +11,8 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 ```
 
 - **LocationDef** 是纯静态内容；注册在 `ContentDb.locations` 中
-- **LocationEntryDef** 挂在 Location 下面，是一个联合类型（`combat` / `gather`）
-- **StageSession** 是运行态纯数据，存放在 `state.stages[stageId]` 中
+- **LocationEntryDef** 挂在 Location 下面，是一个联合类型（`combat` / `gather` / `dungeon`）
+- **StageSession** 是运行态纯数据，存放在 `state.stages[stageId]` 中；通过 `mode: StageMode` 联合体区分 combatZone / gather / dungeon
 - `PlayerCharacter.locationId` 记录角色当前在哪个地点；切换地点不会自动创建实例
 - `PlayerCharacter.stageId` 引用 `state.stages` 中的条目；多角色可独立各自拥有 stage
 
@@ -20,7 +20,8 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 
 - `StageController` 是一个 `Tickable`
 - 它负责管理当前实例中的 actor，包括生成、重生和离开时的清理
-- 每个 `StageSession` 记录 `locationId`、`combatZoneId`、`spawnedActorIds`、当前波次 `currentWave`、进行中的 `pendingCombatWaveSearch`，以及 `pendingLoot`（背包满时溢出的物品）
+- 每个 `StageSession` 记录 `locationId`、`mode`（StageMode 联合体）、`spawnedActorIds`、当前波次 `currentWave`、进行中的 `pendingCombatWaveSearch`，以及 `pendingLoot`（背包满时溢出的物品）
+- `StageMode` 是联合类型：`{ kind: "combatZone"; combatZoneId }` / `{ kind: "gather" }` / `{ kind: "dungeon"; dungeonSessionId }`
 - 每个角色同一时刻只能在一个运行实例中，但多个角色可以各自拥有独立的 stage
 - Stage 只负责 actor 生命周期，不负责战斗推进
 
@@ -64,6 +65,12 @@ Activity 表示玩家当前在实例中做的事。它本身也是 `Tickable`。
 - 每经过 `swingTicks` 发放一轮奖励
 - 每次 swing 后，也会把状态同步回 `hero.activity`
 
+### DungeonWorldActivity
+
+- WorldActivity，不绑定单个角色，驱动整个副本运行
+- 状态机：`spawningWave → fighting → waveCleared → recovering → completed / failed / abandoned`
+- 详见 [dungeon.md](./dungeon.md)
+
 ## 持久化
 
 - Activity 的持久化形态是 `PlayerCharacter.activity`，其中保存 `kind` 与对应数据
@@ -81,4 +88,5 @@ Activity 表示玩家当前在实例中做的事。它本身也是 `Tickable`。
 
 - `src/core/stage/`
 - `src/core/activity/`
-- `src/core/content/types.ts`（LocationDef, CombatZoneDef）
+- `src/core/content/types.ts`（LocationDef, CombatZoneDef, DungeonDef）
+- `src/core/state/types.ts`（DungeonSession）

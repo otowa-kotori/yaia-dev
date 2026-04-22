@@ -214,7 +214,7 @@ function spawnResourceNodes(
   }
 }
 
-function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageControllerContext): void {
+function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageControllerContext, stageId: string): void {
   const wave = pickCombatZoneWave(zone, ctx.rng);
 
   session.combatWaveIndex += 1;
@@ -222,8 +222,10 @@ function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageC
   for (let i = 0; i < wave.monsters.length; i++) {
     const monsterId = wave.monsters[i]!;
     const mdef = getMonster(monsterId);
+    // Include stageId to guarantee uniqueness when multiple characters
+    // fight in the same zone concurrently (each gets its own stage).
     const instanceId =
-      `enemy.${monsterId}.${session.locationId}.${zone.id}.w${session.combatWaveIndex}.${i}`;
+      `enemy.${monsterId}.${stageId}.${zone.id}.w${session.combatWaveIndex}.${i}`;
     const enemy = createEnemy({
       instanceId,
       def: mdef,
