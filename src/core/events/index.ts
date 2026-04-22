@@ -49,6 +49,8 @@ export type GameEvents = {
   kill: { attackerId: string; victimId: string };
   damage: { attackerId: string; targetId: string; amount: number };
   loot: { charId: string; itemId: string; qty: number };
+  /** Fired when items overflow into or are picked up from a stage's pending loot. */
+  pendingLootChanged: { charId: string; stageId: string };
   inventoryChanged: { charId: string; inventoryId: string };
   equipmentChanged: { charId: string; slot: string };
   crafted: { charId: string; recipeId: string };
@@ -61,8 +63,10 @@ export type GameEvents = {
     outcome: "players_won" | "enemies_won";
   };
   activityComplete: { charId: string | null; kind: string };
-  /** Emitted after offline / background catch-up ticks have been applied. */
-  catchUpApplied: { elapsedMs: number; appliedTicks: number; wasCapped: boolean };
+  /** Emitted each slice during chunked catch-up, so UI can render a progress bar. */
+  catchUpProgress: { done: number; total: number };
+  /** Emitted once after catch-up completes (or is cancelled). */
+  catchUpApplied: { elapsedMs: number; appliedTicks: number; wasCapped: boolean; cancelled?: boolean };
 };
 
 export type GameEventBus = EventBus<GameEvents>;

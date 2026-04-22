@@ -14,7 +14,7 @@
 // Tab state is purely local to this component; it does not touch core or
 // the store. The store is created once (useMemo), shared to all children.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildDefaultContent } from "../content";
 import { getContent } from "../core/content";
 import { createGameStore, type GameStore } from "./store";
@@ -25,7 +25,7 @@ import { XpOverview } from "./XpOverview";
 import { UpgradesView } from "./UpgradesView";
 import { useStore } from "./useStore";
 import { ACTIVITY_COMBAT_KIND, ACTIVITY_GATHER_KIND } from "../core/activity";
-import { T } from "./text";
+import { T, fmt } from "./text";
 
 // ---------- Container ----------
 
@@ -64,9 +64,90 @@ export function App() {
       <h1 style={{ margin: "0 0 12px", fontSize: 20, color: "#fff" }}>
         YAIA
       </h1>
+      <CatchUpOverlay store={store} />
       <CharacterBar store={store} />
       <TabBar activeTab={activeTab} onSelect={setActiveTab} />
       <TabPanel activeTab={activeTab} store={store} />
+    </div>
+  );
+}
+
+// ---------- Catch-up overlay (global) ----------
+
+/** Full-width progress banner shown during any catch-up (real or debug).
+ *  Listens to bus events so it works identically for cold-resume,
+ *  visibilitychange, and debug simulation. */
+function CatchUpOverlay({ store }: { store: GameStore }) {
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    const offProgress = store.bus.on("catchUpProgress", (p) => {
+      setProgress({ done: p.done, total: p.total });
+      setResult(null);
+    });
+    const offApplied = store.bus.on("catchUpApplied", (e) => {
+      setProgress(null);
+      if (e.appliedTicks > 0) {
+        if (e.cancelled) {
+          setResult(fmt(T.catchUpCancelled, { ticks: e.appliedTicks }));
+        } else {
+          setResult(fmt(T.catchUpDone, { ticks: e.appliedTicks }));
+        }
+        // Auto-dismiss after a few seconds
+        const timer = setTimeout(() => setResult(null), 4000);
+        return () => clearTimeout(timer);
+      }
+    });
+    return () => { offProgress(); offApplied(); };
+  }, [store.bus]);
+
+  if (!progress && !result) return null;
+
+  const pct = progress ? progress.done / progress.total : 1;
+
+  return (
+    <div style={{
+      background: "#1a2a3a",
+      borderRadius: 6,
+      padding: "8px 12px",
+      marginBottom: 12,
+      border: "1px solid #2a4a6a",
+    }}>
+      {progress && (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+            <span style={{ color: "#8cf" }}>{T.catchUpInProgress}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7 }}>
+              {fmt(T.catchUpProgressLabel, { done: progress.done, total: progress.total })}
+              {" · "}{Math.round(pct * 100)}%
+            </span>
+          </div>
+          <div style={{ height: 6, background: "#111", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{
+              height: "100%",
+              width: `${pct * 100}%`,
+              background: "#59c",
+              transition: "width 80ms linear",
+            }} />
+          </div>
+          <div style={{ marginTop: 4, display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => store.cancelCatchUp()}
+              style={{
+                padding: "2px 8px", fontSize: 11, borderRadius: 3,
+                border: "1px solid #644", background: "transparent",
+                color: "#f88", cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              {T.catchUpCancel}
+            </button>
+          </div>
+        </>
+      )}
+      {!progress && result && (
+        <div style={{ fontSize: 12, color: "#6d9" }}>{result}</div>
+      )}
     </div>
   );
 }
@@ -345,6 +426,76 @@ function SettingsTab({ store }: { store: GameStore }) {
           style={{ ...btnStyle(false, true), borderColor: "#733", color: "#f88" }}
         >
           {T.btn_clearSave}
+        </button>
+      </div>
+
+      {/* Debug panel — only in development */}
+      {import.meta.env.DEV && <DebugPanel store={store} />}
+    </div>
+  );
+}
+
+// ---------- Debug panel ----------
+
+function DebugPanel({ store }: { store: GameStore }) {
+  const { store: s } = useStore(store);
+  const [hours, setHours] = useState("1");
+
+  const state = s.state;
+  const wallClockStr = state.lastWallClockMs
+    ? new Date(state.lastWallClockMs).toLocaleString()
+    : "—";
+
+  return (
+    <div style={{ background: "#1e1e2e", borderRadius: 4, padding: 10, border: "1px dashed #555" }}>
+      <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>
+        {T.debugTools}
+      </div>
+      <div style={{ fontSize: 10, opacity: 0.35, marginBottom: 10 }}>
+        {T.debugOnlyInDev}
+      </div>
+
+      {/* State snapshot */}
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 10, display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 12px" }}>
+        <span>{T.debugTick}</span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>{state.tick}</span>
+        <span>{T.debugWallClock}</span>
+        <span>{wallClockStr}</span>
+        <span>{T.debugActors}</span>
+        <span>{state.actors.length}</span>
+        <span>{T.debugSpeed}</span>
+        <span>{s.getSpeedMultiplier()}x</span>
+      </div>
+
+      {/* Catch-up simulator — triggers the same pipeline as real catch-up */}
+      <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>
+        {T.debugCatchUp}
+      </div>
+      <div style={{ fontSize: 10, opacity: 0.35, marginBottom: 6 }}>
+        {T.debugCatchUpHint}
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          type="number"
+          min="0.1"
+          step="0.5"
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+          style={{
+            width: 60, padding: "3px 6px", fontSize: 12,
+            background: "#111", border: "1px solid #444", borderRadius: 3,
+            color: "#fff", fontFamily: "inherit",
+          }}
+        />
+        <span style={{ fontSize: 11, opacity: 0.5 }}>{T.debugCatchUpHours}</span>
+        <button
+          onClick={() => {
+            const h = parseFloat(hours);
+            if (Number.isFinite(h) && h > 0) s.debugSimulateCatchUp(h);
+          }}
+          style={{ ...btnStyle(false, true), borderColor: "#669" }}
+        >
+          {T.debugCatchUpRun}
         </button>
       </div>
     </div>

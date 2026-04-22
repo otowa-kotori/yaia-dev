@@ -114,6 +114,25 @@ export const T = {
   dangerZone: "危险区域",
   confirmClearSave: "清除存档并重置？此操作不可撤销。",
   btn_clearSave: "清除存档",
+
+  // ── Catch-up overlay (global) ──
+  catchUpInProgress: "正在恢复离线进度…",
+  catchUpProgressLabel: "{done} / {total}",
+  catchUpCancel: "取消",
+  catchUpDone: "离线追帧完成，已补跑 {ticks} tick",
+  catchUpCancelled: "追帧已取消，已跑 {ticks} tick",
+
+  // ── Debug panel ──
+  debugTools: "调试工具",
+  debugOnlyInDev: "仅在开发环境可见",
+  debugCatchUp: "模拟追帧",
+  debugCatchUpHint: "模拟离线指定小时数后恢复，走统一追帧管线。",
+  debugCatchUpHours: "小时",
+  debugCatchUpRun: "执行追帧",
+  debugTick: "逻辑 tick",
+  debugWallClock: "上次存档时间",
+  debugActors: "Actor 数",
+  debugSpeed: "当前倍率",
 } as const;
 
 // ── Equipment slot labels ──

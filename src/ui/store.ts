@@ -12,7 +12,7 @@
 // store picks it up for free via getFocusedCharacter().
 
 import { TICK_MS } from "../core/tick";
-import { computeCatchUpTicks } from "../core/tick/catch-up";
+import { computeCatchUpTicks, MAX_CATCHUP_TICKS } from "../core/tick/catch-up";
 import { createGameSession, type GameSession } from "../core/session";
 import type { ContentDb } from "../core/content";
 import {
@@ -50,6 +50,11 @@ export interface GameStore extends GameSession {
    *  trivial views on state and let UI components stay unchanged. */
   getCurrencies(): Record<string, number>;
   getWorldRecord(): GameSession["state"]["worldRecord"];
+  /** Simulate offline catch-up for the given number of hours (debug only).
+   *  Runs the same chunked pipeline as real catch-up. */
+  debugSimulateCatchUp(hours: number): void;
+  /** Cancel an in-progress catch-up (works for both real and debug). */
+  cancelCatchUp(): void;
 }
 
 export interface CreateGameStoreOptions {
@@ -141,6 +146,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     persistSoon();
   });
   bus.on("loot", notify);
+  bus.on("pendingLootChanged", notify);
   bus.on("inventoryChanged", () => {
     notify();
     persistSoon();
@@ -164,6 +170,87 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   let hiddenAtMs: number | null = null;
   let hiddenAtTick: number | null = null;
 
+  /** How many ticks to run per animation-frame slice. 10k ≈ 16 min game-time,
+   *  typically runs in ~5-15 ms — well within a single frame budget. */
+  const SLICE_SIZE = 10_000;
+
+  /** If catch-up is ≤ this many ticks, run synchronously without UI overlay.
+   *  3 000 ticks = 5 min of game-time at 10 Hz — imperceptible to the player. */
+  const INSTANT_THRESHOLD = 3_000;
+
+  /** Cancel flag for the currently running catch-up (if any). */
+  let catchUpCancelRequested = false;
+  let catchUpRunning = false;
+
+  /** Chunked catch-up executor. Small amounts run synchronously; larger amounts
+   *  emit catchUpProgress each slice via rAF, then catchUpApplied when done.
+   *  Used by both real recovery and debug simulation. */
+  function runChunkedCatchUp(
+    totalTicks: number,
+    elapsedMs: number,
+    wasCapped: boolean,
+  ): void {
+    if (totalTicks <= 0) {
+      bus.emit("catchUpApplied", {
+        elapsedMs,
+        appliedTicks: 0,
+        wasCapped,
+      });
+      return;
+    }
+
+    // Small catch-ups: run synchronously, no UI overlay.
+    if (totalTicks <= INSTANT_THRESHOLD) {
+      session.engine.step(totalTicks);
+      persistSoon();
+      bus.emit("catchUpApplied", {
+        elapsedMs,
+        appliedTicks: totalTicks,
+        wasCapped,
+      });
+      return;
+    }
+
+    // Large catch-ups: chunked via rAF with progress events.
+    catchUpRunning = true;
+    catchUpCancelRequested = false;
+    let done = 0;
+
+    bus.emit("catchUpProgress", { done: 0, total: totalTicks });
+
+    function slice() {
+      if (catchUpCancelRequested) {
+        catchUpRunning = false;
+        persistSoon();
+        bus.emit("catchUpApplied", {
+          elapsedMs,
+          appliedTicks: done,
+          wasCapped,
+          cancelled: true,
+        });
+        return;
+      }
+      const batch = Math.min(SLICE_SIZE, totalTicks - done);
+      session.engine.step(batch);
+      done += batch;
+      bus.emit("catchUpProgress", { done, total: totalTicks });
+
+      if (done >= totalTicks) {
+        catchUpRunning = false;
+        persistSoon();
+        bus.emit("catchUpApplied", {
+          elapsedMs,
+          appliedTicks: totalTicks,
+          wasCapped,
+        });
+      } else {
+        requestAnimationFrame(slice);
+      }
+    }
+
+    requestAnimationFrame(slice);
+  }
+
   /** Compute and apply catch-up ticks from a wall-clock + logic-tick baseline.
    *  Used by both cold resume (tryLoad) and hot resume (visibilitychange). */
   function applyCatchUp(
@@ -177,15 +264,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       currentLogicTick: session.engine.currentTick,
       tickMs: TICK_MS,
     });
-    if (result.ticksToApply > 0) {
-      session.engine.step(result.ticksToApply);
-      persistSoon();
-    }
-    bus.emit("catchUpApplied", {
-      elapsedMs: result.elapsedMs,
-      appliedTicks: result.ticksToApply,
-      wasCapped: result.wasCapped,
-    });
+    runChunkedCatchUp(result.ticksToApply, result.elapsedMs, result.wasCapped);
   }
 
   function onVisibilityChange(): void {
@@ -258,6 +337,18 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
         notify();
         persistSoon();
       }
+    },
+    debugSimulateCatchUp(hours: number) {
+      if (catchUpRunning) return; // one at a time
+      const ticks = Math.min(
+        Math.round((hours * 3_600_000) / TICK_MS),
+        MAX_CATCHUP_TICKS,
+      );
+      const elapsedMs = hours * 3_600_000;
+      runChunkedCatchUp(ticks, elapsedMs, ticks >= MAX_CATCHUP_TICKS);
+    },
+    cancelCatchUp() {
+      catchUpCancelRequested = true;
     },
     async clearSaveAndReset() {
       if (pendingSaveTimer !== null) {
