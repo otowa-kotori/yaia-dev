@@ -59,4 +59,6 @@
 
 - `src/core/item/`
 - `src/core/inventory/`
+- `src/ui/ItemSlot.tsx`（可复用物品格子组件）
+- `src/ui/PendingLootPanel.tsx`（待拾取面板，战斗 tab + 背包 tab 共用）
 - `src/ui/InventoryView.tsx`

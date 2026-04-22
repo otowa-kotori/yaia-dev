@@ -18,7 +18,9 @@
 - 成长系统：XP / Level
 - 持久化：自动存档
 - 物品系统：`GearInstance`、固定位置网格背包、实例工厂、`ItemDef.roll`
+- 背包溢出：`addStack` / `addGear` 返回结果而非异常；背包满时溢出到 `StageSession.pendingLoot`；同 itemId 自动合并；`pickUpPendingLoot` / `pickUpAllPendingLoot` API；切换地点时未拾取确认
 - UI：极简界面，包含 location 选择、entry 入口菜单、战斗、采集、速度、日志与只读背包
+- UI 复用：`ItemSlotCell` 通用物品格子组件、`PendingLootPanel` 待拾取面板（战斗 tab + 背包 tab 复用）
 
 默认内容包括：`location.forest`（含普通/困难两个战斗入口）、`location.mine.copper`（含采集入口）、`encounter.forest.slime_normal`、`encounter.forest.slime_hard`、`monster.slime`、`monster.goblin`、`ability.basic.attack`、`skill.mining`、`item.ore.copper`、`item.monster.slime_gel`、`node.copper_vein`。
 

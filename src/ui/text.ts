@@ -77,6 +77,7 @@ export const T = {
   btn_pickUp: "拾取",
   btn_pickUpAll: "全部拾取",
   pickUpFailed: "背包仍然已满",
+  confirmLeavePendingLoot: "你有物品尚未拾取，离开后将丢失。确定要切换地点吗？",
 
   // ── Crafting ──
   craftingTitle: "合成",

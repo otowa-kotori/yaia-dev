@@ -1,11 +1,10 @@
-// Inventory panel — bag grids + pending loot + item details + equipment.
+// Inventory panel — bag grids + item details + equipment management.
 //
 // This file used to be read-only. It now owns the first layer of inventory
 // interaction:
 //   - click a bag slot to inspect the item in a side panel
 //   - equip equippable gear directly from the bag
 //   - inspect currently equipped items and unequip them
-//   - view and pick up items from the stage's pending loot queue
 //
 // Scope stays intentionally narrow:
 //   - no drag/drop
@@ -22,17 +21,16 @@ import type {
   InventorySlot,
   StackEntry,
 } from "../core/inventory";
-import type { PendingLootEntry } from "../core/stage/types";
 import { SHARED_INVENTORY_KEY } from "../core/state";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { T, slotLabel, fmt } from "./text";
+import { ItemSlotCell, safeItemName, CELL_SIZE, CELL_GAP, GRID_COLS } from "./ItemSlot";
+import { PendingLootPanel } from "./PendingLootPanel";
 
-// ---------- Layout constants ----------
+// ---------- Layout ----------
 
-const COLS = 5;
-const CELL_SIZE = 52;
-const CELL_GAP = 4;
+const COLS = GRID_COLS;
 
 interface SelectionState {
   inventoryOwnerId: string;
@@ -85,22 +83,6 @@ export function InventoryView({ store }: { store: GameStore }) {
     }
   }
 
-  // Pending loot from the current stage session (if any).
-  const stageSession = cc.stageSession;
-  const pendingLoot = stageSession?.pendingLoot ?? [];
-
-  function handlePickUp(index: number): void {
-    const ok = cc.pickUpPendingLoot(index);
-    if (!ok) setActionError(T.pickUpFailed);
-    else clearError();
-  }
-
-  function handlePickUpAll(): void {
-    const remaining = cc.pickUpAllPendingLoot();
-    if (remaining > 0) setActionError(T.pickUpFailed);
-    else clearError();
-  }
-
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -113,13 +95,7 @@ export function InventoryView({ store }: { store: GameStore }) {
           selectedIndex={selected?.inventoryOwnerId === hero.id ? selected.slotIndex : null}
           onSelect={selectSlot}
         />
-        {pendingLoot.length > 0 && (
-          <PendingLootPanel
-            entries={pendingLoot}
-            onPickUp={handlePickUp}
-            onPickUpAll={handlePickUpAll}
-          />
-        )}
+        <PendingLootPanel cc={cc} pendingLoot={cc.stageSession?.pendingLoot ?? []} />
         <BagGrid
           title={T.bagShared}
           inventoryOwnerId={SHARED_INVENTORY_KEY}
@@ -193,211 +169,15 @@ function BagGrid({
         }}
       >
         {inv.slots.map((slot, i) => (
-          <SlotCell
+          <ItemSlotCell
             key={i}
-            slot={slot}
-            index={i}
+            item={slot}
             selected={selectedIndex === i}
-            onSelect={() => onSelect(inventoryOwnerId, title, i)}
+            onClick={slot !== null ? () => onSelect(inventoryOwnerId, title, i) : undefined}
+            tooltip={buildSlotTooltip(slot, i)}
           />
         ))}
       </div>
-    </div>
-  );
-}
-
-// ---------- Slot cell ----------
-
-function SlotCell({
-  slot,
-  index,
-  selected,
-  onSelect,
-}: {
-  slot: InventorySlot;
-  index: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const clickable = slot !== null;
-
-  const base: React.CSSProperties = {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    boxSizing: "border-box",
-    border: `1px solid ${selected ? "#4a9" : slot === null ? "#2a2a2a" : "#444"}`,
-    boxShadow: selected ? "0 0 0 1px #4a9 inset" : undefined,
-    borderRadius: 3,
-    background: slot === null ? "#191919" : hovered || selected ? "#2e2e2e" : "#242424",
-    position: "relative",
-    cursor: clickable ? "pointer" : "default",
-    transition: "background 80ms, border-color 80ms",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    userSelect: "none",
-  };
-
-  return (
-    <div
-      style={base}
-      title={buildSlotTooltip(slot, index)}
-      onClick={clickable ? onSelect : undefined}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {slot?.kind === "stack" && <StackContent slot={slot} hovered={hovered || selected} />}
-      {slot?.kind === "gear" && <GearContent slot={slot} hovered={hovered || selected} />}
-    </div>
-  );
-}
-
-function StackContent({
-  slot,
-  hovered,
-}: {
-  slot: StackEntry;
-  hovered: boolean;
-}) {
-  const name = safeItemName(slot.itemId);
-  const abbr = itemAbbr(name);
-
-  return (
-    <>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#9cb", opacity: hovered ? 1 : 0.9 }}>
-        {abbr}
-      </span>
-      <span
-        style={{
-          position: "absolute",
-          bottom: 2,
-          right: 3,
-          fontSize: 10,
-          fontVariantNumeric: "tabular-nums",
-          opacity: 0.8,
-          color: "#ccc",
-          lineHeight: 1,
-        }}
-      >
-        {slot.qty}
-      </span>
-    </>
-  );
-}
-
-function GearContent({
-  slot,
-  hovered,
-}: {
-  slot: GearEntry;
-  hovered: boolean;
-}) {
-  const name = safeItemName(slot.instance.itemId);
-  const abbr = itemAbbr(name);
-  const affixCount = slot.instance.rolledMods.length;
-
-  return (
-    <>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#d8c878", opacity: hovered ? 1 : 0.9 }}>
-        {abbr}
-      </span>
-      {affixCount > 0 && (
-        <span
-          style={{
-            position: "absolute",
-            bottom: 2,
-            right: 3,
-            fontSize: 10,
-            opacity: 0.7,
-            color: "#d8c878",
-            lineHeight: 1,
-          }}
-        >
-          +{affixCount}
-        </span>
-      )}
-    </>
-  );
-}
-
-// ---------- Pending loot panel ----------
-
-function PendingLootPanel({
-  entries,
-  onPickUp,
-  onPickUpAll,
-}: {
-  entries: PendingLootEntry[];
-  onPickUp: (index: number) => void;
-  onPickUpAll: () => void;
-}) {
-  return (
-    <div style={{ ...sectionStyle, border: "1px solid #8a6d3b" }}>
-      <div style={headerStyle}>
-        <span style={{ color: "#f0c674" }}>{T.pendingLoot} ({entries.length})</span>
-        <button onClick={onPickUpAll} style={secondaryButtonStyle}>
-          {T.btn_pickUpAll}
-        </button>
-      </div>
-      <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 8, lineHeight: 1.5 }}>
-        {T.pendingLootHint}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {entries.map((entry, i) => (
-          <PendingLootRow key={i} entry={entry} index={i} onPickUp={onPickUp} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PendingLootRow({
-  entry,
-  index,
-  onPickUp,
-}: {
-  entry: PendingLootEntry;
-  index: number;
-  onPickUp: (index: number) => void;
-}) {
-  const itemId = entry.kind === "stack" ? entry.itemId : entry.instance.itemId;
-  const name = safeItemName(itemId);
-  const isGear = entry.kind === "gear";
-
-  return (
-    <div style={pendingLootRowStyle}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: isGear ? "#d8c878" : "#9cb",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {name}
-        </span>
-        {entry.kind === "stack" && (
-          <span style={{ fontSize: 11, opacity: 0.7, flexShrink: 0 }}>
-            ×{entry.qty}
-          </span>
-        )}
-        {isGear && entry.instance.rolledMods.length > 0 && (
-          <span style={{ fontSize: 10, opacity: 0.55, color: "#d8c878", flexShrink: 0 }}>
-            +{entry.instance.rolledMods.length}
-          </span>
-        )}
-      </div>
-      <button
-        onClick={() => onPickUp(index)}
-        style={{ ...secondaryButtonStyle, padding: "4px 8px", fontSize: 11 }}
-      >
-        {T.btn_pickUp}
-      </button>
     </div>
   );
 }
@@ -597,21 +377,6 @@ function buildSlotTooltip(slot: InventorySlot, index: number): string {
   return `${name}${affixSummary ? `  [${affixSummary}]` : ""}  ${shortTail(slot.instance.instanceId)}`;
 }
 
-function safeItemName(itemId: string): string {
-  const def = getContent().items[itemId];
-  return def?.name ?? itemId;
-}
-
-function itemAbbr(name: string): string {
-  const words = name.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  if (words.length === 1) {
-    const word = words[0]!;
-    return word.length <= 3 ? word : word.slice(0, 2);
-  }
-  return (words[0]![0]! + words[1]![0]!).toUpperCase();
-}
-
 function formatModifier(modifier: Modifier): string {
   const stat = shortStat(modifier.stat);
   switch (modifier.op) {
@@ -696,15 +461,4 @@ const secondaryButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   fontFamily: "inherit",
   fontSize: 12,
-};
-
-const pendingLootRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 8,
-  padding: "6px 8px",
-  borderRadius: 3,
-  background: "#2a2418",
-  border: "1px solid #3d3525",
 };

@@ -20,6 +20,7 @@ import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { T } from "./text";
+import { PendingLootPanel } from "./PendingLootPanel";
 
 const ATTR_DEFS = buildDefaultContent().attributes;
 
@@ -28,8 +29,12 @@ export function BattleView({ store }: { store: GameStore }) {
   const cc = s.getFocusedCharacter();
   const activity = cc.activity;
   const hero = cc.hero;
+  const pendingLoot = cc.stageSession?.pendingLoot ?? [];
 
   const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
+  const lootPanel = pendingLoot.length > 0
+    ? <PendingLootPanel cc={cc} pendingLoot={pendingLoot} />
+    : null;
 
   if (!hero.locationId) {
     return (
@@ -45,6 +50,7 @@ export function BattleView({ store }: { store: GameStore }) {
     return (
       <div>
         {heroRow}
+        {lootPanel}
         <CombatPanel activity={activity} store={s} />
       </div>
     );
@@ -55,6 +61,7 @@ export function BattleView({ store }: { store: GameStore }) {
     return (
       <div>
         {heroRow}
+        {lootPanel}
         <GatherPanel activity={activity} store={s} />
       </div>
     );
@@ -64,6 +71,7 @@ export function BattleView({ store }: { store: GameStore }) {
   return (
     <div>
       {heroRow}
+      {lootPanel}
       <StageRoster store={s} />
     </div>
   );

@@ -309,7 +309,13 @@ function LocationSelector({ store }: { store: GameStore }) {
         {locationIds.map((id) => (
           <button
             key={id}
-            onClick={() => cc.enterLocation(id)}
+            onClick={() => {
+              const pending = cc.stageSession?.pendingLoot ?? [];
+              if (pending.length > 0) {
+                if (!confirm(T.confirmLeavePendingLoot)) return;
+              }
+              cc.enterLocation(id);
+            }}
             style={btnStyle(currentLocationId === id, true)}
             title={id}
           >
