@@ -21,6 +21,11 @@ import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { T } from "./text";
 import { PendingLootPanel } from "./PendingLootPanel";
+import { ActivityLogPanel } from "./ActivityLogPanel";
+import {
+  DungeonStatusPanel,
+  getCharacterDungeonStatusLabel,
+} from "./DungeonStatusPanel";
 
 const ATTR_DEFS = buildDefaultContent().attributes;
 
@@ -30,8 +35,9 @@ export function BattleView({ store }: { store: GameStore }) {
   const activity = cc.activity;
   const hero = cc.hero;
   const pendingLoot = cc.stageSession?.pendingLoot ?? [];
+  const dungeonStatusLabel = getCharacterDungeonStatusLabel(hero, s);
 
-  const heroRow = hero ? <HeroCard hero={hero} activity={activity} /> : null;
+  const heroRow = hero ? <HeroCard hero={hero} activity={activity} dungeonStatusLabel={dungeonStatusLabel} /> : null;
   const lootPanel = pendingLoot.length > 0
     ? <PendingLootPanel cc={cc} pendingLoot={pendingLoot} />
     : null;
@@ -41,6 +47,20 @@ export function BattleView({ store }: { store: GameStore }) {
       <div>
         {heroRow}
         <Idle msg={T.pickLocation} />
+      </div>
+    );
+  }
+
+  if (hero.dungeonSessionId) {
+    return (
+      <div>
+        {heroRow}
+        {lootPanel}
+        <DungeonStatusPanel
+          store={s}
+          dungeonSessionId={hero.dungeonSessionId}
+          heroId={hero.id}
+        />
       </div>
     );
   }
@@ -128,7 +148,7 @@ function CombatPanel({
           <ActorRow key={a.id} actor={a} />
         ))}
       </div>
-      <LogTail log={battle.log} />
+      <ActivityLogPanel log={battle.log} />
     </div>
   );
 }
@@ -200,9 +220,11 @@ function StageRoster({ store }: { store: GameStore }) {
 function HeroCard({
   hero,
   activity,
+  dungeonStatusLabel,
 }: {
   hero: PlayerCharacter;
   activity: CombatActivity | GatherActivity | null;
+  dungeonStatusLabel: string | null;
 }) {
   const maxHp = Math.max(1, getAttr(hero, ATTR.MAX_HP, ATTR_DEFS));
   const hpPct = Math.max(0, Math.min(1, hero.currentHp / maxHp));
@@ -210,7 +232,9 @@ function HeroCard({
   const xp = xpProgressToNextLevel(hero.level, hero.exp, hero.xpCurve);
 
   let statusLabel: string = T.status_hero_idle;
-  if (activity?.kind === ACTIVITY_COMBAT_KIND) {
+  if (dungeonStatusLabel) {
+    statusLabel = dungeonStatusLabel;
+  } else if (activity?.kind === ACTIVITY_COMBAT_KIND) {
     statusLabel =
       activity.phase === "fighting"
         ? T.status_hero_inCombat
@@ -309,41 +333,3 @@ function Bar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function LogTail({
-  log,
-}: {
-  log: {
-    tick: number;
-    kind: string;
-    actorId?: string;
-    abilityId?: string;
-    magnitudes?: number[];
-    note?: string;
-  }[];
-}) {
-  const tail = log.slice(-8);
-  return (
-    <div
-      style={{
-        marginTop: 12,
-        padding: 8,
-        background: "#111",
-        borderRadius: 4,
-        fontSize: 12,
-        fontFamily: "ui-monospace, Menlo, monospace",
-        maxHeight: 180,
-        overflow: "auto",
-      }}
-    >
-      {tail.map((e, i) => (
-        <div key={i} style={{ opacity: 0.9 }}>
-          [{String(e.tick).padStart(4, "0")}] {e.kind}
-          {e.actorId ? ` · ${e.actorId}` : ""}
-          {e.abilityId ? ` → ${e.abilityId}` : ""}
-          {e.magnitudes?.length ? ` (${e.magnitudes.join(",")})` : ""}
-          {e.note ? ` · ${e.note}` : ""}
-        </div>
-      ))}
-    </div>
-  );
-}

@@ -24,8 +24,12 @@ import { CraftingView } from "./CraftingView";
 import { XpOverview } from "./XpOverview";
 import { UpgradesView } from "./UpgradesView";
 import { useStore } from "./useStore";
-import { ACTIVITY_COMBAT_KIND, ACTIVITY_GATHER_KIND } from "../core/activity";
 import { T, fmt } from "./text";
+import {
+  CharacterSelectButtons,
+  getCharacterSelectStatusLabel,
+} from "./CharacterSelectButtons";
+import { DungeonPartyDialog } from "./DungeonPartyDialog";
 
 // ---------- Container ----------
 
@@ -161,53 +165,27 @@ function CharacterBar({ store }: { store: GameStore }) {
 
   if (heroes.length <= 1) return null;
 
+  const options = heroes.map((hero) => {
+    const cc = s.getCharacter(hero.id);
+    return {
+      id: hero.id,
+      name: hero.name,
+      level: hero.level,
+      statusLabel: getCharacterSelectStatusLabel(hero, cc.activity),
+    };
+  });
+
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 6,
-        marginBottom: 12,
-        flexWrap: "wrap",
-      }}
-    >
-      {heroes.map((hero) => {
-        const active = hero.id === focusedId;
-        const cc = s.getCharacter(hero.id);
-        let statusLabel: string = T.status_idle;
-        if (cc.activity?.kind === ACTIVITY_COMBAT_KIND) {
-          statusLabel = T.status_inCombat;
-        } else if (cc.activity?.kind === ACTIVITY_GATHER_KIND) {
-          statusLabel = T.status_gathering;
-        } else if (hero.locationId) {
-          statusLabel = T.status_idle;
-        }
-        return (
-          <button
-            key={hero.id}
-            onClick={() => s.setFocusedChar(hero.id)}
-            style={{
-              padding: "6px 12px",
-              fontSize: 12,
-              borderRadius: 6,
-              border: active ? "2px solid #4a9" : "1px solid #444",
-              background: active ? "#2a3a2a" : "#222",
-              color: active ? "#fff" : "#aaa",
-              cursor: active ? "default" : "pointer",
-              fontFamily: "inherit",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              gap: 2,
-              minWidth: 90,
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>{hero.name}</span>
-            <span style={{ fontSize: 10, opacity: 0.65 }}>
-              Lv {hero.level} · {statusLabel}
-            </span>
-          </button>
-        );
-      })}
+    <div style={{ marginBottom: 12 }}>
+      <CharacterSelectButtons
+        options={options}
+        selectedIds={[focusedId]}
+        mode="single"
+        onChange={(nextSelectedIds) => {
+          const nextId = nextSelectedIds[0];
+          if (nextId) s.setFocusedChar(nextId);
+        }}
+      />
     </div>
   );
 }
@@ -340,34 +318,47 @@ function EntryList({
   const { store: s } = useStore(store);
   const cc = s.getFocusedCharacter();
   const content = getContent();
+  const [pendingDungeonId, setPendingDungeonId] = useState<string | null>(null);
   const loc = content.locations[locationId];
   if (!loc) return null;
 
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginLeft: 4 }}>
-      {loc.entries.map((entry, i) => {
-        const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : T.entry_gather);
-        return (
-          <button
-            key={i}
-            onClick={() => {
-              if (entry.kind === "combat") {
-                cc.startFight(entry.combatZoneId);
-              } else if (entry.kind === "gather") {
-                const nodeId = entry.resourceNodes[0];
-                if (nodeId) cc.startGather(nodeId);
-              } else if (entry.kind === "dungeon") {
-                const allHeroIds = s.listHeroes().map((h) => h.id);
-                s.startDungeon(entry.dungeonId, allHeroIds);
-              }
-            }}
-            style={btnStyle(false, true)}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginLeft: 4 }}>
+        {loc.entries.map((entry, i) => {
+          const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : T.entry_gather);
+          return (
+            <button
+              key={i}
+              onClick={() => {
+                if (entry.kind === "combat") {
+                  cc.startFight(entry.combatZoneId);
+                } else if (entry.kind === "gather") {
+                  const nodeId = entry.resourceNodes[0];
+                  if (nodeId) cc.startGather(nodeId);
+                } else if (entry.kind === "dungeon") {
+                  setPendingDungeonId(entry.dungeonId);
+                }
+              }}
+              style={btnStyle(false, true)}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <DungeonPartyDialog
+        store={store}
+        dungeonId={pendingDungeonId}
+        isOpen={pendingDungeonId !== null}
+        onClose={() => setPendingDungeonId(null)}
+        onConfirm={(partyCharIds) => {
+          if (!pendingDungeonId) return;
+          s.startDungeon(pendingDungeonId, partyCharIds);
+          setPendingDungeonId(null);
+        }}
+      />
+    </>
   );
 }
 

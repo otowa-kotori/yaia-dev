@@ -21,12 +21,26 @@ export const T = {
   status_idle: "待命",
   status_inCombat: "战斗中",
   status_gathering: "采集中",
+  status_inDungeon: "副本中",
 
   // ── Map & combat tab ──
   label_location: "地点:",
   entry_combat: "战斗",
   entry_gather: "采集",
   btn_stop: "停止",
+  btn_cancel: "取消",
+  btn_enterDungeon: "进入副本",
+  btn_abandonDungeon: "放弃副本",
+  dialogClose: "关闭窗口",
+  dungeonPartyTitle: "选择出战角色",
+  dungeonPartyHint: "请选择要进入副本的角色。未选择的角色会保持当前状态。",
+  dungeonPartySelected: "已选择 {count} 名角色",
+  dungeonPartyLimitRange: "人数限制：{min} - {max}",
+  dungeonPartyLimitMin: "至少需要 {min} 名角色",
+  dungeonPartyLimitMax: "最多允许 {max} 名角色",
+  dungeonPartyInvalid: "当前选择不符合副本人数限制。",
+  confirmAbandonDungeon: "确定要放弃当前副本吗？未完成的进度将丢失。",
+
 
   // ── Battle view ──
   pickLocation: "选择一个地点开始冒险。",
@@ -39,13 +53,34 @@ export const T = {
   stageEmpty: "场景为空 — 等待刷新...",
   inThisStage: "当前场景",
 
-  // ── Hero card ──
+  // ── Hero card / dungeon ──
   status_hero_inCombat: "战斗中",
   status_hero_recovering: "恢复中",
   status_hero_searching: "搜索中",
   status_hero_idle: "待命",
   status_hero_gathering: "采集中",
+  status_hero_dungeon: "副本中",
+  dungeonPanelTitle: "副本状态",
+  dungeonCurrentWave: "当前波次",
+  dungeonPhaseLabel: "阶段",
+  dungeonPartyLabel: "队伍",
+  dungeonEnemyLabel: "当前敌人",
+  activityLogTitle: "战斗日志",
+  activityLogEmpty: "当前没有可展示的战斗日志。",
+  dungeonNoEnemy: "本波敌人尚未出现。",
+  dungeonNoParty: "当前没有可展示的队伍成员。",
+  dungeonNoLog: "当前阶段暂无战斗日志。",
+  dungeonProgress: "第 {current} / {total} 波",
+
+  dungeonPhase_spawningWave: "准备下一波",
+  dungeonPhase_fighting: "战斗中",
+  dungeonPhase_waveCleared: "波次已清理",
+  dungeonPhase_recovering: "波间恢复",
+  dungeonPhase_completed: "已通关",
+  dungeonPhase_failed: "挑战失败",
+  dungeonPhase_abandoned: "已放弃",
   ko: "阵亡",
+
 
   // ── Inventory ──
   equipFailed: "装备失败",
