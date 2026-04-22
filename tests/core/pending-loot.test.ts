@@ -12,7 +12,7 @@ import { createGearInstance } from "../../src/core/item";
 import {
   attrDefs,
   forestLocation,
-  forestEncounter,
+  forestCombatZone,
   loadFixtureContent,
   makeHarness,
   makePlayer,
@@ -44,7 +44,7 @@ function setupHeroInStage(h: TestHarness): {
 
   const session: StageSession = {
     locationId: forestLocation.id,
-    encounterId: forestEncounter.id,
+    combatZoneId: forestCombatZone.id,
     enteredAtTick: 0,
     spawnedActorIds: [],
     combatWaveIndex: 0,

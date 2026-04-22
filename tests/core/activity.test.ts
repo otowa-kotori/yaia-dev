@@ -18,7 +18,7 @@ import {
 import {
   attrDefs,
   forestLocation,
-  forestEncounter,
+  forestCombatZone,
   loadFixtureContent,
   makePlayer,
   basicAttackAbility,
@@ -78,7 +78,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      encounterId: forestEncounter.id,
+      combatZoneId: forestCombatZone.id,
       ctxProvider,
     });
     engine.register(controller);
@@ -129,7 +129,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      encounterId: forestEncounter.id,
+      combatZoneId: forestCombatZone.id,
       ctxProvider,
     });
     engine.register(controller);
@@ -177,7 +177,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      encounterId: forestEncounter.id,
+      combatZoneId: forestCombatZone.id,
       ctxProvider,
     });
     engine.register(controller);
@@ -217,8 +217,8 @@ describe("CombatActivity + Stage integration", () => {
     installHero(state, hero);
 
     // Temporarily set threshold to 1 (always recover).
-    const prevThreshold = forestEncounter.recoverBelowHpFactor;
-    forestEncounter.recoverBelowHpFactor = 1;
+    const prevThreshold = forestCombatZone.recoverBelowHpFactor;
+    forestCombatZone.recoverBelowHpFactor = 1;
 
     try {
       const engine = createTickEngine();
@@ -226,7 +226,7 @@ describe("CombatActivity + Stage integration", () => {
       const controller = enterStage({
         stageId: STAGE_ID,
         locationId: forestLocation.id,
-        encounterId: forestEncounter.id,
+        combatZoneId: forestCombatZone.id,
         ctxProvider,
       });
       engine.register(controller);
@@ -251,7 +251,7 @@ describe("CombatActivity + Stage integration", () => {
       expect(won).toBe(true);
       expect(activity.phase).toBe("recovering");
     } finally {
-      forestEncounter.recoverBelowHpFactor = prevThreshold;
+      forestCombatZone.recoverBelowHpFactor = prevThreshold;
     }
   });
 
@@ -271,10 +271,10 @@ describe("CombatActivity + Stage integration", () => {
     hero.stageId = STAGE_ID;
     installHero(state, hero);
 
-    const prevThreshold = forestEncounter.recoverBelowHpFactor;
-    const prevSearchTicks = forestEncounter.waveSearchTicks;
-    forestEncounter.recoverBelowHpFactor = 1;
-    forestEncounter.waveSearchTicks = 1;
+    const prevThreshold = forestCombatZone.recoverBelowHpFactor;
+    const prevSearchTicks = forestCombatZone.waveSearchTicks;
+    forestCombatZone.recoverBelowHpFactor = 1;
+    forestCombatZone.waveSearchTicks = 1;
 
     try {
       const engine = createTickEngine();
@@ -282,7 +282,7 @@ describe("CombatActivity + Stage integration", () => {
       const controller = enterStage({
         stageId: STAGE_ID,
         locationId: forestLocation.id,
-        encounterId: forestEncounter.id,
+        combatZoneId: forestCombatZone.id,
         ctxProvider,
       });
       engine.register(controller);
@@ -319,8 +319,8 @@ describe("CombatActivity + Stage integration", () => {
       expect(state.stages[STAGE_ID]!.pendingCombatWaveSearch).not.toBeNull();
 
     } finally {
-      forestEncounter.recoverBelowHpFactor = prevThreshold;
-      forestEncounter.waveSearchTicks = prevSearchTicks;
+      forestCombatZone.recoverBelowHpFactor = prevThreshold;
+      forestCombatZone.waveSearchTicks = prevSearchTicks;
     }
   });
 
@@ -344,7 +344,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      encounterId: forestEncounter.id,
+      combatZoneId: forestCombatZone.id,
       ctxProvider,
     });
     engine.register(controller);
@@ -387,7 +387,7 @@ describe("CombatActivity + Stage integration", () => {
     const controller = enterStage({
       stageId: STAGE_ID,
       locationId: forestLocation.id,
-      encounterId: forestEncounter.id,
+      combatZoneId: forestCombatZone.id,
       ctxProvider,
     });
     engine.register(controller);

@@ -9,8 +9,8 @@ import type {
   ContentDb,
   EffectDef,
   EffectId,
-  EncounterDef,
-  EncounterId,
+  CombatZoneDef,
+  CombatZoneId,
   ItemDef,
   ItemId,
   LocationDef,
@@ -256,11 +256,11 @@ export const copperVein: ResourceNodeDef = {
   drops: [{ itemId: copperOre.id, chance: 1, minQty: 1, maxQty: 1 }],
 };
 
-// ---------- Encounters ----------
+// ---------- CombatZones ----------
 
 /** Normal difficulty: single slime per wave. Suitable for beginners. */
-export const slimeNormal: EncounterDef = {
-  id: "encounter.forest.slime_normal" as EncounterId,
+export const slimeNormal: CombatZoneDef = {
+  id: "combatzone.forest.slime_normal" as CombatZoneId,
   name: "史莱姆小径（普通）",
   waveSelection: "random",
   waveSearchTicks: 20,
@@ -281,8 +281,8 @@ export const slimeNormal: EncounterDef = {
 };
 
 /** Hard difficulty: double slime or mixed pack. Higher rewards. */
-export const slimeHard: EncounterDef = {
-  id: "encounter.forest.slime_hard" as EncounterId,
+export const slimeHard: CombatZoneDef = {
+  id: "combatzone.forest.slime_hard" as CombatZoneId,
   name: "史莱姆巢穴（困难）",
   waveSelection: "random",
   waveSearchTicks: 20,
@@ -319,8 +319,8 @@ export const forestLocation: LocationDef = {
   id: "location.forest" as LocationId,
   name: "阳光森林",
   entries: [
-    { kind: "combat", encounterId: slimeNormal.id, label: "史莱姆小径（普通）" },
-    { kind: "combat", encounterId: slimeHard.id, label: "史莱姆巢穴（困难）" },
+    { kind: "combat", combatZoneId: slimeNormal.id, label: "史莱姆小径（普通）" },
+    { kind: "combat", combatZoneId: slimeHard.id, label: "史莱姆巢穴（困难）" },
   ],
 };
 
@@ -382,7 +382,7 @@ export function buildDefaultContent(): ContentDb {
       [forestLocation.id]: forestLocation,
       [copperMineLocation.id]: copperMineLocation,
     },
-    encounters: {
+    combatZones: {
       [slimeNormal.id]: slimeNormal,
       [slimeHard.id]: slimeHard,
     },

@@ -45,7 +45,7 @@ export interface PendingLootGear {
 export type PendingLootEntry = PendingLootStack | PendingLootGear;
 
 export interface ActiveCombatWaveSession {
-  encounterId: string;
+  combatZoneId: string;
   waveId: string;
   waveIndex: number;
   enemyIds: string[];
@@ -68,8 +68,8 @@ export interface PendingCombatWaveSearch {
 export interface StageSession {
   /** The location this instance belongs to. */
   locationId: string;
-  /** The encounter being played (null for gather-only instances). */
-  encounterId: string | null;
+  /** The combat zone being played (null for gather-only instances). */
+  combatZoneId: string | null;
   enteredAtTick: number;
   /** Ids of actors spawned BY this instance (so we know what to clean up on
    *  leave). Actors that pre-date the instance, like the player character,

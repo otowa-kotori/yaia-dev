@@ -8,7 +8,7 @@
 //
 // State machine:
 //
-//   searchingEnemies — the hero is actively looking for the next encounter.
+//   searchingEnemies — the hero is actively looking for the next combat zone wave.
 //                      StageController only starts / progresses a wave search
 //                      when this phase requests it.
 //     | enemies appear -> fighting
@@ -49,7 +49,7 @@ import {
   type PlayerCharacter,
 } from "../actor";
 import { ATTR } from "../attribute";
-import { getMonster, getEncounter } from "../content/registry";
+import { getMonster, getCombatZone } from "../content/registry";
 import type { EffectDef, ItemId, WaveRewardDef } from "../content/types";
 
 import type { GameState } from "../state/types";
@@ -203,9 +203,9 @@ function stepSearching(
   const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
   if (!session) return;
 
-  if (!session.currentWave && !session.pendingCombatWaveSearch && session.encounterId) {
-    const encounter = getEncounter(session.encounterId);
-    beginCombatWaveSearch(encounter, session, ctx.currentTick);
+  if (!session.currentWave && !session.pendingCombatWaveSearch && session.combatZoneId) {
+    const zone = getCombatZone(session.combatZoneId);
+    beginCombatWaveSearch(zone, session, ctx.currentTick);
   }
 
   const enemies = stageEnemies(session, ctx.state).filter((e) => e.currentHp > 0);
@@ -259,7 +259,7 @@ function stepFighting(
     ctx.bus.emit("waveResolved", {
       charId: activity.ownerCharacterId,
       locationId: session.locationId,
-      encounterId: session.currentWave.encounterId,
+      combatZoneId: session.currentWave.combatZoneId,
       waveId: session.currentWave.waveId,
       waveIndex: session.currentWave.waveIndex,
       outcome: resolvedOutcome,
@@ -406,8 +406,8 @@ function grantWaveRewards(
   const activeWave = session.currentWave;
   if (!activeWave || activeWave.rewardGranted) return;
 
-  const encounter = getEncounter(activeWave.encounterId);
-  const wave = lookupWave(encounter, activeWave.waveId);
+  const zone = getCombatZone(activeWave.combatZoneId);
+  const wave = lookupWave(zone, activeWave.waveId);
   const rewardEffect = buildWaveRewardEffect(
     session.locationId,
     activeWave.waveIndex,
@@ -484,9 +484,9 @@ function shouldRecoverAfterBattle(
 ): boolean {
   if (hero.currentHp <= 0) return true;
   const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
-  if (!session || !session.encounterId) return false;
-  const encounter = getEncounter(session.encounterId);
-  const threshold = encounter.recoverBelowHpFactor ?? 0;
+  if (!session || !session.combatZoneId) return false;
+  const zone = getCombatZone(session.combatZoneId);
+  const threshold = zone.recoverBelowHpFactor ?? 0;
   if (threshold <= 0) return false;
 
   const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);

@@ -14,7 +14,7 @@
 - **角色管理**：`getCharacter(charId)`、`getFocusedCharacter()`、`setFocusedChar(charId)`、`listHeroes()`
 - **单角色指令**：
   - `enterLocation(locationId)` / `leaveLocation()`
-  - `startFight(encounterId)` / `startGather(nodeId)` / `stopActivity()`
+  - `startFight(combatZoneId)` / `startGather(nodeId)` / `stopActivity()`
   - `equipItem(slotIndex)` / `unequipItem(slot)`
   - `craftRecipe(recipeId)`
 - **新档初始化**：`resetToFresh()` 根据 `ContentDb.starting.heroes` 创建角色、背包、起始物品，并让角色进入初始地点。

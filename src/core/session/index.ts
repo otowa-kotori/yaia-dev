@@ -17,7 +17,7 @@
 // Location / Entry / Instance flow (per character):
 //   1. cc.enterLocation(locationId) — set hero.locationId, stop any
 //      running activity + stage instance. No actors are spawned yet.
-//   2. cc.startFight(encounterId) — create a StageSession in state.stages,
+//   2. cc.startFight(combatZoneId) — create a StageSession in state.stages,
 //      set hero.stageId, spawn first wave, create CombatActivity.
 //   3. cc.startGather(nodeId) — create a StageSession in state.stages,
 //      set hero.stageId, spawn resource nodes, create GatherActivity.
@@ -106,7 +106,7 @@ export interface CharacterController {
   isRunning(): boolean;
   enterLocation(locationId: string): void;
   leaveLocation(): void;
-  startFight(encounterId: string): void;
+  startFight(combatZoneId: string): void;
   startGather(nodeId: string): void;
   stopActivity(): void;
   equipItem(slotIndex: number): void;
@@ -383,7 +383,7 @@ export function createGameSession(
     cc: CharacterControllerImpl,
     opts: {
       locationId: string;
-      encounterId?: string | null;
+      combatZoneId?: string | null;
       resourceNodes?: string[];
     },
   ): string {
@@ -392,7 +392,7 @@ export function createGameSession(
     const ctrl = enterStageCore({
       stageId,
       locationId: opts.locationId,
-      encounterId: opts.encounterId,
+      combatZoneId: opts.combatZoneId,
       resourceNodes: opts.resourceNodes,
       ctxProvider: buildCtx,
     });
@@ -458,14 +458,14 @@ export function createGameSession(
         cc.hero.locationId = null;
       },
 
-      startFight(encounterId: string): void {
+      startFight(combatZoneId: string): void {
         if (!cc.hero.locationId) {
           console.warn("session.startFight: not in a location");
           return;
         }
         const stageId = startStageInstance(cc, {
           locationId: cc.hero.locationId,
-          encounterId,
+          combatZoneId,
         });
         void stageId; // stageId is set on hero by startStageInstance
         cc._activity = createCombatActivity({
@@ -680,7 +680,7 @@ export function createGameSession(
       const ctrl = enterStageCore({
         stageId,
         locationId: session.locationId,
-        encounterId: session.encounterId,
+        combatZoneId: session.combatZoneId,
         ctxProvider: buildCtx,
         resume: true,
       });

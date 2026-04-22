@@ -16,7 +16,7 @@ import {
 } from "../../src/content/index";
 import {
   basicAttackAbility,
-  forestEncounter,
+  forestCombatZone,
   forestLocation,
   loadFixtureContent,
   mineLocation,
@@ -75,7 +75,7 @@ describe("GameSession location flow", () => {
     const session = createSession(forestLocation.id);
     const cc = session.getFocusedCharacter();
 
-    cc.startFight(forestEncounter.id);
+    cc.startFight(forestCombatZone.id);
 
     const stageId = cc.hero.stageId!;
     session.engine.step(10);

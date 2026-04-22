@@ -352,7 +352,7 @@ function EntryList({
             key={i}
             onClick={() => {
               if (entry.kind === "combat") {
-                cc.startFight(entry.encounterId);
+                cc.startFight(entry.combatZoneId);
               } else {
                 const nodeId = entry.resourceNodes[0];
                 if (nodeId) cc.startGather(nodeId);

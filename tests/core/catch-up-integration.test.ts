@@ -12,7 +12,7 @@ import { TICK_MS } from "../../src/core/tick";
 import { serialize } from "../../src/core/save/serialize";
 import {
   basicAttackAbility,
-  forestEncounter,
+  forestCombatZone,
   forestLocation,
   loadFixtureContent,
   mineLocation,
@@ -107,13 +107,13 @@ describe("catch-up integration: continuous vs split+catchup equivalence", () => 
 
     // Control: start fight then run all ticks.
     const control = createSession(forestLocation.id);
-    control.getFocusedCharacter().startFight(forestEncounter.id);
+    control.getFocusedCharacter().startFight(forestCombatZone.id);
     control.engine.step(N + M);
     const controlSnap = snapshot(control);
 
     // Experiment: start fight, run N, then catch-up M.
     const experiment = createSession(forestLocation.id);
-    experiment.getFocusedCharacter().startFight(forestEncounter.id);
+    experiment.getFocusedCharacter().startFight(forestCombatZone.id);
     experiment.engine.step(N);
 
     const baseWallClockMs = 1_000_000;
@@ -168,14 +168,14 @@ describe("catch-up integration: continuous vs split+catchup equivalence", () => 
 
     // Control: continuous N+M.
     const control = createSession(forestLocation.id);
-    control.getFocusedCharacter().startFight(forestEncounter.id);
+    control.getFocusedCharacter().startFight(forestCombatZone.id);
     control.engine.step(N + M);
     const controlSnap = snapshot(control);
 
     // Experiment: run N, then simulate browser pushing `backgroundAdvanced`
     // ticks during background, then catch-up the remainder.
     const experiment = createSession(forestLocation.id);
-    experiment.getFocusedCharacter().startFight(forestEncounter.id);
+    experiment.getFocusedCharacter().startFight(forestCombatZone.id);
     experiment.engine.step(N);
 
     // Browser managed to push some ticks while hidden.
@@ -200,7 +200,7 @@ describe("catch-up integration: continuous vs split+catchup equivalence", () => 
     // Run 1000 ticks as catch-up to verify no crash or invariant violation
     // when the catch-up amount is non-trivial.
     const session = createSession(forestLocation.id);
-    session.getFocusedCharacter().startFight(forestEncounter.id);
+    session.getFocusedCharacter().startFight(forestCombatZone.id);
     session.engine.step(10);
 
     const elapsed = 1000 * TICK_MS;

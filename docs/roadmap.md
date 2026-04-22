@@ -11,9 +11,9 @@
 - 战斗系统：`Battle`、scheduler、intent、击杀奖励
 - 地点系统：`Location → Entry → Instance` 三层概念模型
 - 场景系统：`StageController` 管理运行实例 actor 生命周期
-- 场景进度：`encounter → wave` 层级、波次随机选择、波次冷却与失败后重开
+- 场景进度：`combat zone → wave` 层级、波次随机选择、波次冷却与失败后重开
 - 活动系统：`CombatActivity` 与 `GatherActivity`
-- 战斗收尾：波次奖励、玩家团灭判负、战后低血量自动回血（基于 encounter 阈值）
+- 战斗收尾：波次奖励、玩家团灭判负、战后低血量自动回血（基于 combat zone 阈值）
 - 实体系统：Actor 层级与工厂
 - 成长系统：XP / Level
 - 持久化：自动存档
@@ -22,7 +22,7 @@
 - UI：极简界面，包含 location 选择、entry 入口菜单、战斗、采集、速度、日志与只读背包
 - UI 复用：`ItemSlotCell` 通用物品格子组件、`PendingLootPanel` 待拾取面板（战斗 tab + 背包 tab 复用）
 
-默认内容包括：`location.forest`（含普通/困难两个战斗入口）、`location.mine.copper`（含采集入口）、`encounter.forest.slime_normal`、`encounter.forest.slime_hard`、`monster.slime`、`monster.goblin`、`ability.basic.attack`、`skill.mining`、`item.ore.copper`、`item.monster.slime_gel`、`node.copper_vein`。
+默认内容包括：`location.forest`（含普通/困难两个战斗入口）、`location.mine.copper`（含采集入口）、`combatzone.forest.slime_normal`、`combatzone.forest.slime_hard`、`monster.slime`、`monster.goblin`、`ability.basic.attack`、`skill.mining`、`item.ore.copper`、`item.monster.slime_gel`、`node.copper_vein`。
 
 ## 待办
 
@@ -42,7 +42,7 @@
 ### 🟢 后续
 
 - **怪物掉落**：把 `MonsterDef.drops` 接入击杀奖励流程。装备路径已经通过 `addItemToInventory` 自动分流到实例工厂。
-- **更多内容**：补充更多 location、encounter、怪物、配方与装备梯度。
+- **更多内容**：补充更多 location、combat zone、怪物、配方与装备梯度。
 - **天赋系统**：实现树状 DAG；相关字段已经预留。
 - **WorldActivity**：加入不绑定单个 PlayerCharacter 的后台活动；接口已经存在。
 - **数据驱动 Intent**、**公式字符串 parser**、**IndexedDB 存档**：接口都已预留，后续接入。

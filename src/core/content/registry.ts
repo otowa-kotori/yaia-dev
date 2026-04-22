@@ -23,7 +23,7 @@ export function patchContent(partial: Partial<ContentDb>): void {
     effects: { ...current.effects, ...(partial.effects ?? {}) },
     skills: { ...current.skills, ...(partial.skills ?? {}) },
     locations: { ...current.locations, ...(partial.locations ?? {}) },
-    encounters: { ...current.encounters, ...(partial.encounters ?? {}) },
+    combatZones: { ...current.combatZones, ...(partial.combatZones ?? {}) },
     recipes: { ...current.recipes, ...(partial.recipes ?? {}) },
     talents: { ...current.talents, ...(partial.talents ?? {}) },
     upgrades: { ...current.upgrades, ...(partial.upgrades ?? {}) },
@@ -73,9 +73,9 @@ export function getLocation(id: string) {
   if (!v) throw new Error(`content: no location "${id}"`);
   return v;
 }
-export function getEncounter(id: string) {
-  const v = current.encounters[id];
-  if (!v) throw new Error(`content: no encounter "${id}"`);
+export function getCombatZone(id: string) {
+  const v = current.combatZones[id];
+  if (!v) throw new Error(`content: no combatZone "${id}"`);
   return v;
 }
 export function getRecipe(id: string) {

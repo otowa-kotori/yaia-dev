@@ -2,16 +2,16 @@
 //
 // With the Location / Entry / Instance split, this controller no longer
 // knows about "stages" in the old sense. It manages the actor population
-// of a single chosen entry (combat encounter or gather site).
+// of a single chosen entry (combat zone or gather site).
 //
 // Ticking responsibilities:
 //   1. At enter: spawn gather nodes immediately. Combat entries start empty;
 //      CombatActivity explicitly requests a wave search when it wants the
-//      next encounter to begin.
+//      next combat zone wave to begin.
 //   2. Each tick: reap dead instance-owned enemies that are no longer
 //      referenced by any ongoing battle.
 //   3. When a requested wave search reaches its ready tick, spawn the next
-//      randomly selected wave from the encounter.
+//      randomly selected wave from the combat zone.
 //   4. On leave: remove every actor whose id is in spawnedActorIds.
 //
 // The controller does NOT run combat. CombatActivity reads the living
@@ -27,8 +27,8 @@ import {
   type Actor,
   type Enemy,
 } from "../actor";
-import type { AttrDef, EncounterDef, WaveDef } from "../content/types";
-import { getEncounter, getMonster, getResourceNode } from "../content/registry";
+import type { AttrDef, CombatZoneDef, WaveDef } from "../content/types";
+import { getCombatZone, getMonster, getResourceNode } from "../content/registry";
 import type { GameEventBus } from "../events";
 import type { Rng } from "../rng";
 import type { GameState } from "../state/types";
@@ -45,15 +45,15 @@ export interface StageControllerContext {
 
 export interface StageController extends Tickable {
   readonly locationId: string;
-  readonly encounterId: string | null;
+  readonly combatZoneId: string | null;
 }
 
 export interface CreateStageControllerOptions {
   /** Unique id for this stage instance, used as key in state.stages. */
   stageId: string;
   locationId: string;
-  /** Encounter to fight. Null for gather-only instances. */
-  encounterId?: string | null;
+  /** Combat zone to fight. Null for gather-only instances. */
+  combatZoneId?: string | null;
   /** Resource nodes to spawn (for gather entries). */
   resourceNodes?: string[];
   ctxProvider: () => StageControllerContext;
@@ -67,7 +67,7 @@ export const DEFAULT_WAVE_SEARCH_TICKS = 20;
 /** Enter an instance: create session, spawn initial population, return a
  *  Tickable controller you should register on the tick engine. */
 export function enterStage(opts: CreateStageControllerOptions): StageController {
-  const encId = opts.encounterId ?? null;
+  const zoneId = opts.combatZoneId ?? null;
   const stageId = opts.stageId;
   const initialCtx = opts.ctxProvider();
 
@@ -79,7 +79,7 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
     }
     const session = freshSession(
       opts.locationId,
-      encId,
+      zoneId,
       initialCtx.currentTick,
     );
     initialCtx.state.stages[stageId] = session;
@@ -90,18 +90,18 @@ export function enterStage(opts: CreateStageControllerOptions): StageController 
     }
   }
 
-  // Capture encounter def once for the tick closure (null for gather).
-  const encounterDef = encId ? getEncounter(encId) : null;
+  // Capture combat zone def once for the tick closure (null for gather).
+  const zoneDef = zoneId ? getCombatZone(zoneId) : null;
 
   const controller: StageController = {
     id: `stage:${stageId}`,
     locationId: opts.locationId,
-    encounterId: encId,
+    combatZoneId: zoneId,
     tick() {
       const ctx = opts.ctxProvider();
       const session = ctx.state.stages[stageId];
       if (!session) return;
-      stepController(encounterDef, session, ctx);
+      stepController(zoneDef, session, ctx);
     },
   };
   return controller;
@@ -124,7 +124,7 @@ export function leaveStage(stageId: string, ctx: StageControllerContext): void {
 }
 
 export function beginCombatWaveSearch(
-  encounter: EncounterDef,
+  zone: CombatZoneDef,
   session: StageSession,
   currentTick: number,
 ): void {
@@ -132,7 +132,7 @@ export function beginCombatWaveSearch(
   if (session.pendingCombatWaveSearch) return;
   const waveSearchTicks = Math.max(
     0,
-    encounter.waveSearchTicks ?? DEFAULT_WAVE_SEARCH_TICKS,
+    zone.waveSearchTicks ?? DEFAULT_WAVE_SEARCH_TICKS,
   );
   session.pendingCombatWaveSearch = {
     startedAtTick: currentTick,
@@ -143,14 +143,14 @@ export function beginCombatWaveSearch(
 // ---------- Step ----------
 
 function stepController(
-  encounter: EncounterDef | null,
+  zone: CombatZoneDef | null,
   session: StageSession,
   ctx: StageControllerContext,
 ): void {
   // Reap dead instance-owned enemies first.
   reapDeadEnemies(session, ctx);
 
-  if (!encounter) return; // gather-only — nothing to step
+  if (!zone) return; // gather-only — nothing to step
 
   if (session.currentWave?.status === "active") {
     return;
@@ -161,7 +161,7 @@ function stepController(
     session.currentWave = null;
   }
 
-  progressWaveSearch(encounter, session, ctx);
+  progressWaveSearch(zone, session, ctx);
 }
 
 // ---------- Reaping ----------
@@ -213,8 +213,8 @@ function spawnResourceNodes(
   }
 }
 
-function spawnCombatWave(encounter: EncounterDef, session: StageSession, ctx: StageControllerContext): void {
-  const wave = pickEncounterWave(encounter, ctx.rng);
+function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageControllerContext): void {
+  const wave = pickCombatZoneWave(zone, ctx.rng);
 
   session.combatWaveIndex += 1;
   const enemyIds: string[] = [];
@@ -222,7 +222,7 @@ function spawnCombatWave(encounter: EncounterDef, session: StageSession, ctx: St
     const monsterId = wave.monsters[i]!;
     const mdef = getMonster(monsterId);
     const instanceId =
-      `enemy.${monsterId}.${session.locationId}.${encounter.id}.w${session.combatWaveIndex}.${i}`;
+      `enemy.${monsterId}.${session.locationId}.${zone.id}.w${session.combatWaveIndex}.${i}`;
     const enemy = createEnemy({
       instanceId,
       def: mdef,
@@ -234,7 +234,7 @@ function spawnCombatWave(encounter: EncounterDef, session: StageSession, ctx: St
   }
 
   session.currentWave = {
-    encounterId: encounter.id,
+    combatZoneId: zone.id,
     waveId: wave.id,
     waveIndex: session.combatWaveIndex,
     enemyIds,
@@ -267,13 +267,13 @@ export function stageResourceNodes(
 }
 
 export function lookupWave(
-  encounter: EncounterDef,
+  zone: CombatZoneDef,
   waveId: string,
 ): WaveDef {
-  const wave = encounter.waves.find((x) => x.id === waveId);
+  const wave = zone.waves.find((x) => x.id === waveId);
   if (!wave) {
     throw new Error(
-      `stage: encounter "${encounter.id}" has no wave "${waveId}"`,
+      `stage: combatZone "${zone.id}" has no wave "${waveId}"`,
     );
   }
   return wave;
@@ -281,13 +281,13 @@ export function lookupWave(
 
 // ---------- Internal ----------
 
-function pickEncounterWave(encounter: EncounterDef, rng: Rng): WaveDef {
-  if (encounter.waves.length === 0) {
-    throw new Error(`stage: encounter "${encounter.id}" has no waves`);
+function pickCombatZoneWave(zone: CombatZoneDef, rng: Rng): WaveDef {
+  if (zone.waves.length === 0) {
+    throw new Error(`stage: combatZone "${zone.id}" has no waves`);
   }
-  switch (encounter.waveSelection ?? "random") {
+  switch (zone.waveSelection ?? "random") {
     case "random":
-      return rng.pick(encounter.waves);
+      return rng.pick(zone.waves);
   }
 }
 
@@ -308,7 +308,7 @@ function clearResolvedWaveActors(
 }
 
 function progressWaveSearch(
-  encounter: EncounterDef,
+  zone: CombatZoneDef,
   session: StageSession,
   ctx: StageControllerContext,
 ): void {
@@ -316,17 +316,17 @@ function progressWaveSearch(
   if (!pending) return;
   if (ctx.currentTick < pending.readyAtTick) return;
   session.pendingCombatWaveSearch = null;
-  spawnCombatWave(encounter, session, ctx);
+  spawnCombatWave(zone, session, ctx);
 }
 
 function freshSession(
   locationId: string,
-  encounterId: string | null,
+  combatZoneId: string | null,
   currentTick: number,
 ): StageSession {
   return {
     locationId,
-    encounterId,
+    combatZoneId,
     enteredAtTick: currentTick,
     spawnedActorIds: [],
     combatWaveIndex: 0,

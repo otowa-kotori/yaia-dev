@@ -57,7 +57,7 @@ export type GameEvents = {
   waveResolved: {
     charId: string;
     locationId: string;
-    encounterId: string;
+    combatZoneId: string;
     waveId: string;
     waveIndex: number;
     outcome: "players_won" | "enemies_won";

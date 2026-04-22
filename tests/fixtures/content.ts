@@ -7,8 +7,8 @@ import type {
   AttrId,
   EffectDef,
   EffectId,
-  EncounterDef,
-  EncounterId,
+  CombatZoneDef,
+  CombatZoneId,
   ItemDef,
   ItemId,
   LocationDef,
@@ -204,10 +204,10 @@ export const testVein: ResourceNodeDef = {
   drops: [{ itemId: testOreItem.id, chance: 1, minQty: 1, maxQty: 2 }],
 };
 
-// ---------- Encounters ----------
+// ---------- CombatZones ----------
 
-export const forestEncounter: EncounterDef = {
-  id: "encounter.forest.test_path" as EncounterId,
+export const forestCombatZone: CombatZoneDef = {
+  id: "combatzone.forest.test_path" as CombatZoneId,
   name: "Test Path",
   waveSelection: "random",
   waveSearchTicks: 5,
@@ -242,7 +242,7 @@ export const forestLocation: LocationDef = {
   id: "location.forest.test" as LocationId,
   name: "Test Forest",
   entries: [
-    { kind: "combat", encounterId: forestEncounter.id, label: "Test Path" },
+    { kind: "combat", combatZoneId: forestCombatZone.id, label: "Test Path" },
   ],
 };
 
@@ -290,8 +290,8 @@ export function loadFixtureContent(): ContentDb {
       [forestLocation.id]: forestLocation,
       [mineLocation.id]: mineLocation,
     },
-    encounters: {
-      [forestEncounter.id]: forestEncounter,
+    combatZones: {
+      [forestCombatZone.id]: forestCombatZone,
     },
   };
   setContent(db);

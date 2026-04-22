@@ -20,7 +20,7 @@ export type AbilityId = string & { readonly __brand: "AbilityId" };
 export type EffectId = string & { readonly __brand: "EffectId" };
 export type SkillId = string & { readonly __brand: "SkillId" };
 export type LocationId = string & { readonly __brand: "LocationId" };
-export type EncounterId = string & { readonly __brand: "EncounterId" };
+export type CombatZoneId = string & { readonly __brand: "CombatZoneId" };
 export type RecipeId = string & { readonly __brand: "RecipeId" };
 export type AttrId = string & { readonly __brand: "AttrId" };
 export type TalentId = string & { readonly __brand: "TalentId" };
@@ -168,17 +168,17 @@ export interface SkillDef {
   maxLevel?: number;
 }
 
-// ---------- Encounters & Locations ----------
+// ---------- CombatZones & Locations ----------
 //
 // Three-layer model:
 //   LocationDef   — "where am I" (physical place / map area)
 //   LocationEntry — "what can I do here" (combat / gather / npc entries)
-//   EncounterDef  — "how does this fight work" (waves, rewards, thresholds)
+//   CombatZoneDef  — "how does this fight work" (waves, rewards, thresholds)
 //
-// EncounterDef is a top-level ContentDb citizen so it can be looked up by
+// CombatZoneDef is a top-level ContentDb citizen so it can be looked up by
 // id without knowing which Location it belongs to.
 
-export type EncounterWaveSelection = "random";
+export type CombatZoneWaveSelection = "random";
 
 export interface WaveRewardDropDef {
   itemId: ItemId;
@@ -203,26 +203,26 @@ export interface WaveDef {
   rewards?: WaveRewardDef;
 }
 
-export interface EncounterDef {
-  id: EncounterId;
+export interface CombatZoneDef {
+  id: CombatZoneId;
   name: string;
-  /** Candidate waves for this encounter. Current MVP only supports random pick. */
+  /** Candidate waves for this combat zone. Current MVP only supports random pick. */
   waves: WaveDef[];
-  /** Selection strategy hook for future encounter-specific logic. */
-  waveSelection?: EncounterWaveSelection;
+  /** Selection strategy hook for future zone-specific logic. */
+  waveSelection?: CombatZoneWaveSelection;
   /** Ticks spent searching before the next combat wave may spawn. */
   waveSearchTicks?: number;
   /** After a battle ends, pause to heal if HP ratio is at or below this threshold.
-   *  Different difficulty encounters can use different thresholds. */
+   *  Different difficulty zones can use different thresholds. */
   recoverBelowHpFactor?: number;
-  /** Which skill's XP this encounter grants on kill (e.g. "skill.swordsmanship"). */
+  /** Which skill's XP this combat zone grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
 }
 
 // ---------- Location entries ----------
 
 export type LocationEntryDef =
-  | { kind: "combat"; encounterId: EncounterId; label?: string }
+  | { kind: "combat"; combatZoneId: CombatZoneId; label?: string }
   | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string };
 
 /** A physical location / map area. Contains a menu of available entries
@@ -349,7 +349,7 @@ export interface ContentDb {
   effects: Readonly<Record<string, EffectDef>>;
   skills: Readonly<Record<string, SkillDef>>;
   locations: Readonly<Record<string, LocationDef>>;
-  encounters: Readonly<Record<string, EncounterDef>>;
+  combatZones: Readonly<Record<string, CombatZoneDef>>;
   recipes: Readonly<Record<string, RecipeDef>>;
   talents: Readonly<Record<string, TalentDef>>;
   upgrades: Readonly<Record<string, UpgradeDef>>;
@@ -371,7 +371,7 @@ export function emptyContentDb(): ContentDb {
     effects: {},
     skills: {},
     locations: {},
-    encounters: {},
+    combatZones: {},
     recipes: {},
     talents: {},
     upgrades: {},
