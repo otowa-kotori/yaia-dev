@@ -61,6 +61,8 @@ export type GameEvents = {
     outcome: "players_won" | "enemies_won";
   };
   activityComplete: { charId: string | null; kind: string };
+  /** Emitted after offline / background catch-up ticks have been applied. */
+  catchUpApplied: { elapsedMs: number; appliedTicks: number; wasCapped: boolean };
 };
 
 export type GameEventBus = EventBus<GameEvents>;

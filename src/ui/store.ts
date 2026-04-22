@@ -12,6 +12,7 @@
 // store picks it up for free via getFocusedCharacter().
 
 import { TICK_MS } from "../core/tick";
+import { computeCatchUpTicks } from "../core/tick/catch-up";
 import { createGameSession, type GameSession } from "../core/session";
 import type { ContentDb } from "../core/content";
 import {
@@ -57,6 +58,8 @@ export interface CreateGameStoreOptions {
   saveAdapter?: SaveAdapter;
   /** If true, attempt to load on startup. Default: true. */
   autoLoad?: boolean;
+  /** Injectable wall-clock source. Defaults to Date.now. Used by tests. */
+  now?: () => number;
 }
 
 // ---------- Factory ----------
@@ -68,6 +71,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   });
   const adapter = opts.saveAdapter ?? new LocalStorageSaveAdapter();
   const attrDefs = opts.content.attributes;
+  const now = opts.now ?? (() => Date.now());
 
   // ---------- Subscription plumbing ----------
 
@@ -86,9 +90,12 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   function persistNow(): void {
     try {
+      // Stamp wall clock before serializing so the save carries the latest
+      // real-world timestamp for offline catch-up.
+      session.state.lastWallClockMs = now();
       const payload = serialize(session.state);
       void adapter.save(SAVE_KEY, payload);
-      lastSaveAt = Date.now();
+      lastSaveAt = now();
     } catch (e) {
       console.error("save failed:", e);
     }
@@ -96,7 +103,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   function schedulePersist(): void {
     if (pendingSaveTimer !== null) return;
-    const sinceLast = Date.now() - lastSaveAt;
+    const sinceLast = now() - lastSaveAt;
     const delay = Math.max(500, AUTOSAVE_INTERVAL_MS - sinceLast);
     pendingSaveTimer = setTimeout(() => {
       pendingSaveTimer = null;
@@ -151,6 +158,51 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     persistSoon();
   });
 
+  // ---------- Catch-up (offline / background tab) ----------
+
+  // Hot-resume snapshot: recorded when the page becomes hidden.
+  let hiddenAtMs: number | null = null;
+  let hiddenAtTick: number | null = null;
+
+  /** Compute and apply catch-up ticks from a wall-clock + logic-tick baseline.
+   *  Used by both cold resume (tryLoad) and hot resume (visibilitychange). */
+  function applyCatchUp(
+    baseWallClockMs: number,
+    baseLogicTick: number,
+  ): void {
+    const result = computeCatchUpTicks({
+      lastWallClockMs: baseWallClockMs,
+      nowMs: now(),
+      lastLogicTick: baseLogicTick,
+      currentLogicTick: session.engine.currentTick,
+      tickMs: TICK_MS,
+    });
+    if (result.ticksToApply > 0) {
+      session.engine.step(result.ticksToApply);
+      persistSoon();
+    }
+    bus.emit("catchUpApplied", {
+      elapsedMs: result.elapsedMs,
+      appliedTicks: result.ticksToApply,
+      wasCapped: result.wasCapped,
+    });
+  }
+
+  function onVisibilityChange(): void {
+    if (document.visibilityState === "hidden") {
+      // Snapshot wall clock + logic tick before the browser throttles timers.
+      hiddenAtMs = now();
+      hiddenAtTick = session.engine.currentTick;
+      persistNow();
+    } else if (document.visibilityState === "visible") {
+      if (hiddenAtMs !== null && hiddenAtTick !== null) {
+        applyCatchUp(hiddenAtMs, hiddenAtTick);
+        hiddenAtMs = null;
+        hiddenAtTick = null;
+      }
+    }
+  }
+
 
   // ---------- Load flow ----------
 
@@ -160,6 +212,11 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       if (!raw) return false;
       const loaded = deserialize(raw, { attrDefs });
       session.loadFromSave(loaded);
+      // Cold-resume catch-up: compensate for time elapsed since this save
+      // was last written.
+      if (loaded.lastWallClockMs) {
+        applyCatchUp(loaded.lastWallClockMs, loaded.tick);
+      }
       notify();
       return true;
     } catch (e) {
@@ -214,6 +271,9 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     dispose() {
       baseDispose();
       if (pendingSaveTimer !== null) clearTimeout(pendingSaveTimer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
       subs.clear();
     },
   }) as GameStore;
@@ -229,6 +289,8 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
         /* swallow — page is closing anyway */
       }
     });
+    // Hot-resume: snapshot on hide, catch-up on visible.
+    document.addEventListener("visibilitychange", onVisibilityChange);
   }
 
   // Always bootstrap with a fresh state so the session is immediately usable

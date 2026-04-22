@@ -9,6 +9,16 @@
 - 所有周期性行为都以 `Tickable` 的形式挂到引擎上，例如 activity、stage controller、UI notifier
 - 速度倍率由引擎统一缩放，因此 headless 与实时模式的行为保持等价
 
+### catch-up（离线/后台追帧）
+
+- 入口：`src/core/tick/catch-up.ts`
+- `computeCatchUpTicks` 是纯函数，接收 wall clock 差值、logic tick 差值和 TICK_MS，返回需补跑的 tick 数
+- 追帧公式：`missingTicks = expectedTicks - actuallyAdvanced`，避免与后台期间浏览器节流推进的 tick 双算
+- 追帧永远按 1x 速度计算，不受 UI 倍率影响
+- wall clock 上限 24 小时（86,400,000 ms），tick 上限 864,000
+- 热恢复（`visibilitychange`）和冷恢复（读档）共用同一套 catch-up 管线
+- 追帧完成后发出 `catchUpApplied` 事件
+
 ## rng
 
 - 使用可序列化 seed 的确定性 PRNG

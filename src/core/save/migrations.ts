@@ -4,7 +4,7 @@
 // We write a migration for each bump so existing dev saves can be upgraded
 // without a full reset.
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /** A migration transforms serialized save data from `fromVersion` to
  *  `fromVersion + 1`. Migrations operate on the parsed JSON object to keep
@@ -17,6 +17,19 @@ export interface Migration {
   apply(data: Record<string, unknown>): Record<string, unknown>;
 }
 
-/** In-order list of migrations. Empty by default in alpha. */
-export const migrations: Migration[] = [];
+/** In-order list of migrations. */
+export const migrations: Migration[] = [
+  {
+    fromVersion: 5,
+    apply(data) {
+      // Add lastWallClockMs field for offline catch-up.
+      // Default to current time so the first catch-up after migration is a
+      // no-op rather than a spurious 24-hour fast-forward.
+      if (data.lastWallClockMs === undefined) {
+        data.lastWallClockMs = Date.now();
+      }
+      return data;
+    },
+  },
+];
 

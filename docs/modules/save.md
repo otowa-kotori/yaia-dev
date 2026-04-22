@@ -40,6 +40,13 @@
 - `save` 允许单向读取 content 注册表，用于补回派生字段
 - 新游戏初始化不走 save 管线，而是由 `session.resetToFresh` 读取 `ContentDb.starting`
 
+### lastWallClockMs
+
+- `GameState.lastWallClockMs` 记录每次存档时的真实时间戳（`Date.now()`）
+- 在 `persistNow()` 中写入，在 `createEmptyState()` 中初始化
+- 读档后用于计算离线时长，驱动 catch-up 追帧
+- save v6 新增字段；v5→v6 migration 将其默认为 `Date.now()`
+
 ## 入口
 
 `src/core/save/`

@@ -1,4 +1,4 @@
-# 开发路线
+﻿# 开发路线
 
 架构说明见 [architecture.md](./architecture.md)，全局约定见根目录 `CLAUDE.md`。
 
@@ -34,7 +34,7 @@
 
 4. **属性展示**：在英雄卡片中显示 `ATK` / `DEF` / `STR` / `DEX` / `INT` / `WIS`。
 5. **可读战斗日志**：把日志中的内容 ID 替换为可读名称。
-6. **离线追进度**：存档记录 wall clock；读档后调用 `runForTicks` 补跑离线进度，上限 4 小时。
+6. ~~**离线追进度**~~：✅ 已完成。`computeCatchUpTicks` 纯函数 + `visibilitychange` 热恢复 + 冷恢复追帧，上限 24 小时。
 7. **背包交互**：支持 equip、丢弃与 drag-and-drop。
 
 ### 🟢 后续

@@ -119,6 +119,9 @@ export interface GameState {
    *  computeWorldModifiers + rebuildCharacterDerived on load / purchase. */
   worldRecord: WorldRecord;
   settings: GameSettings;
+  /** Wall-clock timestamp (ms since epoch) of the last save / snapshot.
+   *  Used by the catch-up system to compute offline elapsed time. */
+  lastWallClockMs: number;
 }
 
 // ---------- Helpers ----------
@@ -145,5 +148,6 @@ export function createEmptyState(seed: number, version: number): GameState {
     currencies: {},
     worldRecord: { upgrades: {} },
     settings: { speedMultiplier: 1 },
+    lastWallClockMs: Date.now(),
   };
 }
