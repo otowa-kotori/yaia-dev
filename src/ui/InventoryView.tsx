@@ -1,10 +1,11 @@
-// Inventory panel — bag grids + item details + equipment management.
+// Inventory panel — bag grids + pending loot + item details + equipment.
 //
 // This file used to be read-only. It now owns the first layer of inventory
 // interaction:
 //   - click a bag slot to inspect the item in a side panel
 //   - equip equippable gear directly from the bag
 //   - inspect currently equipped items and unequip them
+//   - view and pick up items from the stage's pending loot queue
 //
 // Scope stays intentionally narrow:
 //   - no drag/drop
@@ -21,6 +22,7 @@ import type {
   InventorySlot,
   StackEntry,
 } from "../core/inventory";
+import type { PendingLootEntry } from "../core/stage/types";
 import { SHARED_INVENTORY_KEY } from "../core/state";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
@@ -83,6 +85,22 @@ export function InventoryView({ store }: { store: GameStore }) {
     }
   }
 
+  // Pending loot from the current stage session (if any).
+  const stageSession = cc.stageSession;
+  const pendingLoot = stageSession?.pendingLoot ?? [];
+
+  function handlePickUp(index: number): void {
+    const ok = cc.pickUpPendingLoot(index);
+    if (!ok) setActionError(T.pickUpFailed);
+    else clearError();
+  }
+
+  function handlePickUpAll(): void {
+    const remaining = cc.pickUpAllPendingLoot();
+    if (remaining > 0) setActionError(T.pickUpFailed);
+    else clearError();
+  }
+
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -95,6 +113,13 @@ export function InventoryView({ store }: { store: GameStore }) {
           selectedIndex={selected?.inventoryOwnerId === hero.id ? selected.slotIndex : null}
           onSelect={selectSlot}
         />
+        {pendingLoot.length > 0 && (
+          <PendingLootPanel
+            entries={pendingLoot}
+            onPickUp={handlePickUp}
+            onPickUpAll={handlePickUpAll}
+          />
+        )}
         <BagGrid
           title={T.bagShared}
           inventoryOwnerId={SHARED_INVENTORY_KEY}
@@ -294,6 +319,86 @@ function GearContent({
         </span>
       )}
     </>
+  );
+}
+
+// ---------- Pending loot panel ----------
+
+function PendingLootPanel({
+  entries,
+  onPickUp,
+  onPickUpAll,
+}: {
+  entries: PendingLootEntry[];
+  onPickUp: (index: number) => void;
+  onPickUpAll: () => void;
+}) {
+  return (
+    <div style={{ ...sectionStyle, border: "1px solid #8a6d3b" }}>
+      <div style={headerStyle}>
+        <span style={{ color: "#f0c674" }}>{T.pendingLoot} ({entries.length})</span>
+        <button onClick={onPickUpAll} style={secondaryButtonStyle}>
+          {T.btn_pickUpAll}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 8, lineHeight: 1.5 }}>
+        {T.pendingLootHint}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {entries.map((entry, i) => (
+          <PendingLootRow key={i} entry={entry} index={i} onPickUp={onPickUp} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PendingLootRow({
+  entry,
+  index,
+  onPickUp,
+}: {
+  entry: PendingLootEntry;
+  index: number;
+  onPickUp: (index: number) => void;
+}) {
+  const itemId = entry.kind === "stack" ? entry.itemId : entry.instance.itemId;
+  const name = safeItemName(itemId);
+  const isGear = entry.kind === "gear";
+
+  return (
+    <div style={pendingLootRowStyle}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: isGear ? "#d8c878" : "#9cb",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {name}
+        </span>
+        {entry.kind === "stack" && (
+          <span style={{ fontSize: 11, opacity: 0.7, flexShrink: 0 }}>
+            ×{entry.qty}
+          </span>
+        )}
+        {isGear && entry.instance.rolledMods.length > 0 && (
+          <span style={{ fontSize: 10, opacity: 0.55, color: "#d8c878", flexShrink: 0 }}>
+            +{entry.instance.rolledMods.length}
+          </span>
+        )}
+      </div>
+      <button
+        onClick={() => onPickUp(index)}
+        style={{ ...secondaryButtonStyle, padding: "4px 8px", fontSize: 11 }}
+      >
+        {T.btn_pickUp}
+      </button>
+    </div>
   );
 }
 
@@ -591,4 +696,15 @@ const secondaryButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   fontFamily: "inherit",
   fontSize: 12,
+};
+
+const pendingLootRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 8px",
+  borderRadius: 3,
+  background: "#2a2418",
+  border: "1px solid #3d3525",
 };

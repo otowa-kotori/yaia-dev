@@ -1,8 +1,9 @@
 // Inventory operations.
 //
-// All helpers mutate the passed Inventory in place. Out-of-space conditions
-// throw — this follows the alpha "no silent fallback" policy. Callers that
-// want softer behaviour (drop on ground, mailbox) wrap the throw themselves.
+// All helpers mutate the passed Inventory in place and return a result
+// indicating success or the reason for failure. Callers decide how to
+// handle overflow (e.g. route to pending loot, surface an error, …).
+// A full bag is normal gameplay, not an exception.
 //
 // Stack merging:
 //   addStack first fills every existing StackEntry with the same itemId, then
@@ -24,6 +25,16 @@ import type { ItemId } from "../content/types";
 import type { GearInstance } from "../item/types";
 import type { Inventory, InventorySlot, StackEntry } from "./types";
 
+// ---------- Result types ----------
+
+export type AddStackResult =
+  | { ok: true }
+  | { ok: false; reason: "full"; remaining: number };
+
+export type AddGearResult =
+  | { ok: true }
+  | { ok: false; reason: "full" };
+
 export function createInventory(capacity: number): Inventory {
   if (capacity < 0 || !Number.isFinite(capacity)) {
     throw new Error(`createInventory: invalid capacity ${capacity}`);
@@ -38,14 +49,15 @@ export type StackLimit = number | null | undefined;
 
 /**
  * Merge into existing stacks of the same itemId, then occupy fresh slots for
- * overflow. Throws if the bag runs out of empty slots.
+ * overflow. Returns `{ ok: false, remaining }` when the bag runs out of empty
+ * slots — partial placement is committed (as much as fits is added).
  */
 export function addStack(
   inv: Inventory,
   itemId: ItemId | string,
   qty: number,
   stackLimit?: StackLimit,
-): void {
+): AddStackResult {
   if (qty <= 0) throw new Error(`addStack: qty must be positive, got ${qty}`);
 
   const normalizedLimit = normalizeStackLimit(stackLimit);
@@ -56,14 +68,14 @@ export function addStack(
     if (existingIndex !== -1) {
       const slot = inv.slots[existingIndex] as StackEntry;
       slot.qty += qty;
-      return;
+      return { ok: true };
     }
     const emptyIndex = firstEmpty(inv);
     if (emptyIndex === -1) {
-      throw new Error(`inventory: full (capacity=${inv.capacity}, adding stack "${itemId}")`);
+      return { ok: false, reason: "full", remaining: qty };
     }
     inv.slots[emptyIndex] = { kind: "stack", itemId: resolvedItemId, qty };
-    return;
+    return { ok: true };
   }
 
   let remaining = qty;
@@ -75,20 +87,19 @@ export function addStack(
     const added = Math.min(room, remaining);
     slot.qty += added;
     remaining -= added;
-    if (remaining === 0) return;
+    if (remaining === 0) return { ok: true };
   }
 
   while (remaining > 0) {
     const emptyIndex = firstEmpty(inv);
     if (emptyIndex === -1) {
-      throw new Error(
-        `inventory: full (capacity=${inv.capacity}, adding stack "${itemId}", remaining=${remaining})`,
-      );
+      return { ok: false, reason: "full", remaining };
     }
     const added = Math.min(normalizedLimit, remaining);
     inv.slots[emptyIndex] = { kind: "stack", itemId: resolvedItemId, qty: added };
     remaining -= added;
   }
+  return { ok: true };
 }
 
 function normalizeStackLimit(limit: StackLimit): number | null {
@@ -99,15 +110,14 @@ function normalizeStackLimit(limit: StackLimit): number | null {
   return limit;
 }
 
-/** Occupy the first empty slot with this gear instance. Throws if full. */
-export function addGear(inv: Inventory, gear: GearInstance): void {
+/** Occupy the first empty slot with this gear instance. Returns failure if full. */
+export function addGear(inv: Inventory, gear: GearInstance): AddGearResult {
   const emptyIndex = firstEmpty(inv);
   if (emptyIndex === -1) {
-    throw new Error(
-      `inventory: full (capacity=${inv.capacity}, adding gear "${gear.itemId}" #${gear.instanceId})`,
-    );
+    return { ok: false, reason: "full" };
   }
   inv.slots[emptyIndex] = { kind: "gear", instance: gear };
+  return { ok: true };
 }
 
 /** Return the lowest-index slot that holds a stack of itemId, or -1. */

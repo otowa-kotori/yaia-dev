@@ -70,6 +70,14 @@ export const T = {
   bagShared: "共享仓库",
   heroBag: "{name}的背包",
 
+  // ── Pending loot ──
+  pendingLoot: "待拾取",
+  pendingLootHint: "背包已满，以下物品暂存于场景中。离开场景后未拾取的物品将丢失。",
+  pendingLootEmpty: "无待拾取物品",
+  btn_pickUp: "拾取",
+  btn_pickUpAll: "全部拾取",
+  pickUpFailed: "背包仍然已满",
+
   // ── Crafting ──
   craftingTitle: "合成",
   craftingNoBag: "角色背包不存在，无法进行合成。",

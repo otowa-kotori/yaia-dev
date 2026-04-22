@@ -33,6 +33,7 @@ Project-specific conventions for Claude. Read before editing code.
 ## Style
 
 - Alpha stage: no fallbacks for missing content / data. Throw loudly on bad inputs so bugs are visible. `getX(id)` style helpers throw; callers don't wrap in try/catch unless a specific use case justifies swallowing.
+- Alpha stage: do NOT bump `SAVE_VERSION` or write migrations. Old saves are simply discarded on schema changes. Only add migrations when explicitly told to.
 - Time units inside game-core are logic ticks. ms only at the UI boundary.
 - All gameplay RNG flows through `ctx.rng`. No `Math.random()` in core.
 - Battles / scheduler state / intent state must be JSON-safe (plain data) so `GameState` can round-trip through a save file.

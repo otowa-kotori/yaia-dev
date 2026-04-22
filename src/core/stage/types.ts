@@ -21,6 +21,29 @@
 // Runtime logic (the "controller") is not persisted; it's re-instantiated
 // from state.currentStage on load.
 
+import type { ItemId } from "../content/types";
+import type { GearInstance } from "../item/types";
+
+// ---------- Pending loot ----------
+//
+// When an Activity (combat / gather) generates item rewards but the hero's
+// inventory is full, the overflow lands here instead of crashing. The player
+// picks items up manually; anything left behind when the stage is abandoned
+// is lost. Unlimited size — the stage is short-lived so this won't bloat.
+
+export interface PendingLootStack {
+  kind: "stack";
+  itemId: ItemId;
+  qty: number;
+}
+
+export interface PendingLootGear {
+  kind: "gear";
+  instance: GearInstance;
+}
+
+export type PendingLootEntry = PendingLootStack | PendingLootGear;
+
 export interface ActiveCombatWaveSession {
   encounterId: string;
   waveId: string;
@@ -58,4 +81,8 @@ export interface StageSession {
   pendingCombatWaveSearch: PendingCombatWaveSearch | null;
   /** The wave currently spawned, or the most recently resolved wave before cleanup finishes. */
   currentWave: ActiveCombatWaveSession | null;
+  /** Items that could not fit into the hero's inventory. The player may pick
+   *  them up manually. Cleared when the stage is abandoned (with a UI
+   *  confirmation if non-empty). */
+  pendingLoot: PendingLootEntry[];
 }

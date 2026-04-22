@@ -112,6 +112,12 @@ export interface CharacterController {
   equipItem(slotIndex: number): void;
   unequipItem(slot: string): void;
   craftRecipe(recipeId: string): void;
+  /** Try to move a specific pending-loot entry into the hero's inventory.
+   *  Returns true if successful, false if inventory is still full. */
+  pickUpPendingLoot(index: number): boolean;
+  /** Try to move all pending loot into inventory. Returns the count of
+   *  entries that could not be picked up (still pending). */
+  pickUpAllPendingLoot(): number;
 }
 
 export interface GameSession {
@@ -211,16 +217,26 @@ export function createGameSession(
     const inventory = getInventoryByOwner(inventoryOwnerId);
     const def = getItem(itemId);
     if (def.stackable) {
-      addStack(
+      const res = addStack(
         inventory,
         itemId,
         qty,
         getInventoryStackLimit(state, inventoryOwnerId, attrDefs),
       );
+      if (!res.ok) {
+        throw new Error(
+          `session.addItemToInventory: inventory full for "${inventoryOwnerId}", cannot add stack "${itemId}" (remaining=${res.remaining})`,
+        );
+      }
       return;
     }
     for (let i = 0; i < qty; i += 1) {
-      addGear(inventory, createGearInstance(itemId, { rng }));
+      const res = addGear(inventory, createGearInstance(itemId, { rng }));
+      if (!res.ok) {
+        throw new Error(
+          `session.addItemToInventory: inventory full for "${inventoryOwnerId}", cannot add gear "${itemId}"`,
+        );
+      }
     }
   }
 
@@ -294,20 +310,30 @@ export function createGameSession(
     for (const output of recipe.outputs) {
       const def = getItem(output.itemId);
       if (def.stackable) {
-        addStack(
+        const res = addStack(
           draft,
           output.itemId,
           output.qty,
           getInventoryStackLimit(state, hero.id, attrDefs),
         );
+        if (!res.ok) {
+          throw new Error(
+            `session.simulateRecipeInventoryChange: inventory full, cannot fit recipe output "${output.itemId}"`,
+          );
+        }
         continue;
       }
       for (let i = 0; i < output.qty; i += 1) {
-        addGear(draft, {
+        const res = addGear(draft, {
           instanceId: `preview.${recipe.id}.${i}`,
           itemId: output.itemId,
           rolledMods: [],
         } satisfies GearInstance);
+        if (!res.ok) {
+          throw new Error(
+            `session.simulateRecipeInventoryChange: inventory full, cannot fit recipe output gear "${output.itemId}"`,
+          );
+        }
       }
     }
   }
@@ -513,7 +539,12 @@ export function createGameSession(
         if (!equipped) {
           throw new Error(`session.unequipItem: slot "${slot}" is empty`);
         }
-        addGear(getInventoryByOwner(hero.id), equipped);
+        const res = addGear(getInventoryByOwner(hero.id), equipped);
+        if (!res.ok) {
+          throw new Error(
+            `session.unequipItem: inventory full, cannot unequip "${equipped.itemId}" from slot "${slot}"`,
+          );
+        }
         hero.equipped[slot] = null;
         rebuildHeroDerived(hero);
         bus.emit("equipmentChanged", { charId: hero.id, slot });
@@ -547,6 +578,74 @@ export function createGameSession(
 
         bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
         bus.emit("crafted", { charId: hero.id, recipeId });
+      },
+
+      pickUpPendingLoot(index: number): boolean {
+        const session = cc.stageSession;
+        if (!session) return false;
+        if (index < 0 || index >= session.pendingLoot.length) return false;
+
+        const entry = session.pendingLoot[index]!;
+        const hero = cc.hero;
+        const inv = getInventoryByOwner(hero.id);
+
+        if (entry.kind === "stack") {
+          const res = addStack(
+            inv,
+            entry.itemId,
+            entry.qty,
+            getInventoryStackLimit(state, hero.id, attrDefs),
+          );
+          if (!res.ok) return false;
+        } else {
+          const res = addGear(inv, entry.instance);
+          if (!res.ok) return false;
+        }
+
+        session.pendingLoot.splice(index, 1);
+        bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
+        bus.emit("pendingLootChanged", { charId: hero.id, stageId: hero.stageId! });
+        return true;
+      },
+
+      pickUpAllPendingLoot(): number {
+        const session = cc.stageSession;
+        if (!session) return 0;
+
+        const hero = cc.hero;
+        const inv = getInventoryByOwner(hero.id);
+        const before = session.pendingLoot.length;
+        const kept: typeof session.pendingLoot = [];
+
+        for (const entry of session.pendingLoot) {
+          if (entry.kind === "stack") {
+            const res = addStack(
+              inv,
+              entry.itemId,
+              entry.qty,
+              getInventoryStackLimit(state, hero.id, attrDefs),
+            );
+            if (!res.ok) {
+              // Partial placement: addStack already committed what fits.
+              // Keep the remainder in pending.
+              kept.push({ kind: "stack", itemId: entry.itemId, qty: res.remaining });
+              continue;
+            }
+          } else {
+            const res = addGear(inv, entry.instance);
+            if (!res.ok) {
+              kept.push(entry);
+              continue;
+            }
+          }
+        }
+
+        session.pendingLoot = kept;
+        if (kept.length < before) {
+          bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
+          bus.emit("pendingLootChanged", { charId: hero.id, stageId: hero.stageId! });
+        }
+        return kept.length;
       },
     };
 

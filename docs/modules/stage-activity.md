@@ -20,7 +20,7 @@ LocationDef        — "我在哪"（物理地点 / 地图区域）
 
 - `StageController` 是一个 `Tickable`
 - 它负责管理当前实例中的 actor，包括生成、重生和离开时的清理
-- 每个 `StageSession` 记录 `locationId`、`encounterId`、`spawnedActorIds`、当前波次 `currentWave`，以及进行中的 `pendingCombatWaveSearch`
+- 每个 `StageSession` 记录 `locationId`、`encounterId`、`spawnedActorIds`、当前波次 `currentWave`、进行中的 `pendingCombatWaveSearch`，以及 `pendingLoot`（背包满时溢出的物品）
 - 每个角色同一时刻只能在一个运行实例中，但多个角色可以各自拥有独立的 stage
 - Stage 只负责 actor 生命周期，不负责战斗推进
 
@@ -69,7 +69,7 @@ Activity 表示玩家当前在实例中做的事。它本身也是 `Tickable`。
 - Activity 的持久化形态是 `PlayerCharacter.activity`，其中保存 `kind` 与对应数据
 - 读档时由 session 根据这份数据重新实例化运行时 `Tickable`
 - store 不直接改写 `hero.activity`，避免 activity 运行时状态与存档状态漂移
-- Stage session 以 JSON-safe 纯数据保存，因此 encounter / wave 进度可以随存档一起恢复
+- Stage session 以 JSON-safe 纯数据保存，因此 encounter / wave 进度与 pendingLoot 可以随存档一起恢复
 
 ## 边界
 

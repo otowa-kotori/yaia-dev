@@ -19,17 +19,6 @@ export interface Migration {
 
 /** In-order list of migrations. */
 export const migrations: Migration[] = [
-  {
-    fromVersion: 5,
-    apply(data) {
-      // Add lastWallClockMs field for offline catch-up.
-      // Default to current time so the first catch-up after migration is a
-      // no-op rather than a spurious 24-hour fast-forward.
-      if (data.lastWallClockMs === undefined) {
-        data.lastWallClockMs = Date.now();
-      }
-      return data;
-    },
-  },
+
 ];
 

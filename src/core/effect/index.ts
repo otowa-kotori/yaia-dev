@@ -21,9 +21,10 @@ import type { Character, PlayerCharacter } from "../actor";
 import { getAttr, isPlayer } from "../actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../attribute";
 import { grantCharacterXp, grantSkillXp } from "../progression";
-import { addStack, addGear } from "../inventory";
+import { addStack, addGear, type AddStackResult, type AddGearResult } from "../inventory";
 import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance } from "../item";
+import type { PendingLootEntry } from "../stage/types";
 
 export interface EffectContext {
   state: GameState;
@@ -168,6 +169,11 @@ function applyRewards(
 //     everywhere for gameplay randomness feeds the roll, keeping save-state
 //     determinism intact.
 //
+// Overflow policy: when the hero's inventory is full, excess items are routed
+// to the stage's pendingLoot queue (if the hero is in a stage). Items that
+// cannot be placed anywhere are silently dropped — this should not happen in
+// practice because a stage is always active when rewards flow.
+//
 // Policy: the per-char inventory must already exist (created on hero spawn /
 // after load). No silent fallback; missing inventory is a bug — throw.
 function addItemToInventory(
@@ -184,13 +190,53 @@ function addItemToInventory(
   }
   const def = getItem(itemId);
   if (def.stackable) {
-    addStack(inv, itemId, qty, getInventoryStackLimit(ctx.state, charId, ctx.attrDefs));
+    const stackLimit = getInventoryStackLimit(ctx.state, charId, ctx.attrDefs);
+    const res = addStack(inv, itemId, qty, stackLimit);
+    if (!res.ok) {
+      pushToPendingLoot(ctx, charId, { kind: "stack", itemId, qty: res.remaining });
+    }
     return;
   }
   for (let i = 0; i < qty; i++) {
     const gear = createGearInstance(itemId, { rng: ctx.rng });
-    addGear(inv, gear);
+    const res = addGear(inv, gear);
+    if (!res.ok) {
+      pushToPendingLoot(ctx, charId, { kind: "gear", instance: gear });
+    }
   }
+}
+
+/** Route overflow items to the stage's pendingLoot for the given character.
+ *  Stack entries are merged into an existing pending entry with the same itemId
+ *  (pendingLoot has no stack limit — unlimited stacking).
+ *  If no stage is found (shouldn't happen during normal gameplay), the item
+ *  is lost — but we avoid crashing so the game loop stays alive. */
+function pushToPendingLoot(
+  ctx: EffectContext,
+  charId: string,
+  entry: PendingLootEntry,
+): void {
+  const hero = ctx.state.actors.find((a) => a.id === charId);
+  if (!hero || !isPlayer(hero)) return;
+  const stageId = hero.stageId;
+  const session = stageId ? ctx.state.stages[stageId] : undefined;
+  if (!session) return;
+
+  if (entry.kind === "stack") {
+    const existing = session.pendingLoot.find(
+      (e): e is PendingLootEntry & { kind: "stack" } =>
+        e.kind === "stack" && e.itemId === entry.itemId,
+    );
+    if (existing) {
+      existing.qty += entry.qty;
+    } else {
+      session.pendingLoot.push(entry);
+    }
+  } else {
+    session.pendingLoot.push(entry);
+  }
+
+  ctx.bus.emit("pendingLootChanged", { charId, stageId: stageId! });
 }
 
 function buildFormulaContext(

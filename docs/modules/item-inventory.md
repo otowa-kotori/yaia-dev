@@ -36,6 +36,17 @@
 - **槽位稳定**：装备时若发生同槽位替换，旧装备回填到原背包槽位，而不是重新找空位。
 - **实例级 modifier**：最终生效属性 = `ItemDef.modifiers` + `GearInstance.rolledMods`，由 `rebuildCharacterDerived` 统一重建。
 - **材料与装备分流**：可堆叠物品走 `addStack`，不可堆叠装备走 `addGear`。
+- **结果返回而非异常**：`addStack` / `addGear` 在背包满时返回 `{ ok: false }` 而不是抛异常——背包满是正常游戏状态。Session 层的合成 / 卸装等操作会检查结果并 throw（这些场景不允许失败）。
+
+## 溢出与待拾取 (Pending Loot)
+
+当 Activity（战斗 / 采集）产生物品奖励时：
+- **优先入包**：通过 `addStack` / `addGear` 尝试放入角色背包。
+- **溢出进 pending**：背包满时，溢出的物品进入 `StageSession.pendingLoot`。
+- **手动拾取**：玩家通过 `pickUpPendingLoot(index)` 或 `pickUpAllPendingLoot()` 从待拾取区取回物品。
+- **离开丢失**：离开 Stage 时 `pendingLoot` 随 session 一起清空。UI 层应在 `pendingLoot` 非空时弹出确认。
+
+货币和经验值仍然即时发放，不受背包限制。
 
 ## 边界
 

@@ -83,25 +83,29 @@ describe("inventory ops", () => {
     expect(inv.slots[3]).toBeNull();
   });
 
-  test("addStack throws when bag is full and item is not present", () => {
+  test("addStack returns full when bag is full and item is not present", () => {
     const inv = createInventory(2);
     addGear(inv, gear("g1"));
     addGear(inv, gear("g2"));
-    expect(() => addStack(inv, ORE, 1, STACK_LIMIT)).toThrow(/full/);
+    const res = addStack(inv, ORE, 1, STACK_LIMIT);
+    expect(res).toEqual({ ok: false, reason: "full", remaining: 1 });
   });
 
-  test("addStack throws when overflow needs a new slot but bag is full", () => {
+  test("addStack returns full with partial placement when overflow needs a new slot but bag is full", () => {
     const inv = createInventory(2);
     addStack(inv, ORE, 50, STACK_LIMIT);
     addGear(inv, gear("g1"));
-    expect(() => addStack(inv, ORE, 1, STACK_LIMIT)).toThrow(/full/);
+    const res = addStack(inv, ORE, 1, STACK_LIMIT);
+    // The existing stack was already at limit, so no merge possible.
+    expect(res).toEqual({ ok: false, reason: "full", remaining: 1 });
   });
 
   test("addStack still merges even when all other slots are full if current stack has room", () => {
     const inv = createInventory(2);
     addStack(inv, ORE, 40, STACK_LIMIT);
     addGear(inv, gear("g1"));
-    expect(() => addStack(inv, ORE, 10, STACK_LIMIT)).not.toThrow();
+    const res = addStack(inv, ORE, 10, STACK_LIMIT);
+    expect(res).toEqual({ ok: true });
     expect((inv.slots[0] as { qty: number }).qty).toBe(50);
   });
 
@@ -113,10 +117,11 @@ describe("inventory ops", () => {
     expect(inv.slots[1]).toBeNull();
   });
 
-  test("addGear throws when bag is full", () => {
+  test("addGear returns full when bag is full", () => {
     const inv = createInventory(1);
     addGear(inv, gear("g1"));
-    expect(() => addGear(inv, gear("g2"))).toThrow(/full/);
+    const res = addGear(inv, gear("g2"));
+    expect(res).toEqual({ ok: false, reason: "full" });
   });
 
   test("findStackSlot + countItem ignore gear", () => {

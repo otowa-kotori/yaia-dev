@@ -332,5 +332,6 @@ function freshSession(
     combatWaveIndex: 0,
     pendingCombatWaveSearch: null,
     currentWave: null,
+    pendingLoot: [],
   };
 }
