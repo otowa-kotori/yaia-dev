@@ -340,7 +340,7 @@ function ItemDetailsPanel({
   const canEquip =
     isGear &&
     Boolean(def.slot) &&
-    selected.inventoryOwnerId === heroNameToInventoryOwnerId(heroName);
+    selected.inventoryOwnerId === heroInventoryOwnerId;
 
   return (
     <div style={sectionStyle}>

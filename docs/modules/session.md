@@ -1,42 +1,62 @@
 # session
 
-`GameSession` 是运行时编排层，采用两层接口设计。
-
-## 两层接口
-
-- **GameSession**（全局层）：tick 引擎、事件总线、rng、state、角色管理（`getCharacter`、`getFocusedCharacter`、`listHeroes`）、全局指令（速度、存档、重置）
-- **CharacterController**（单角色层）：per-hero 运行时句柄，暴露 `enterLocation`、`startFight`、`startGather`、`stopActivity`、`equipItem`、`craftRecipe` 等命令——不需要传 charId
-
-UI 通过 `session.getFocusedCharacter()` 获取当前聚焦角色的 controller，直接调方法。
+`GameSession` 是运行时编排层，采用 **GameSession + CharacterController** 的两层接口。
 
 ## 定位
 
-- Store 构建在 `GameSession` 之上，并额外补充订阅与存档能力
-- UI、测试和脚本进入游戏世界时，统一通过 `createGameSession` 或基于它构建出的 store
-- `GameSession` 是各个 core 模块的运行时聚合点，但不是规则例外层
+- **GameSession** 负责全局生命周期、tick 引擎、事件总线、随机数、共享状态与角色管理。
+- **CharacterController** 负责单角色的 gameplay 指令，UI 不需要反复传 `charId`。
+- **Store** 构建在 `GameSession` 之上，额外补充订阅、revision 和自动存档。
 
 ## 职责
 
-- **全局指令**：`setSpeedMultiplier`、`loadFromSave`、`resetToFresh`、`dispose`
+- **全局指令**：`setSpeedMultiplier`、`getSpeedMultiplier`、`loadFromSave`、`resetToFresh`、`dispose`
 - **角色管理**：`getCharacter(charId)`、`getFocusedCharacter()`、`setFocusedChar(charId)`、`listHeroes()`
-- **CharacterController 指令**：`enterLocation`、`leaveLocation`、`startFight`、`startGather`、`stopActivity`、`equipItem`、`unequipItem`、`craftRecipe`
-- **生命周期**：`loadFromSave` 负责接管存档恢复并重建所有 controller；`resetToFresh` 根据 `ContentDb.starting.heroes` 初始化多角色新游戏；`dispose` 负责停止引擎
+- **单角色指令**：
+  - `enterLocation(locationId)` / `leaveLocation()`
+  - `startFight(encounterId)` / `startGather(nodeId)` / `stopActivity()`
+  - `equipItem(slotIndex)` / `unequipItem(slot)`
+  - `craftRecipe(recipeId)`
+- **新档初始化**：`resetToFresh()` 根据 `ContentDb.starting.heroes` 创建角色、背包、起始物品，并让角色进入初始地点。
+- **读档恢复**：`loadFromSave()` 重建角色控制器、stage controller 与运行中 activity。
+
+## 装备与合成入口
+
+- **装备**：
+  - `equipItem(slotIndex)` 从当前角色的**个人背包槽位**装备一件 gear。
+  - 如果目标装备槽已有旧装备，则旧装备回填到原背包槽位。
+  - `unequipItem(slot)` 把该槽位装备放回角色个人背包。
+- **合成**：
+  - `craftRecipe(recipeId)` 只在角色未运行 battle / gather activity 时允许执行。
+  - 制作前会同时校验技能等级、材料是否足够以及产物是否能放回背包。
+  - 成功后写入产物、发放技能 XP，并发出刷新 UI 所需事件。
+
+## 事件协作
+
+`session` 自己不做 React 刷新；它通过事件总线把状态变化通知给上层：
+
+- `inventoryChanged`：背包内容发生变化
+- `equipmentChanged`：装备槽位发生变化
+- `crafted`：一次制作成功完成
+- `activityComplete`：活动自然结束
+
+`src/ui/store.ts` 监听这些事件后触发订阅通知并安排持久化。
 
 ## 边界
 
-- 不负责 UI 状态，例如 revision、订阅和存档节流都由 store 处理
-- 不持有内容定义，只读取 `ContentDb`
-- 不为跨模块规则单独开例外；只负责把已有模块组合起来
+- **不负责 UI 状态**：tab、选中项、提示文案、详情面板等都不在 session 层管理。
+- **不负责内容定义**：session 只读取 `ContentDb`，不持有设计数据源。
+- **不直接写存档介质**：session 只维护内存状态；何时持久化由 store 决定。
+- **不绕过规则层**：装备、合成、采集、战斗都尽量复用现有 core 模块能力，而不是在 session 里重写一套规则。
 
 ## 不变量
 
-- 每个角色同一时刻最多只有一个 stage（通过 `hero.stageId` 引用 `state.stages` 中的条目）
-- 每个角色同一时刻最多只有一个 activity（持有在 CharacterController 内部）
-- Stage 独立于角色：多个角色可以引用同一个 stageId（未来多人副本预留）
-- StageController 由 session 层独立管理（`stageControllers Map`），不归属 CharacterController
-- Stage 销毁时检查是否还有角色引用该 stageId，无引用才真正清理
-- 从存档恢复 activity 时，按继续执行处理，不重复触发仅应在首次启动时发生的 `onStart` 副作用
+- **角色作用域清晰**：`CharacterController` 的命令只作用于自己绑定的 hero。
+- **同一角色单活动**：每个角色同一时刻最多只有一个运行中的 activity。
+- **Stage 独立管理**：stage controller 放在 session 层的 `Map<stageId, StageController>` 中，而不是挂在角色身上。
+- **恢复不重复副作用**：从存档恢复 activity 时，不重复触发只应在首次启动时执行的 `onStart` 副作用。
 
 ## 入口
 
-`src/core/session/index.ts`
+- `src/core/session/index.ts`
+- `src/ui/store.ts`
