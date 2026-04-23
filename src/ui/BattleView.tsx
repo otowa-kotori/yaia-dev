@@ -6,16 +6,16 @@
 //
 // Pure presentation — reads from Store, dispatches nothing.
 
-import type { Character, PlayerCharacter } from "../core/actor";
-import { getAttr, isCharacter, isEnemy, isResourceNode } from "../core/actor";
-import { ATTR } from "../core/attribute";
-import { xpProgressToNextLevel } from "../core/progression";
+import type { Character, PlayerCharacter } from "../core/entity/actor";
+import { getAttr, isCharacter, isEnemy, isResourceNode } from "../core/entity/actor";
+import { ATTR } from "../core/entity/attribute";
+import { xpProgressToNextLevel } from "../core/growth/leveling";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
   type CombatActivity,
   type GatherActivity,
-} from "../core/activity";
+} from "../core/world/activity";
 import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";

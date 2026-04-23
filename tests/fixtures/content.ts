@@ -1,4 +1,4 @@
-import { ATTR } from "../../src/core/attribute";
+import { ATTR } from "../../src/core/entity/attribute";
 import { emptyContentDb, setContent, type ContentDb } from "../../src/core/content";
 import type {
   AbilityDef,
@@ -22,19 +22,19 @@ import type {
   SkillDef,
   SkillId,
 } from "../../src/core/content/types";
-import { createGameEventBus } from "../../src/core/events";
-import type { GameEventBus } from "../../src/core/events";
-import { createRng, type Rng } from "../../src/core/rng";
-import { createEmptyState, type GameState } from "../../src/core/state";
+import { createGameEventBus } from "../../src/core/infra/events";
+import type { GameEventBus } from "../../src/core/infra/events";
+import { createRng, type Rng } from "../../src/core/infra/rng";
+import { createEmptyState, type GameState } from "../../src/core/infra/state";
 import { SAVE_VERSION } from "../../src/core/save/migrations";
 import {
   createEnemy,
   createPlayerCharacter,
   type Enemy,
   type PlayerCharacter,
-} from "../../src/core/actor";
-import type { FormulaRef } from "../../src/core/formula";
-import { registerBuiltinIntents } from "../../src/core/intent";
+} from "../../src/core/entity/actor";
+import type { FormulaRef } from "../../src/core/infra/formula";
+import { registerBuiltinIntents } from "../../src/core/combat/intent";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../../src/core/inventory";
 
 // ---------- Shared attribute definitions ----------

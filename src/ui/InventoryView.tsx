@@ -21,7 +21,7 @@ import type {
   InventorySlot,
   StackEntry,
 } from "../core/inventory";
-import { SHARED_INVENTORY_KEY } from "../core/state";
+import { SHARED_INVENTORY_KEY } from "../core/infra/state";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { T, slotLabel, fmt } from "./text";

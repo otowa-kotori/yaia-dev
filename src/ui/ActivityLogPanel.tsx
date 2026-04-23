@@ -1,4 +1,4 @@
-import type { BattleLogEntry } from "../core/combat/battle";
+import type { BattleLogEntry } from "../core/combat/battle/battle";
 import { T } from "./text";
 
 export function ActivityLogPanel({

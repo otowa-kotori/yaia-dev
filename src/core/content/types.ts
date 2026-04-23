@@ -8,7 +8,7 @@
 // Definitions are plain data. They may reference other content by ID (never
 // hold direct references). This keeps the save file ID-only.
 
-import type { FormulaRef } from "../formula/types";
+import type { FormulaRef } from "../infra/formula/types";
 
 // ---------- Branded ID types ----------
 // Brands are compile-time only; at runtime they're plain strings.

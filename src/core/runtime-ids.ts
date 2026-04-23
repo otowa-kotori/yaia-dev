@@ -19,7 +19,7 @@
 //   the allocator space is exhausted.
 
 import type { MonsterId, ResourceNodeId } from "./content/types";
-import type { GameState, RuntimeIdState } from "./state/types";
+import type { GameState, RuntimeIdState } from "./infra/state/types";
 
 const RUNTIME_SUFFIX_ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

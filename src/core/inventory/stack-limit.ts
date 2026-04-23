@@ -1,7 +1,7 @@
-import { isPlayer } from "../actor/types";
-import { ATTR, getAttr as getAttrFromSet } from "../attribute";
+import { isPlayer } from "../entity/actor/types";
+import { ATTR, getAttr as getAttrFromSet } from "../entity/attribute";
 import type { AttrDef } from "../content/types";
-import { SHARED_INVENTORY_KEY, type GameState } from "../state/types";
+import { SHARED_INVENTORY_KEY, type GameState } from "../infra/state/types";
 import { DEFAULT_SHARED_STACK_LIMIT } from "./constants";
 
 export function getInventoryStackLimit(

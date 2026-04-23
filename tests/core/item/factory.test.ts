@@ -1,12 +1,12 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { createRng } from "../../../src/core/rng";
+import { createRng } from "../../../src/core/infra/rng";
 import {
   patchContent,
   resetContent,
 } from "../../../src/core/content";
 import type { ItemDef, ItemId } from "../../../src/core/content/types";
 import { createGearInstance } from "../../../src/core/item";
-import { ATTR } from "../../../src/core/attribute";
+import { ATTR } from "../../../src/core/entity/attribute";
 import { loadFixtureContent } from "../../fixtures/content";
 
 const rolledSword: ItemDef = {

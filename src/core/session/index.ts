@@ -32,14 +32,14 @@
 // No Math.random / no setInterval inside gameplay paths — everything flows
 // through ctx.rng and the tick engine, per the project invariants.
 
-import { createTickEngine, type TickEngine } from "../tick";
-import { createGameEventBus, type GameEventBus } from "../events";
-import { createRng, restoreRng, type Rng } from "../rng";
+import { createTickEngine, type TickEngine } from "../infra/tick";
+import { createGameEventBus, type GameEventBus } from "../infra/events";
+import { createRng, restoreRng, type Rng } from "../infra/rng";
 import {
   createEmptyState,
   type GameState,
   type DungeonSession,
-} from "../state";
+} from "../infra/state";
 import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
 import { getItem, getLocation, getRecipe, getSkill, getDungeon, setContent } from "../content";
@@ -56,15 +56,15 @@ import {
   abandonDungeon as abandonDungeonCore,
   type DungeonActivity,
   type DungeonPhase,
-} from "../activity";
+} from "../world/activity";
 import {
   createPlayerCharacter,
   isPlayer,
   isResourceNode,
   rebuildCharacterDerived,
   type PlayerCharacter,
-} from "../actor";
-import { registerBuiltinIntents } from "../intent";
+} from "../entity/actor";
+import { registerBuiltinIntents } from "../combat/intent";
 import {
   addGear,
   addStack,
@@ -75,19 +75,19 @@ import {
 } from "../inventory";
 import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance, type GearInstance } from "../item";
-import { grantSkillXp } from "../progression";
+import { grantSkillXp } from "../growth/leveling";
 import {
   enterStage as enterStageCore,
   leaveStage as leaveStageCore,
   type StageController,
-} from "../stage";
+} from "../world/stage";
 import {
   assertRuntimeIdState,
   mintDungeonSessionId,
   mintStageId,
 } from "../runtime-ids";
-import type { StageSession } from "../stage/types";
-import type { StageMode } from "../stage/types";
+import type { StageSession } from "../world/stage/types";
+import type { StageMode } from "../world/stage/types";
 
 // ---------- Persisted activity pointers ----------
 // The resume payload stored in PlayerCharacter.activity.data. Mirrored in

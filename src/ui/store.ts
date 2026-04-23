@@ -11,8 +11,8 @@
 // Adding a new gameplay command = add a method on CharacterController; the
 // store picks it up for free via getFocusedCharacter().
 
-import { TICK_MS } from "../core/tick";
-import { computeCatchUpTicks, MAX_CATCHUP_TICKS } from "../core/tick/catch-up";
+import { TICK_MS } from "../core/infra/tick";
+import { computeCatchUpTicks, MAX_CATCHUP_TICKS } from "../core/infra/tick/catch-up";
 import { createGameSession, type GameSession } from "../core/session";
 import type { ContentDb } from "../core/content";
 import {
@@ -21,8 +21,8 @@ import {
   serialize,
   type SaveAdapter,
 } from "../core/save";
-import { purchaseUpgrade as purchaseUpgradeImpl, type UpgradePurchaseContext } from "../core/upgrade-manager";
-import { isPlayer, rebuildCharacterDerived } from "../core/actor";
+import { purchaseUpgrade as purchaseUpgradeImpl, type UpgradePurchaseContext } from "../core/growth/upgrade-manager";
+import { isPlayer, rebuildCharacterDerived } from "../core/entity/actor";
 
 const SAVE_KEY = "yaia:save";
 const AUTOSAVE_INTERVAL_MS = 10_000;

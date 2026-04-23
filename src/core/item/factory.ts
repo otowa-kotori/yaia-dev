@@ -16,7 +16,7 @@
 
 import { getItem } from "../content/registry";
 import type { ItemId, Modifier } from "../content/types";
-import type { Rng } from "../rng";
+import type { Rng } from "../infra/rng";
 import type { GearInstance } from "./types";
 
 export interface CreateGearCtx {

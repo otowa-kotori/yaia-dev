@@ -19,8 +19,8 @@
 // Format: JSON with a `version` envelope. Versioning + migrations live in
 // ./migrations.ts.
 
-import type { GameState } from "../state/types";
-import { isCharacter, isEnemy, isPlayer, rebuildCharacterDerived } from "../actor";
+import type { GameState } from "../infra/state/types";
+import { isCharacter, isEnemy, isPlayer, rebuildCharacterDerived } from "../entity/actor";
 import type { AttrDef } from "../content/types";
 import { getMonster } from "../content/registry";
 import { SAVE_VERSION, migrations } from "./migrations";

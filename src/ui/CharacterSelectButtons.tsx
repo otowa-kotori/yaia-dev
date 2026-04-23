@@ -4,13 +4,13 @@
 // (multi-select). The component stays presentation-focused: callers provide the
 // display data and receive the next selected id list on click.
 
-import type { PlayerCharacter } from "../core/actor";
+import type { PlayerCharacter } from "../core/entity/actor";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
   type CombatActivity,
   type GatherActivity,
-} from "../core/activity";
+} from "../core/world/activity";
 import { T } from "./text";
 
 export interface CharacterSelectOption {

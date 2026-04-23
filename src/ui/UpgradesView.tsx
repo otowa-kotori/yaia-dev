@@ -11,8 +11,8 @@
 // writes via store.purchaseUpgrade(). No local state beyond hover.
 
 import { getContent } from "../core/content";
-import { upgradeCost } from "../core/worldrecord";
-import { ATTR } from "../core/attribute";
+import { upgradeCost } from "../core/growth/worldrecord";
+import { ATTR } from "../core/entity/attribute";
 import type { Modifier } from "../core/content/types";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";

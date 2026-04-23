@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { applyEffect, type EffectContext } from "../../src/core/effect";
+import { applyEffect, type EffectContext } from "../../src/core/behavior/effect";
 import { resetContent } from "../../src/core/content";
 import type { EffectDef, ItemId } from "../../src/core/content/types";
 import {
@@ -21,8 +21,8 @@ import {
   basicAttackAbility,
   type TestHarness,
 } from "../fixtures/content";
-import type { PlayerCharacter } from "../../src/core/actor";
-import type { StageSession } from "../../src/core/stage/types";
+import type { PlayerCharacter } from "../../src/core/entity/actor";
+import type { StageSession } from "../../src/core/world/stage/types";
 
 const STAGE_ID = "test-stage";
 

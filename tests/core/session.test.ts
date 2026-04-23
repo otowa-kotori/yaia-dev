@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ACTIVITY_GATHER_KIND } from "../../src/core/activity";
-import { getAttr, isResourceNode } from "../../src/core/actor";
-import { ATTR } from "../../src/core/attribute";
+import { ACTIVITY_GATHER_KIND } from "../../src/core/world/activity";
+import { getAttr, isResourceNode } from "../../src/core/entity/actor";
+import { ATTR } from "../../src/core/entity/attribute";
 import { resetContent } from "../../src/core/content";
 import { addStack, countItem } from "../../src/core/inventory";
 import { deserialize, serialize } from "../../src/core/save";

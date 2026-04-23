@@ -4,7 +4,7 @@
 // gathering. Renders them in the same grid-cell format as the bag. The player
 // can pick up individual items or use "pick up all".
 
-import type { PendingLootEntry } from "../core/stage/types";
+import type { PendingLootEntry } from "../core/world/stage/types";
 import type { CharacterController } from "../core/session";
 import { ItemSlotCell, safeItemName, CELL_SIZE, CELL_GAP, GRID_COLS } from "./ItemSlot";
 import { T } from "./text";

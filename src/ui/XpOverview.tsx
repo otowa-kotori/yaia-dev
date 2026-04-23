@@ -5,10 +5,10 @@
 //   - Core attribute block (ATK / DEF / STR / DEX / INT / WIS / SPD)
 //   - Per-skill progress bars for every skill the hero has earned XP in
 
-import { getAttr } from "../core/actor";
-import { ATTR } from "../core/attribute";
+import { getAttr } from "../core/entity/actor";
+import { ATTR } from "../core/entity/attribute";
 import { getContent } from "../core/content";
-import { xpProgressToNextLevel } from "../core/progression";
+import { xpProgressToNextLevel } from "../core/growth/leveling";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { buildDefaultContent } from "../content";

@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { deserialize, serialize } from "../../../src/core/save";
-import { createEmptyState } from "../../../src/core/state";
+import { createEmptyState } from "../../../src/core/infra/state";
 import { resetContent, patchContent } from "../../../src/core/content";
 import type { ItemDef, ItemId } from "../../../src/core/content/types";
-import { ATTR } from "../../../src/core/attribute";
-import { isPlayer, getAttr } from "../../../src/core/actor";
+import { ATTR } from "../../../src/core/entity/attribute";
+import { isPlayer, getAttr } from "../../../src/core/entity/actor";
 import {
   addGear,
   addStack,
@@ -12,7 +12,7 @@ import {
   DEFAULT_CHAR_INVENTORY_CAPACITY,
 } from "../../../src/core/inventory";
 import { createGearInstance } from "../../../src/core/item";
-import { createRng } from "../../../src/core/rng";
+import { createRng } from "../../../src/core/infra/rng";
 import { attrDefs, loadFixtureContent, makePlayer } from "../../fixtures/content";
 
 // A content bundle the save layer needs to resolve itemIds / slots.

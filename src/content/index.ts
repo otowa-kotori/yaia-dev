@@ -1,7 +1,7 @@
 // Default MVP content bundle. Plain-data, kept deliberately minimal.
 // Grow this file freely — it's the primary file designers will edit.
 
-import { ATTR } from "../core/attribute";
+import { ATTR } from "../core/entity/attribute";
 import type {
   AbilityDef,
   AbilityId,
@@ -29,7 +29,7 @@ import type {
 } from "../core/content";
 
 import { emptyContentDb } from "../core/content";
-import type { FormulaRef } from "../core/formula";
+import type { FormulaRef } from "../core/infra/formula";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
 
 // ---------- Currency IDs ----------

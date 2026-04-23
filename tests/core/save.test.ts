@@ -5,13 +5,13 @@ import {
   SAVE_VERSION,
   serialize,
 } from "../../src/core/save";
-import { createEmptyState } from "../../src/core/state";
-import { createBattle } from "../../src/core/combat";
-import { INTENT, registerBuiltinIntents } from "../../src/core/intent";
+import { createEmptyState } from "../../src/core/infra/state";
+import { createBattle } from "../../src/core/combat/battle";
+import { INTENT, registerBuiltinIntents } from "../../src/core/combat/intent";
 import { resetContent } from "../../src/core/content";
 import { loadFixtureContent, makePlayer, makeSlime, attrDefs } from "../fixtures/content";
-import { ATTR } from "../../src/core/attribute";
-import { getAttr, isCharacter, isEnemy, isPlayer } from "../../src/core/actor";
+import { ATTR } from "../../src/core/entity/attribute";
+import { getAttr, isCharacter, isEnemy, isPlayer } from "../../src/core/entity/actor";
 
 describe("save / serialize+deserialize", () => {
   beforeEach(() => {

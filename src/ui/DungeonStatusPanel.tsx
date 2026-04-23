@@ -4,14 +4,14 @@
 // session APIs. The panel summarizes wave progress, inferred phase, party HP,
 // current enemies, and exposes the abandon action.
 
-import type { Actor, Character, PlayerCharacter } from "../core/actor";
-import { getAttr, isEnemy, isPlayer } from "../core/actor";
-import { ACTIVITY_DUNGEON_KIND, type DungeonPhase } from "../core/activity";
-import { ATTR } from "../core/attribute";
-import type { Battle } from "../core/combat/battle";
+import type { Actor, Character, PlayerCharacter } from "../core/entity/actor";
+import { getAttr, isEnemy, isPlayer } from "../core/entity/actor";
+import { ACTIVITY_DUNGEON_KIND, type DungeonPhase } from "../core/world/activity";
+import { ATTR } from "../core/entity/attribute";
+import type { Battle } from "../core/combat/battle/battle";
 import { getContent } from "../core/content";
-import type { DungeonSession } from "../core/state";
-import type { StageSession } from "../core/stage/types";
+import type { DungeonSession } from "../core/infra/state";
+import type { StageSession } from "../core/world/stage/types";
 import { buildDefaultContent } from "../content";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import type { GameStore } from "./store";

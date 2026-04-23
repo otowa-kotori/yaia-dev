@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { getContent } from "../core/content";
 import type { GearEntry, StackEntry } from "../core/inventory";
-import type { PendingLootEntry } from "../core/stage/types";
+import type { PendingLootEntry } from "../core/world/stage/types";
 
 // ---------- Layout constants (shared with grids) ----------
 

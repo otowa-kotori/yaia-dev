@@ -4,27 +4,45 @@
 // Deliberately thin: grow by adding exports when a system is ready to be
 // consumed externally.
 
-export * as rng from "./rng";
-export * as events from "./events";
-export * as tick from "./tick";
-export * as state from "./state";
+// infra
+export * as rng from "./infra/rng";
+export * as events from "./infra/events";
+export * as tick from "./infra/tick";
+export * as state from "./infra/state";
+export * as formula from "./infra/formula";
+
+// content (flat)
 export * as content from "./content";
-export * as formula from "./formula";
-export * as attribute from "./attribute";
-export * as actor from "./actor";
+
+// entity
+export * as attribute from "./entity/attribute";
+export * as actor from "./entity/actor";
+
+// item (flat)
 export * as item from "./item";
 export * as inventory from "./inventory";
-export * as effect from "./effect";
-export * as ability from "./ability";
-export * as combat from "./combat";
-export * as intent from "./intent";
-export * as stage from "./stage";
-export * as activity from "./activity";
+
+// behavior
+export * as effect from "./behavior/effect";
+export * as ability from "./behavior/ability";
+
+// combat
+export * as combat from "./combat/battle";
+export * as intent from "./combat/intent";
+
+// world
+export * as stage from "./world/stage";
+export * as activity from "./world/activity";
+
+// growth
+export * as progression from "./growth/leveling";
+export * as upgradeManager from "./growth/upgrade-manager";
+
+// infra (misc)
 export * as runtimeIds from "./runtime-ids";
-export * as progression from "./progression";
+
+// persistence (flat)
 export * as save from "./save";
 
-
-
-export * as upgradeManager from "./upgrade-manager";
+// orchestration (flat)
 export * as session from "./session";
