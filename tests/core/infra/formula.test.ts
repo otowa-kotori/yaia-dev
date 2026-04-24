@@ -1,7 +1,19 @@
 import { describe, test, expect } from "bun:test";
 import { evalFormula, type FormulaRef } from "../../../src/core/infra/formula";
 
+const progressionParams = {
+  a: 8,
+  p: 1.8,
+  c: 8,
+  base: 1.25,
+  cap: 0.18,
+  d: 0.22,
+  e: 80,
+  offset: 8,
+};
+
 describe("formula", () => {
+
   test("constant", () => {
     const f: FormulaRef = { kind: "constant", value: 42 };
     expect(evalFormula(f, { vars: {} })).toBe(42);
@@ -57,7 +69,36 @@ describe("formula", () => {
     expect(evalFormula(f, { vars: { lvl: 3 } })).toBe(200);
   });
 
+  test("char_xp_curve_v1 follows progression doc values", () => {
+    const f: FormulaRef = {
+      kind: "char_xp_curve_v1",
+      ...progressionParams,
+    };
+    expect(evalFormula(f, { vars: { level: 5 } })).toBe(183);
+    expect(evalFormula(f, { vars: { level: 10 } })).toBe(1147);
+  });
+
+  test("skill_xp_curve_v1 currently mirrors the character curve", () => {
+    const f: FormulaRef = {
+      kind: "skill_xp_curve_v1",
+      ...progressionParams,
+    };
+    expect(evalFormula(f, { vars: { level: 15 } })).toBe(4813);
+    expect(evalFormula(f, { vars: { level: 20 } })).toBe(16415);
+  });
+
+  test("soft XP curves return 0 at level <= 0 and respect custom levelVar", () => {
+    const f: FormulaRef = {
+      kind: "char_xp_curve_v1",
+      ...progressionParams,
+      levelVar: "lvl",
+    };
+    expect(evalFormula(f, { vars: { lvl: 0 } })).toBe(0);
+    expect(evalFormula(f, { vars: { lvl: 5 } })).toBe(183);
+  });
+
   test("atk_vs_def applies floor", () => {
+
     const f: FormulaRef = { kind: "atk_vs_def", atkMul: 1, defMul: 1 };
     expect(evalFormula(f, { vars: { atk: 1, def: 100 } })).toBe(1); // floor default = 1
   });

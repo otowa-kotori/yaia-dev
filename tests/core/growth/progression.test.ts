@@ -11,7 +11,8 @@ import {
   loadFixtureContent,
   makePlayer,
   miningSkill,
-  testXpCurve,
+  testCharXpCurve,
+  testSkillXpCurve,
 } from "../../fixtures/content";
 
 describe("progression / XP", () => {
@@ -21,16 +22,13 @@ describe("progression / XP", () => {
   });
 
   test("xpCostToReach(1) is 0 (level 1 is free)", () => {
-    expect(xpCostToReach(1, testXpCurve)).toBe(0);
+    expect(xpCostToReach(1, testCharXpCurve)).toBe(0);
   });
 
-  test("xpCostToReach uses the curve", () => {
-    // base 10, growth 1.2: L2 = floor(10*1.2^1) = 12,
-    //                     L3 = floor(10*1.2^2) = 14 (14.4),
-    //                     L4 = floor(10*1.2^3) = 17 (17.28)
-    expect(xpCostToReach(2, testXpCurve)).toBe(12);
-    expect(xpCostToReach(3, testXpCurve)).toBe(14);
-    expect(xpCostToReach(4, testXpCurve)).toBe(17);
+  test("xpCostToReach uses the character curve", () => {
+    expect(xpCostToReach(2, testCharXpCurve)).toBe(34);
+    expect(xpCostToReach(3, testCharXpCurve)).toBe(67);
+    expect(xpCostToReach(4, testCharXpCurve)).toBe(115);
   });
 
   test("grantCharacterXp awards one level when exactly enough", () => {
@@ -39,7 +37,7 @@ describe("progression / XP", () => {
     const evs: { charId: string; level: number }[] = [];
     bus.on("levelup", (p) => evs.push(p));
 
-    const gained = grantCharacterXp(pc, 12, { bus });
+    const gained = grantCharacterXp(pc, 34, { bus });
     expect(gained).toBe(1);
     expect(pc.level).toBe(2);
     expect(pc.exp).toBe(0);
@@ -52,12 +50,12 @@ describe("progression / XP", () => {
     const evs: number[] = [];
     bus.on("levelup", (p) => evs.push(p.level));
 
-    // L1->L2 costs 12, L2->L3 costs 14, L3->L4 costs 17. 12+14+17 = 43.
-    // 50 exp -> 3 levels + 7 exp left (L4->L5 costs 20, insufficient).
-    const gained = grantCharacterXp(pc, 50, { bus });
+    // L1->L2 costs 34, L2->L3 costs 67, L3->L4 costs 115. 34+67+115 = 216.
+    // 250 exp -> 3 levels + 34 exp left (L4->L5 costs 183, insufficient).
+    const gained = grantCharacterXp(pc, 250, { bus });
     expect(gained).toBe(3);
     expect(pc.level).toBe(4);
-    expect(pc.exp).toBe(7);
+    expect(pc.exp).toBe(34);
     expect(evs).toEqual([2, 3, 4]);
   });
 
@@ -89,16 +87,16 @@ describe("progression / XP", () => {
     const evs: string[] = [];
     bus.on("levelup", (p) => evs.push(p.charId));
 
-    // miningSkill uses testXpCurve: L2 costs 12. 12 exp exactly levels up.
-    grantSkillXp(pc, miningSkill, 12, { bus });
+    expect(miningSkill.xpCurve).toEqual(testSkillXpCurve);
+    grantSkillXp(pc, miningSkill, 34, { bus });
     expect(evs).toEqual(["hero:skill.mining"]);
   });
 
   test("xpProgressToNextLevel returns pct and cost", () => {
     const pc = makePlayer({ id: "p", abilities: [] });
-    pc.exp = 6;
+    pc.exp = 17;
     const p = xpProgressToNextLevel(pc.level, pc.exp, pc.xpCurve);
-    expect(p.cost).toBe(12);
+    expect(p.cost).toBe(34);
     expect(p.pct).toBe(0.5);
   });
 });
