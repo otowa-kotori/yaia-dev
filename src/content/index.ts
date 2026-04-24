@@ -103,12 +103,23 @@ const attrDefs: Record<string, AttrDef> = {
 
 // ---------- Formulas ----------
 
-/** Character default XP curve: 25 * 1.2^(level-1). */
-export const defaultCharXpCurve: FormulaRef = {
-  kind: "exp_curve_v1",
-  base: 25,
-  growth: 1.2,
+const defaultProgressionXpParams = {
+  a: 8,
+  p: 1.8,
+  c: 8,
+  base: 1.25,
+  cap: 0.18,
+  d: 0.22,
+  e: 80,
+  offset: 8,
 };
+
+/** Character XP curve from docs/design/progression.md. */
+export const defaultCharXpCurve: FormulaRef = {
+  kind: "char_xp_curve_v1",
+  ...defaultProgressionXpParams,
+};
+
 
 // ---------- Effects ----------
 
@@ -225,13 +236,13 @@ export const copperSword: ItemDef = {
 // ---------- Skills ----------
 
 
-/** Skill XP curve: same shape as char curve but a bit steeper so leveling a
- *  skill feels distinct from leveling character. Tuning pass later. */
+/** Skill XP curve currently mirrors the character curve but keeps its own
+ *  formula kind so tuning can diverge later without touching character saves. */
 export const defaultSkillXpCurve: FormulaRef = {
-  kind: "exp_curve_v1",
-  base: 15,
-  growth: 1.15,
+  kind: "skill_xp_curve_v1",
+  ...defaultProgressionXpParams,
 };
+
 
 export const miningSkill: SkillDef = {
   id: "skill.mining" as SkillId,

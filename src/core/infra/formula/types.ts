@@ -10,7 +10,7 @@ export interface FormulaContext {
   vars: Readonly<Record<string, number>>;
 }
 
-/** XP required to reach `level` in a skill or character. */
+/** Legacy geometric XP curve kept for older systems and simple scalings. */
 export interface ExpCurveV1 {
   kind: "exp_curve_v1";
   /** XP required at level 1. */
@@ -19,6 +19,30 @@ export interface ExpCurveV1 {
   growth: number;
   /** Variable name holding the level. Defaults to "level". */
   levelVar?: string;
+}
+
+/** Shared parameters for the progression soft-curve family. */
+export interface SoftXpCurveParams {
+  a: number;
+  p: number;
+  c: number;
+  base: number;
+  cap: number;
+  d: number;
+  e: number;
+  offset: number;
+  /** Variable name holding the level. Defaults to "level". */
+  levelVar?: string;
+}
+
+/** Character XP curve from docs/design/progression.md. */
+export interface CharXpCurveV1 extends SoftXpCurveParams {
+  kind: "char_xp_curve_v1";
+}
+
+/** Skill XP curve. Kept as a separate kind so it can diverge later. */
+export interface SkillXpCurveV1 extends SoftXpCurveParams {
+  kind: "skill_xp_curve_v1";
 }
 
 export interface LinearFormula {
@@ -58,6 +82,8 @@ export interface AtkVsDefFormula {
 
 export type FormulaRef =
   | ExpCurveV1
+  | CharXpCurveV1
+  | SkillXpCurveV1
   | LinearFormula
   | PowerFormula
   | ConstantFormula

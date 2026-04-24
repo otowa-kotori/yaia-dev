@@ -122,19 +122,25 @@ function tickAtbScheduler(
   syncParticipants(state, participants, ctx);
   for (const actor of participants) {
     if (!isAlive(actor)) continue;
-    state.energyByActorId[actor.id] += getEnergyGain(state, actor, ctx);
+
+    const currentEnergy = state.energyByActorId[actor.id];
+    if (currentEnergy === undefined) {
+      throw new Error(`scheduler.atb: missing energy for actor ${actor.id} after sync`);
+    }
+
+    const nextEnergy = currentEnergy + getEnergyGain(state, actor, ctx);
+    state.energyByActorId[actor.id] = nextEnergy;
+
     // Clear floor once energy is back to non-negative — the post-action
     // recovery phase is over and the gauge denominator should revert to
     // the standard threshold.
-    if (
-      state.energyFloorByActorId[actor.id] !== undefined &&
-      state.energyFloorByActorId[actor.id] < 0 &&
-      state.energyByActorId[actor.id] >= 0
-    ) {
+    const floor = state.energyFloorByActorId[actor.id];
+    if (floor !== undefined && floor < 0 && nextEnergy >= 0) {
       state.energyFloorByActorId[actor.id] = 0;
     }
   }
 }
+
 
 function nextActorAtb(
   state: AtbSchedulerState,

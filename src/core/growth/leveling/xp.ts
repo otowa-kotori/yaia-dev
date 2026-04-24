@@ -1,8 +1,11 @@
 // Character-level XP system.
 //
 // Each PlayerCharacter carries its own xpCurve. Skill XP reads the curve
-// from the SkillDef passed by the caller. No fallbacks — missing data
+// from the SkillDef passed by the caller. Character and skill progression
+// may use different formula kinds; this module stays curve-agnostic and only
+// asks evalFormula() for the next-level cost. No fallbacks — missing data
 // throws loudly (alpha-stage discipline).
+
 
 import { evalFormula } from "../../infra/formula/eval";
 import type { FormulaRef } from "../../infra/formula/types";

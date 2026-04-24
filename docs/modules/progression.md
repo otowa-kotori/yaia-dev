@@ -4,9 +4,11 @@
 
 ## progression
 
-- 负责 `PlayerCharacter` 的 level / xp 推进
+- 负责 `PlayerCharacter` 的 level / xp 推进，以及技能经验推进
 - 包括 XP 曲线求值与升级事件广播
+- 角色与技能可使用不同的 `xpCurve.kind`；当前默认分别走 `char_xp_curve_v1` 与 `skill_xp_curve_v1`
 - XP 来源统一走 effect 的 `rewards` 管线派发
+
 
 ## worldrecord
 

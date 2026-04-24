@@ -170,18 +170,36 @@ export const goblinMonster: MonsterDef = {
 
 // ---------- Common fixture skills ----------
 
-export const testXpCurve: FormulaRef = {
-  kind: "exp_curve_v1",
-  base: 10,
-  growth: 1.2,
+const testProgressionXpParams = {
+  a: 8,
+  p: 1.8,
+  c: 8,
+  base: 1.25,
+  cap: 0.18,
+  d: 0.22,
+  e: 80,
+  offset: 8,
 };
+
+export const testCharXpCurve: FormulaRef = {
+  kind: "char_xp_curve_v1",
+  ...testProgressionXpParams,
+};
+
+export const testSkillXpCurve: FormulaRef = {
+  kind: "skill_xp_curve_v1",
+  ...testProgressionXpParams,
+};
+
+export const testXpCurve = testCharXpCurve;
 
 export const miningSkill: SkillDef = {
   id: "skill.mining" as SkillId,
   name: "Mining",
-  xpCurve: testXpCurve,
+  xpCurve: testSkillXpCurve,
   maxLevel: 99,
 };
+
 
 // ---------- Common fixture items + resource nodes ----------
 
@@ -390,7 +408,8 @@ export function makePlayer(overrides: {
   const pc = createPlayerCharacter({
     id: overrides.id,
     name: overrides.id,
-    xpCurve: overrides.xpCurve ?? testXpCurve,
+    xpCurve: overrides.xpCurve ?? testCharXpCurve,
+
     baseAttrs: base as Record<string, number>,
     knownAbilities: overrides.abilities as unknown as AbilityId[],
     attrDefs,

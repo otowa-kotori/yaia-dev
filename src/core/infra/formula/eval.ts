@@ -2,7 +2,12 @@
 // live behind this function signature — replace the body if needs outgrow
 // named formulas.
 
-import type { FormulaContext, FormulaRef } from "./types";
+import type {
+  CharXpCurveV1,
+  FormulaContext,
+  FormulaRef,
+  SkillXpCurveV1,
+} from "./types";
 
 export function evalFormula(ref: FormulaRef, ctx: FormulaContext): number {
   const vars = ctx.vars;
@@ -29,6 +34,11 @@ export function evalFormula(ref: FormulaRef, ctx: FormulaContext): number {
       return Math.floor(ref.base * Math.pow(ref.growth, level - 1));
     }
 
+    case "char_xp_curve_v1":
+    case "skill_xp_curve_v1": {
+      return evalSoftXpCurve(ref, vars);
+    }
+
     case "atk_vs_def": {
       const atk = varOrZero(vars, "atk");
       const def = varOrZero(vars, "def");
@@ -37,6 +47,20 @@ export function evalFormula(ref: FormulaRef, ctx: FormulaContext): number {
       return Math.max(floor, Math.floor(raw));
     }
   }
+}
+
+function evalSoftXpCurve(
+  ref: CharXpCurveV1 | SkillXpCurveV1,
+  vars: Readonly<Record<string, number>>,
+): number {
+  const levelVar = ref.levelVar ?? "level";
+  const level = varOrZero(vars, levelVar);
+  if (level <= 0) return 0;
+
+  const brake = Math.min(ref.cap, (ref.d * level) / (level + ref.e));
+  const surface = ref.a + Math.pow(level, ref.p) + ref.c * level;
+  const exponentBase = ref.base - brake;
+  return Math.floor(surface * Math.pow(exponentBase, level) - ref.offset);
 }
 
 function varOrZero(vars: Readonly<Record<string, number>>, name: string): number {
