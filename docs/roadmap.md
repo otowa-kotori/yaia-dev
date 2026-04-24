@@ -12,8 +12,10 @@
 - 地点系统：`Location → Entry → Instance` 三层概念模型
 - 场景系统：`StageController` 管理运行实例 actor 生命周期
 - 场景进度：`combat zone → wave` 层级、波次随机选择、波次冷却与失败后重开
-- 活动系统：`CombatActivity` 与 `GatherActivity`
+- 活动系统：`CombatActivity`（WorldActivity，支持多人组队）与 `GatherActivity`
 - 战斗收尾：波次奖励、玩家团灭判负、战后低血量自动回血（基于 combat zone 阈值）
+- **多人组队战斗**：`CombatActivity` 升级为 WorldActivity，`partyCharIds` 支持多角色共享同一 Stage + Battle；击杀奖励与货币波次奖励按存活人数平摊，物品波次奖励随机发给一人
+- **响应式属性**：`AttrDef.computeBase`（派生 base）+ `DynamicModifierProvider`（动态 modifier）+ depGraph invalidation 传播，统一 lazy invalidation，取代手动检查点刷新
 - 实体系统：Actor 层级与工厂
 - 成长系统：XP / Level
 - 持久化：自动存档
