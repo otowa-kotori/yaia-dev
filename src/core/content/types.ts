@@ -42,6 +42,25 @@ export interface AttrDef {
   clampMax?: number;
   /** If true, value stays integer (floor after clamp). */
   integer?: boolean;
+
+  // ---- Reactive / derived fields (optional) ----
+
+  /**
+   * Derived base computation function. When provided, recomputeStat uses its
+   * return value instead of set.base[id]. The `get` callback reads another
+   * attribute's final value, recursively triggering lazy recompute if needed.
+   *
+   * Example — PATK = weaponAtk × (1 + 0.3 × √STR):
+   *   computeBase: (get) => get(ATTR.WEAPON_ATK) * (1 + 0.3 * Math.sqrt(get(ATTR.STR)))
+   */
+  computeBase?: (get: (attrId: AttrId) => number) => number;
+
+  /**
+   * Which attributes computeBase reads. Used to build the depGraph so that
+   * when a dependency changes, this stat's cache is automatically invalidated.
+   * Only meaningful when computeBase is set.
+   */
+  dependsOn?: AttrId[];
 }
 
 // ---------- Modifier ----------
@@ -53,6 +72,31 @@ export interface Modifier {
   op: ModifierOp;
   value: number;
   sourceId: string;           // where this modifier came from (item, effect, talent)
+}
+
+// ---------- Dynamic Modifier Provider ----------
+
+/**
+ * A dynamic modifier provider computes modifier values at query time,
+ * based on the current value of other attributes (via `get`).
+ *
+ * Install with `addDynamicProvider`; remove with `removeDynamicProvider`.
+ * Not persisted — rebuilt from activeEffects / talents on load.
+ *
+ * Example — heal power scales with INT:
+ *   compute: (get) => [{ stat: ATTR.HEAL_POWER, op: "flat",
+ *                         value: get(ATTR.INT) * 0.002, sourceId }]
+ */
+export interface DynamicModifierProvider {
+  /** Unique identifier for install/uninstall. E.g. "talent:guardian_prayer:3". */
+  sourceId: string;
+  /** Which attributes this provider's output modifiers can affect.
+   *  Must cover all stats that compute() may return — used for invalidation. */
+  targetAttrs: AttrId[];
+  /** Which attributes compute() reads via get(). Used to propagate invalidation. */
+  dependsOn: AttrId[];
+  /** Called during recomputeStat for each targetAttr. get() reads other attrs' final values. */
+  compute: (get: (id: AttrId) => number) => Modifier[];
 }
 
 // ---------- Items ----------
