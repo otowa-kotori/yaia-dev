@@ -89,7 +89,7 @@ describe("CombatActivity + Stage integration", () => {
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
       ctxProvider,
-      actionDelayTicks: 1,
+
     });
     engine.register(activity);
 
@@ -97,7 +97,7 @@ describe("CombatActivity + Stage integration", () => {
     const levelBefore = hero.level;
 
     // Grind enough ticks for at least 3 waves.
-    engine.step(200);
+    engine.step(600);
 
     expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThanOrEqual(3);
     const progressed =
@@ -137,13 +137,13 @@ describe("CombatActivity + Stage integration", () => {
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
       ctxProvider,
-      actionDelayTicks: 1,
+
     });
     engine.register(activity);
 
     engine.step(10);
     activity.stopRequested = true;
-    engine.step(50);
+    engine.step(200);
 
     expect(activity.phase).toBe("stopped");
     expect(events).toContain(ACTIVITY_COMBAT_KIND);
@@ -185,7 +185,7 @@ describe("CombatActivity + Stage integration", () => {
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
       ctxProvider,
-      actionDelayTicks: 1,
+
       recoverHpPctPerTick: 0.5,
     });
     engine.register(activity);
@@ -234,7 +234,7 @@ describe("CombatActivity + Stage integration", () => {
       const activity = createCombatActivity({
         ownerCharacterId: hero.id,
         ctxProvider,
-        actionDelayTicks: 1,
+
         recoverHpPctPerTick: 0.01,
       });
       engine.register(activity);
@@ -244,7 +244,7 @@ describe("CombatActivity + Stage integration", () => {
         if (payload.outcome === "players_won") won = true;
       });
 
-      for (let i = 0; i < 40 && !won; i++) {
+      for (let i = 0; i < 200 && !won; i++) {
         engine.step(1);
       }
 
@@ -290,12 +290,12 @@ describe("CombatActivity + Stage integration", () => {
       const activity = createCombatActivity({
         ownerCharacterId: hero.id,
         ctxProvider,
-        actionDelayTicks: 1,
+
         recoverHpPctPerTick: 0.1,
       });
       engine.register(activity);
 
-      for (let i = 0; i < 40 && activity.phase !== "recovering"; i++) {
+      for (let i = 0; i < 200 && activity.phase !== "recovering"; i++) {
         engine.step(1);
       }
 
@@ -351,7 +351,7 @@ describe("CombatActivity + Stage integration", () => {
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
       ctxProvider,
-      actionDelayTicks: 1,
+
     });
     engine.register(activity);
     engine.step(10);
@@ -394,7 +394,7 @@ describe("CombatActivity + Stage integration", () => {
     const activity = createCombatActivity({
       ownerCharacterId: hero.id,
       ctxProvider,
-      actionDelayTicks: 1,
+
     });
     engine.register(activity);
 

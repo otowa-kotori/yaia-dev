@@ -153,6 +153,8 @@ export interface AbilityDef {
   cost?: { mp?: number };
   /** Cooldown in ticks. */
   cooldownTicks?: number;
+  /** ATB energy cost. Omitted = scheduler actionThreshold (normally 1000). */
+  energyCost?: number;
   targetKind: TargetKind;
   /** Effects to apply, in order, on each target. */
   effects: EffectId[];

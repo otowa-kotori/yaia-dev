@@ -101,14 +101,12 @@ describe("save / serialize+deserialize", () => {
       id: "battle.test",
       mode: "solo",
       participantIds: [hero.id, slime.id],
-      actionDelayTicks: 4,
       startedAtTick: 10,
       intents: {
         [hero.id]: INTENT.RANDOM_ATTACK,
         [slime.id]: INTENT.RANDOM_ATTACK,
       },
     });
-    battle.ticksSinceLastAction = 2;
     state.battles.push(battle);
 
     const raw = serialize(state);
@@ -118,8 +116,7 @@ describe("save / serialize+deserialize", () => {
     const b = restored.battles[0]!;
     expect(b.id).toBe("battle.test");
     expect(b.participantIds).toEqual([hero.id, slime.id]);
-    expect(b.ticksSinceLastAction).toBe(2);
-    expect(b.scheduler.kind).toBe("speed_sorted");
+    expect(b.scheduler.kind).toBe("atb");
     expect(b.intents[hero.id]).toBe(INTENT.RANDOM_ATTACK);
 
     // Enemy was restored with abilities re-populated from its MonsterDef.

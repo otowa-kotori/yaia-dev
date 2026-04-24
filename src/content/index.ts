@@ -88,7 +88,7 @@ const attrDefs: Record<string, AttrDef> = {
   [ATTR.SPEED]: {
     id: ATTR.SPEED,
     name: "速度",
-    defaultBase: 10,
+    defaultBase: 40,
     integer: true,
     clampMin: 1,
   },
@@ -138,7 +138,7 @@ export const slime: MonsterDef = {
     [ATTR.MAX_HP]: 30,
     [ATTR.ATK]: 4,
     [ATTR.DEF]: 1,
-    [ATTR.SPEED]: 5,
+    [ATTR.SPEED]: 12, // very slow — acts roughly every 84 ticks (8.4 s)
   },
   abilities: [basicAttack.id],
   drops: [],
@@ -154,12 +154,29 @@ export const goblin: MonsterDef = {
     [ATTR.MAX_HP]: 24,
     [ATTR.ATK]: 6,
     [ATTR.DEF]: 0,
-    [ATTR.SPEED]: 7,
+    [ATTR.SPEED]: 32, // medium — acts roughly every 32 ticks (3.2 s)
   },
   abilities: [basicAttack.id],
   drops: [],
   xpReward: 14,
   currencyReward: { [CURRENCY_GOLD]: 7 },
+};
+
+/** 洞穴蝙蝠 — 高速低耐。ATB 下行动极快，但脆皮。 */
+export const caveBat: MonsterDef = {
+  id: "monster.cave_bat" as MonsterId,
+  name: "洞穴蝙蝠",
+  level: 2,
+  baseAttrs: {
+    [ATTR.MAX_HP]: 16,
+    [ATTR.ATK]: 5,
+    [ATTR.DEF]: 0,
+    [ATTR.SPEED]: 72, // nearly 2x player speed — acts roughly every 14 ticks (1.4 s)
+  },
+  abilities: [basicAttack.id],
+  drops: [],
+  xpReward: 12,
+  currencyReward: { [CURRENCY_GOLD]: 6 },
 };
 
 // ---------- Items ----------
@@ -315,6 +332,39 @@ export const slimeHard: CombatZoneDef = {
   ],
 };
 
+/** Copper mine combat zone — bat/goblin mix, showcases ATB speed diversity. */
+export const copperMineCombat: CombatZoneDef = {
+  id: "combatzone.mine.copper_monsters" as CombatZoneId,
+  name: "矿洞深处（战斗）",
+  waveSelection: "random",
+  waveSearchTicks: 20,
+  recoverBelowHpFactor: 0.5,
+  waves: [
+    {
+      id: "wave.mine.bat_pair",
+      name: "蝙蝠群",
+      monsters: [caveBat.id, caveBat.id],
+      rewards: {
+        drops: [
+          { itemId: copperOre.id, chance: 0.5, minQty: 1, maxQty: 1 },
+        ],
+        currencies: { [CURRENCY_GOLD]: 3 },
+      },
+    },
+    {
+      id: "wave.mine.goblin_bat",
+      name: "哥布林与蝙蝠",
+      monsters: [goblin.id, caveBat.id],
+      rewards: {
+        drops: [
+          { itemId: copperOre.id, chance: 0.5, minQty: 1, maxQty: 1 },
+        ],
+        currencies: { [CURRENCY_GOLD]: 4 },
+      },
+    },
+  ],
+};
+
 // ---------- Dungeons ----------
 
 /** 史莱姆洞窟——三波固定顺序副本，适合两人组队。
@@ -385,6 +435,7 @@ export const copperMineLocation: LocationDef = {
   id: "location.mine.copper" as LocationId,
   name: "铜矿洞",
   entries: [
+    { kind: "combat", combatZoneId: copperMineCombat.id, label: "矿洞深处（战斗）" },
     { kind: "gather", resourceNodes: [copperVein.id], label: "铜矿脉" },
   ],
 };
@@ -434,6 +485,7 @@ export function buildDefaultContent(): ContentDb {
     monsters: {
       [slime.id]: slime,
       [goblin.id]: goblin,
+      [caveBat.id]: caveBat,
     },
     locations: {
       [forestLocation.id]: forestLocation,
@@ -442,6 +494,7 @@ export function buildDefaultContent(): ContentDb {
     combatZones: {
       [slimeNormal.id]: slimeNormal,
       [slimeHard.id]: slimeHard,
+      [copperMineCombat.id]: copperMineCombat,
     },
     dungeons: {
       [slimeCaveDungeon.id]: slimeCaveDungeon,

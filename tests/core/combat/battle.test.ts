@@ -45,12 +45,11 @@ describe("Battle: tick loop", () => {
       id: "b1",
       mode: "solo",
       participantIds: [hero.id, slime.id],
-      actionDelayTicks: 1, // fast-forward in tests
       startedAtTick: 0,
     });
 
     let tick = 0;
-    const maxTicks = 200;
+    const maxTicks = 500;
     while (battle.outcome === "ongoing" && tick < maxTicks) {
       tick += 1;
       tickBattle(battle, { state, bus, rng, attrDefs, currentTick: tick });
@@ -58,40 +57,6 @@ describe("Battle: tick loop", () => {
     expect(battle.outcome).toBe("players_won");
     expect(isAlive(hero)).toBe(true);
     expect(isAlive(slime)).toBe(false);
-  });
-
-  test("actionDelayTicks controls how often actions resolve", () => {
-    const state = freshState();
-    const bus = createGameEventBus();
-    const rng = createRng(42);
-
-    const hero = makePlayer({
-      id: "p1",
-      abilities: [basicAttackAbility.id],
-      atk: 2, // low dmg so battle lasts a while
-      speed: 20,
-    });
-    const slime = makeSlime("s1"); // def 1, so hero deals 1/tick
-    state.actors = [hero, slime];
-
-    const battle = createBattle({
-      id: "b1",
-      mode: "solo",
-      participantIds: [hero.id, slime.id],
-      actionDelayTicks: 4,
-      startedAtTick: 0,
-    });
-
-    // tick 1..3: no action yet
-    for (let t = 1; t <= 3; t++) {
-      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: t });
-    }
-    const logActions = battle.log.filter((e) => e.kind === "action").length;
-    expect(logActions).toBe(0);
-
-    // tick 4: first action resolves
-    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 4 });
-    expect(battle.log.filter((e) => e.kind === "action").length).toBe(1);
   });
 
   test("same seed produces the same battle log (determinism)", () => {
@@ -112,7 +77,6 @@ describe("Battle: tick loop", () => {
         id: "b",
         mode: "solo",
         participantIds: [hero.id, slime.id],
-        actionDelayTicks: 1,
         startedAtTick: 0,
       });
       let t = 0;
@@ -143,11 +107,10 @@ describe("Battle: tick loop", () => {
       id: "b",
       mode: "solo",
       participantIds: [hero.id, slime.id],
-      actionDelayTicks: 1,
       startedAtTick: 0,
     });
     let t = 0;
-    while (battle.outcome === "ongoing" && t < 100) {
+    while (battle.outcome === "ongoing" && t < 200) {
       t += 1;
       tickBattle(battle, { state, bus, rng, attrDefs, currentTick: t });
     }
@@ -171,10 +134,13 @@ describe("Battle: tick loop", () => {
       id: "b",
       mode: "solo",
       participantIds: [hero.id, slime.id],
-      actionDelayTicks: 1,
       startedAtTick: 0,
     });
-    tickBattle(b, { state, bus, rng, attrDefs, currentTick: 1 });
+    // Pump enough ticks for ATB energy to trigger the one-shot action.
+    for (let t = 1; t <= 50; t++) {
+      tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
+      if (b.outcome !== "ongoing") break;
+    }
     expect(b.outcome).toBe("players_won");
     const logLen = b.log.length;
     // Further ticks must be no-ops.

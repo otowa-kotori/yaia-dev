@@ -75,10 +75,8 @@ export const ACTIVITY_COMBAT_KIND = "activity.combat";
 export interface CombatActivityOptions {
   ownerCharacterId: string;
   ctxProvider: () => ActivityContext;
-  /** HP regen per tick during `recovering`, in [0, 1]. Default 0.01. */
+  /** HP regen per tick during `recovering`, in [0, 1]. Default 0.02. */
   recoverHpPctPerTick?: number;
-  /** actionDelayTicks passed to each Battle. Default 8 (0.8s per turn). */
-  actionDelayTicks?: number;
   /** Pre-set initial state for load-from-save. */
   resume?: {
     phase: CombatActivityPhase;
@@ -111,7 +109,6 @@ export function createCombatActivity(
   // choice. Session does not pass this any more; if it ever needs to be
   // per-stage, expose it via content.
   const recoverHp = opts.recoverHpPctPerTick ?? 0.02;
-  const actionDelay = opts.actionDelayTicks ?? 8;
 
   const initialCtx = opts.ctxProvider();
   const resume = opts.resume;
@@ -142,7 +139,6 @@ export function createCombatActivity(
       const ctx = opts.ctxProvider();
       stepPhase(activity, ctx, {
         recoverHpPctPerTick: recoverHp,
-        actionDelayTicks: actionDelay,
       });
     },
 
@@ -165,7 +161,6 @@ export function createCombatActivity(
 
 interface StepParams {
   recoverHpPctPerTick: number;
-  actionDelayTicks: number;
 }
 
 function stepPhase(
@@ -193,7 +188,7 @@ function stepPhase(
 function stepSearching(
   activity: CombatActivity,
   ctx: ActivityContext,
-  params: StepParams,
+  _params: StepParams,
 ): void {
   if (activity.stopRequested) {
     enterStopped(activity, ctx);
@@ -212,7 +207,7 @@ function stepSearching(
   const enemies = stageEnemies(session, ctx.state).filter((e) => e.currentHp > 0);
   if (enemies.length === 0) return;
 
-  openBattle(activity, hero, enemies, ctx, params);
+  openBattle(activity, hero, enemies, ctx);
 }
 
 function stepFighting(
@@ -322,7 +317,6 @@ function openBattle(
   hero: PlayerCharacter,
   enemies: Enemy[],
   ctx: ActivityContext,
-  params: StepParams,
 ): void {
   const intents: Record<string, string> = {};
   intents[hero.id] = INTENT.RANDOM_ATTACK;
@@ -333,7 +327,6 @@ function openBattle(
     id: battleId,
     mode: "solo",
     participantIds: [hero.id, ...enemies.map((e) => e.id)],
-    actionDelayTicks: params.actionDelayTicks,
     startedAtTick: ctx.currentTick,
     intents,
   });

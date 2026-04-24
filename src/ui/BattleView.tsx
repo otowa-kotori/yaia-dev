@@ -6,9 +6,8 @@
 //
 // Pure presentation — reads from Store, dispatches nothing.
 
-import type { Character, PlayerCharacter } from "../core/entity/actor";
-import { getAttr, isCharacter, isEnemy, isResourceNode } from "../core/entity/actor";
-import { ATTR } from "../core/entity/attribute";
+import type { PlayerCharacter } from "../core/entity/actor";
+import { isCharacter, isEnemy, isResourceNode } from "../core/entity/actor";
 import { xpProgressToNextLevel } from "../core/growth/leveling";
 import {
   ACTIVITY_COMBAT_KIND,
@@ -16,7 +15,6 @@ import {
   type CombatActivity,
   type GatherActivity,
 } from "../core/world/activity";
-import { buildDefaultContent } from "../content";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { T } from "./text";
@@ -26,8 +24,9 @@ import {
   DungeonStatusPanel,
   getCharacterDungeonStatusLabel,
 } from "./DungeonStatusPanel";
-
-const ATTR_DEFS = buildDefaultContent().attributes;
+import { ActorCard } from "./ActorCard";
+import type { Battle } from "../core/combat/battle/battle";
+import { getAtbGaugePct } from "../core/combat/battle/scheduler";
 
 export function BattleView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
@@ -36,8 +35,16 @@ export function BattleView({ store }: { store: GameStore }) {
   const hero = cc.hero;
   const pendingLoot = cc.stageSession?.pendingLoot ?? [];
   const dungeonStatusLabel = getCharacterDungeonStatusLabel(hero, s);
+  const battle = findCurrentBattle(activity, s);
 
-  const heroRow = hero ? <HeroCard hero={hero} activity={activity} dungeonStatusLabel={dungeonStatusLabel} /> : null;
+  const heroRow = hero ? (
+    <HeroCard
+      hero={hero}
+      activity={activity}
+      dungeonStatusLabel={dungeonStatusLabel}
+      battle={battle}
+    />
+  ) : null;
   const lootPanel = pendingLoot.length > 0
     ? <PendingLootPanel cc={cc} pendingLoot={pendingLoot} />
     : null;
@@ -65,18 +72,16 @@ export function BattleView({ store }: { store: GameStore }) {
     );
   }
 
-  // Combat view
   if (activity?.kind === ACTIVITY_COMBAT_KIND) {
     return (
       <div>
         {heroRow}
         {lootPanel}
-        <CombatPanel activity={activity} store={s} />
+        <CombatPanel activity={activity} store={s} battle={battle} />
       </div>
     );
   }
 
-  // Gather view
   if (activity?.kind === ACTIVITY_GATHER_KIND) {
     return (
       <div>
@@ -87,7 +92,6 @@ export function BattleView({ store }: { store: GameStore }) {
     );
   }
 
-  // In a stage but not doing anything — show the roster.
   return (
     <div>
       {heroRow}
@@ -96,6 +100,8 @@ export function BattleView({ store }: { store: GameStore }) {
     </div>
   );
 }
+
+// ---------- Sub-components ----------
 
 function Idle({ msg }: { msg: string }) {
   return (
@@ -106,15 +112,12 @@ function Idle({ msg }: { msg: string }) {
 function CombatPanel({
   activity,
   store,
+  battle,
 }: {
   activity: CombatActivity;
   store: GameStore;
+  battle: Battle | null;
 }) {
-  const battle =
-    activity.currentBattleId
-      ? store.state.battles.find((b) => b.id === activity.currentBattleId) ??
-        null
-      : null;
   const phaseLabel =
     activity.phase === "recovering"
       ? T.recovering
@@ -133,19 +136,23 @@ function CombatPanel({
     );
   }
 
-  const participants = battle.participantIds
+  const enemies = battle.participantIds
     .map((id) => store.state.actors.find((a) => a.id === id))
-    .filter((a): a is Character => a !== undefined && isCharacter(a));
-  const enemies = participants.filter(isEnemy);
+    .filter((a) => a !== undefined && isCharacter(a) && isEnemy(a));
 
   return (
     <div>
-      <div style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 3 }}>
           {T.enemies}
         </div>
         {enemies.map((a) => (
-          <ActorRow key={a.id} actor={a} />
+          <ActorCard
+            key={a.id}
+            actor={a}
+            variant="enemy"
+            atbPct={getAtbPct(battle, a.id)}
+          />
         ))}
       </div>
       <ActivityLogPanel log={battle.log} />
@@ -193,7 +200,7 @@ function StageRoster({ store }: { store: GameStore }) {
         {T.inThisStage}
       </div>
       {roster.map((a) => {
-        if (isCharacter(a)) return <ActorRow key={a.id} actor={a} />;
+        if (isCharacter(a)) return <ActorCard key={a.id} actor={a} variant="enemy" />;
         return (
           <div
             key={a.id}
@@ -221,14 +228,13 @@ function HeroCard({
   hero,
   activity,
   dungeonStatusLabel,
+  battle,
 }: {
   hero: PlayerCharacter;
   activity: CombatActivity | GatherActivity | null;
   dungeonStatusLabel: string | null;
+  battle: Battle | null;
 }) {
-  const maxHp = Math.max(1, getAttr(hero, ATTR.MAX_HP, ATTR_DEFS));
-  const hpPct = Math.max(0, Math.min(1, hero.currentHp / maxHp));
-  const dead = hero.currentHp <= 0;
   const xp = xpProgressToNextLevel(hero.level, hero.exp, hero.xpCurve);
 
   let statusLabel: string = T.status_hero_idle;
@@ -247,89 +253,52 @@ function HeroCard({
     statusLabel = T.status_hero_gathering;
   }
 
+  const inBattle = battle && activity?.kind === ACTIVITY_COMBAT_KIND && activity.phase === "fighting";
+
   return (
-    <div
-      style={{
-        padding: 10,
-        background: "#222",
-        borderRadius: 4,
-        opacity: dead ? 0.45 : 1,
-      }}
+    <ActorCard
+      actor={hero}
+      variant="hero"
+      statusLabel={`Lv ${hero.level} · ${statusLabel}`}
+      atbPct={inBattle ? getAtbPct(battle, hero.id) : undefined}
     >
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ fontWeight: 600 }}>
-          {hero.name} · Lv {hero.level}
-          {dead ? ` (${T.ko})` : ""}
-        </span>
-        <span style={{ fontSize: 12, opacity: 0.7 }}>{statusLabel}</span>
-      </div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 6 }}>
-        <div style={{ flex: 1 }}>
-          <Bar pct={hpPct} color="#4a7" />
-          <div style={{ fontSize: 11, marginTop: 2, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
-            HP {Math.round(hero.currentHp)} / {Math.round(maxHp)}
-          </div>
+      {/* XP bar — only for heroes */}
+      <div style={{ marginTop: 3 }}>
+        <div style={{ height: 5, background: "#111", borderRadius: 2, overflow: "hidden" }}>
+          <div style={{
+            height: "100%",
+            width: `${Math.min(1, Math.max(0, xp.pct)) * 100}%`,
+            background: "#59c",
+            transition: "width 100ms linear",
+          }} />
         </div>
-        <div style={{ flex: 1 }}>
-          <Bar pct={xp.pct} color="#59c" />
-          <div style={{ fontSize: 11, marginTop: 2, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>
-            XP {hero.exp} / {xp.cost || "—"}
-          </div>
+        <div style={{
+          fontSize: 11,
+          marginTop: 2,
+          opacity: 0.7,
+          fontVariantNumeric: "tabular-nums",
+        }}>
+          XP {hero.exp} / {xp.cost || "\u2014"}
         </div>
       </div>
-    </div>
+    </ActorCard>
   );
 }
 
-function ActorRow({ actor }: { actor: Character }) {
-  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP, ATTR_DEFS));
-  const hpPct = Math.max(0, Math.min(1, actor.currentHp / maxHp));
-  const dead = actor.currentHp <= 0;
-  return (
-    <div
-      style={{
-        marginBottom: 6,
-        padding: 8,
-        background: "#222",
-        borderRadius: 4,
-        opacity: dead ? 0.35 : 1,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ fontWeight: 500 }}>
-          {actor.name}
-          {dead ? ` (${T.ko})` : ""}
-        </span>
-        <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 12 }}>
-          {Math.round(actor.currentHp)} / {Math.round(maxHp)}
-        </span>
-      </div>
-      <div style={{ marginTop: 4 }}>
-        <Bar pct={hpPct} color="#c44" />
-      </div>
-    </div>
-  );
+// ---------- Helpers ----------
+
+function findCurrentBattle(
+  activity: CombatActivity | GatherActivity | null,
+  store: GameStore,
+): Battle | null {
+  if (!activity || activity.kind !== ACTIVITY_COMBAT_KIND) return null;
+  const combatAct = activity as CombatActivity;
+  if (!combatAct.currentBattleId) return null;
+  return store.state.battles.find((b) => b.id === combatAct.currentBattleId) ?? null;
 }
 
-function Bar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div
-      style={{
-        height: 6,
-        background: "#111",
-        borderRadius: 2,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          height: "100%",
-          width: `${pct * 100}%`,
-          background: color,
-          transition: "width 100ms linear",
-        }}
-      />
-    </div>
-  );
+/** Charge-up (前摇) visualization using post-action floor normalization.
+ *  See scheduler.ts getAtbGaugePct for the formula. */
+function getAtbPct(battle: Battle, actorId: string): number {
+  return getAtbGaugePct(battle.scheduler, actorId);
 }
-

@@ -2,22 +2,17 @@
 //
 // Design notes:
 // - Battle holds IDs, not actor refs. Actors live in GameState.actors. Battle
-//   looks them up each tick, so hot-reloading or mutating actors elsewhere
-//   flows naturally.
-// - Battle advances on TICKS, not button presses. It accumulates
-//   `ticksSinceLastAction`; when it crosses `actionDelayTicks` it requests the
-//   next actor from the scheduler, runs that actor's intent, and dispatches
-//   through tryUseAbility. This keeps pacing a pure data concern and makes
-//   headless simulation identical to real-time play at speed 1x.
+//   resolves them on demand each tick so mutations elsewhere flow naturally.
+// - Battle advances on logic TICKS. Each tick the scheduler charges ATB energy,
+//   then the battle serves every ready actor in descending energy order until no
+//   one remains above threshold.
 // - Battle is a Tickable. Its isDone() fires once outcome != "ongoing" so the
 //   tick engine auto-unregisters it.
-// - tickActiveEffects is run per-actor once PER ACTOR TURN (not per engine
-//   tick). Duration-per-tick vs duration-per-turn is a design choice; turn-
-//   based feels better with per-turn DoTs, and we can revisit for ATB.
-//   Effects still measure durationTicks in logic ticks, but only decrement on
-//   the owner's own turn. Document this in EffectDef authoring notes.
+// - tickActiveEffects is run once PER ACTOR ACTION WINDOW (not per engine tick).
+//   This intentionally preserves the current owner-turn decay model even under
+//   ATB, keeping the blast radius limited while the scheduler is replaced.
 
-import type { AttrDef } from "../../content/types";
+import type { AttrDef, AbilityDef } from "../../content/types";
 
 /** Battle mode: solo (1 player) or party (future multi-character). */
 export type BattleMode = "solo" | "party";
@@ -30,9 +25,10 @@ import { isAlive, isCharacter, isEnemy, isPlayer } from "../../entity/actor";
 import { tryUseAbility, type CastResult } from "../../behavior/ability";
 import { tickActiveEffects } from "../../behavior/effect";
 import {
-  createSpeedSortedScheduler,
+  createAtbScheduler,
   nextActor as schedulerNextActor,
   onActionResolved as schedulerOnActionResolved,
+  tickScheduler,
   type SchedulerContext,
   type SchedulerState,
 } from "./scheduler";
@@ -58,10 +54,6 @@ export interface Battle {
   /** All actors involved. IDs only — resolved against GameState.actors. */
   participantIds: string[];
   scheduler: SchedulerState;
-  /** Ticks accumulated since the last action resolved. */
-  ticksSinceLastAction: number;
-  /** Ticks of inaction before the next actor is served. Controls visible pacing. */
-  actionDelayTicks: number;
   outcome: BattleOutcome;
   /** Ring-free append-only log. Callers trim when they ship logs to the UI. */
   log: BattleLogEntry[];
@@ -74,7 +66,7 @@ export interface Battle {
   endedAtTick: number | null;
   /** Internal: ids already reported as dead, so we don't double-emit kill
    *  events or let the activity layer double-grant rewards. Plain array (not
-   *  Set) to keep Battle JSON-serializable so it can live in GameState. */
+   *  Set) keeps Battle JSON-serializable inside GameState. */
   deathsReported: string[];
 }
 
@@ -83,19 +75,18 @@ export interface CreateBattleOptions {
   mode: BattleMode;
   participantIds: string[];
   scheduler?: SchedulerState;
-  actionDelayTicks?: number;
   intents?: Record<string, string>;
   startedAtTick: number;
 }
+
+const MAX_ACTIONS_PER_TICK_FACTOR = 32;
 
 export function createBattle(opts: CreateBattleOptions): Battle {
   return {
     id: opts.id,
     mode: opts.mode,
     participantIds: opts.participantIds.slice(),
-    scheduler: opts.scheduler ?? createSpeedSortedScheduler(),
-    ticksSinceLastAction: 0,
-    actionDelayTicks: opts.actionDelayTicks ?? 4, // default 400ms at 10Hz
+    scheduler: opts.scheduler ?? createAtbScheduler(),
     outcome: "ongoing",
     log: [
       {
@@ -128,28 +119,48 @@ export interface TickBattleContext {
 export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
   if (battle.outcome !== "ongoing") return;
 
-  battle.ticksSinceLastAction += 1;
-  if (battle.ticksSinceLastAction < battle.actionDelayTicks) {
-    // Wait for the pacing window to close before serving another action.
-    // Check outcome anyway in case somebody died from a DoT between turns.
-    maybeTerminate(battle, ctx);
-    return;
-  }
+  let participants = resolveParticipants(battle, ctx.state);
+  emitNewDeaths(battle, participants, ctx);
+  maybeTerminate(battle, ctx);
+  if (battle.outcome !== "ongoing") return;
 
-  // Time to act.
-  battle.ticksSinceLastAction = 0;
-
-  const participants = resolveParticipants(battle, ctx.state);
   const schedCtx: SchedulerContext = { attrDefs: ctx.attrDefs };
-  const actor = schedulerNextActor(battle.scheduler, participants, schedCtx);
+  tickScheduler(battle.scheduler, participants, schedCtx);
 
-  if (!actor) {
-    // No one can act — terminate in whatever state we're in.
+  const maxActionsThisTick = Math.max(
+    1,
+    participants.length * MAX_ACTIONS_PER_TICK_FACTOR,
+  );
+  let actionsServed = 0;
+
+  while (battle.outcome === "ongoing") {
+    participants = resolveParticipants(battle, ctx.state);
+    const actor = schedulerNextActor(battle.scheduler, participants, schedCtx);
+    if (!actor) return;
+
+    actionsServed += 1;
+    if (actionsServed > maxActionsThisTick) {
+      throw new Error(
+        `battle ${battle.id}: exceeded ${maxActionsThisTick} action windows in one tick`,
+      );
+    }
+
+    runActorActionWindow(battle, actor, participants, ctx);
+    participants = resolveParticipants(battle, ctx.state);
+    emitNewDeaths(battle, participants, ctx);
     maybeTerminate(battle, ctx);
-    return;
   }
+}
 
-  // Active effects tick down on the acting actor's own turn. See module doc.
+function runActorActionWindow(
+  battle: Battle,
+  actor: Character,
+  participants: readonly Character[],
+  ctx: TickBattleContext,
+): void {
+  const defaultEnergyCost = getDefaultEnergyCost(battle.scheduler);
+
+  // Active effects still decay on the owner's own action window.
   tickActiveEffects(actor, {
     state: ctx.state,
     bus: ctx.bus,
@@ -158,10 +169,10 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
     currentTick: ctx.currentTick,
   });
 
-  // Actor may have died from a DoT pulse applied above.
+  // If the actor died before acting (e.g. its own DoT tick), still consume the
+  // served action window so the same ready slot cannot loop forever this tick.
   if (!isAlive(actor)) {
-    emitDeath(battle, actor, ctx);
-    maybeTerminate(battle, ctx);
+    schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
     return;
   }
 
@@ -177,10 +188,13 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
       actorId: actor.id,
       note: "no valid plan",
     });
-    schedulerOnActionResolved(battle.scheduler, actor);
-    maybeTerminate(battle, ctx);
+    schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
     return;
   }
+
+  const ability = getAbility(plan.abilityId);
+  const energyCost = resolveAbilityEnergyCost(ability, defaultEnergyCost);
+  schedulerOnActionResolved(battle.scheduler, actor, energyCost);
 
   const result: CastResult = tryUseAbility(actor, plan.abilityId, plan.targets, {
     state: ctx.state,
@@ -199,26 +213,38 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
       targetIds: result.targets.map((t) => t.id),
       magnitudes: result.magnitudes.slice(),
     });
-  } else {
-    // Cast failed (e.g. on cooldown, insufficient mp) — treat as a skipped turn.
-    battle.log.push({
-      tick: ctx.currentTick,
-      kind: "skip",
-      actorId: actor.id,
-      abilityId: plan.abilityId,
-      note: `cast failed: ${result.reason}`,
-    });
+    return;
   }
 
-  // Emit deaths for any participant who died from this action.
-  for (const p of participants) {
-    if (!isAlive(p) && !battle.deathsReported.includes(p.id)) {
-      emitDeath(battle, p, ctx);
-    }
-  }
+  // Cast failed (e.g. on cooldown, insufficient mp) — the action window was
+  // already consumed above, so we only log the skip here.
+  battle.log.push({
+    tick: ctx.currentTick,
+    kind: "skip",
+    actorId: actor.id,
+    abilityId: plan.abilityId,
+    note: `cast failed: ${result.reason}`,
+  });
+}
 
-  battle.scheduler && schedulerOnActionResolved(battle.scheduler, actor);
-  maybeTerminate(battle, ctx);
+function getDefaultEnergyCost(state: SchedulerState): number {
+  switch (state.kind) {
+    case "atb":
+      return state.actionThreshold;
+  }
+}
+
+function resolveAbilityEnergyCost(
+  ability: AbilityDef,
+  defaultEnergyCost: number,
+): number {
+  const energyCost = ability.energyCost ?? defaultEnergyCost;
+  if (!Number.isFinite(energyCost) || energyCost <= 0) {
+    throw new Error(
+      `battle: invalid energyCost ${energyCost} on ability ${ability.id}`,
+    );
+  }
+  return energyCost;
 }
 
 // ---------- Termination ----------
@@ -242,6 +268,18 @@ function maybeTerminate(battle: Battle, ctx: TickBattleContext): void {
       kind: "end",
       note: `outcome: ${outcome}`,
     });
+  }
+}
+
+function emitNewDeaths(
+  battle: Battle,
+  participants: readonly Character[],
+  ctx: TickBattleContext,
+): void {
+  for (const actor of participants) {
+    if (!isAlive(actor) && !battle.deathsReported.includes(actor.id)) {
+      emitDeath(battle, actor, ctx);
+    }
   }
 }
 
@@ -269,10 +307,10 @@ export function resolveParticipants(
   battle: Battle,
   state: GameState,
 ): Character[] {
-  // The order returned MUST be stable across calls because the scheduler
-  // uses participant array index as a tie-break. Preserve participantIds order.
-  // Non-character actors (ResourceNode etc) are silently ignored — they
-  // can't be in a battle even if their id accidentally shows up.
+  // The order returned MUST be stable across calls because the scheduler uses
+  // participant array index as a deterministic tie-break. Preserve
+  // participantIds order. Non-character actors (ResourceNode etc) are silently
+  // ignored — they can't be in a battle even if their id accidentally shows up.
   const byId = new Map<string, Character>();
   for (const a of state.actors) {
     if (isCharacter(a)) byId.set(a.id, a);

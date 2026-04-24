@@ -6,7 +6,7 @@
 
 - `Battle` 表示一场战斗的纯数据状态
 - `SchedulerState` 表示行动调度需要的状态
-- `Intent` 表示战斗中的自动决策：给定当前战斗局面，这个 actor 这一回合要做什么
+- `Intent` 表示战斗中的自动决策：给定当前战斗局面，这个 actor 要做什么
 - `tickBattle` 负责推进战斗，直到产生下一次行动或分出胜负
 
 ## Intent
@@ -15,7 +15,7 @@
 
 - `intents: Record<actorId, intentId>` 为每个参战者记录一个 `intentId`
 - 执行时通过 `resolveIntent(id)` 从注册表中取出对应函数
-- `Intent` 的返回值是本回合的行动计划，例如使用哪个 `ability`、目标是谁
+- `Intent` 的返回值是本次行动的计划，例如使用哪个 `ability`、目标是谁
 - 当前内建的默认实现是 `INTENT.RANDOM_ATTACK`
 - 数据驱动的 intent 接口已经预留；当前 MVP 仍以代码注册为主
 
@@ -25,8 +25,6 @@
 
 - `Battle` 是可序列化的纯数据对象，存放在 `state.battles[]` 中
 - `SchedulerState` 也是纯数据；`nextActor()` 是独立自由函数
-- `SpeedSortedScheduler` 每次选择行动者时都会按 speed 重排，因此速度类 buff 会立即生效
-- 行动节奏通过 `actionDelayTicks` 推进，headless 模式与实时模式保持一致
 - 每次轮到 actor 行动时，战斗流程会先解析其 `Intent`，再通过 `tryUseAbility` 执行对应动作
 
 ## 胜负与奖励

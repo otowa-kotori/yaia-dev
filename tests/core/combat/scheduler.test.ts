@@ -1,94 +1,121 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import {
-  createSpeedSortedScheduler,
+  createAtbScheduler,
+  tickScheduler,
   nextActor,
+  onActionResolved,
+  DEFAULT_ATB_ACTION_THRESHOLD,
+  DEFAULT_ATB_BASE_ENERGY_GAIN,
+  DEFAULT_ATB_BASE_SPEED,
+  DEFAULT_ATB_INITIAL_ENERGY_PER_SPEED,
 } from "../../../src/core/combat/battle";
 import { resetContent } from "../../../src/core/content";
 import { loadFixtureContent, makePlayer, makeSlime, attrDefs } from "../../fixtures/content";
 import { ATTR } from "../../../src/core/entity/attribute";
 
-describe("SpeedSortedScheduler", () => {
+describe("ATB Scheduler", () => {
   beforeEach(() => {
     resetContent();
     loadFixtureContent();
   });
 
-  test("serves alive participants in descending speed each round", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 10 });
-    const p2 = makePlayer({ id: "p2", abilities: [], speed: 20 });
-    const e1 = makeSlime("e1"); // speed 5
-
-    const sched = createSpeedSortedScheduler();
-    const participants = [p1, p2, e1];
-
-    const ordered = [
-      nextActor(sched, participants, { attrDefs }),
-      nextActor(sched, participants, { attrDefs }),
-      nextActor(sched, participants, { attrDefs }),
-    ];
-    expect(ordered.map((a) => a?.id)).toEqual(["p2", "p1", "e1"]);
+  test("initial energy is f(SPD), capped below threshold", () => {
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const sched = createAtbScheduler();
+    nextActor(sched, [p1], { attrDefs });
+    const expected = Math.min(
+      DEFAULT_ATB_ACTION_THRESHOLD - 1,
+      40 * DEFAULT_ATB_INITIAL_ENERGY_PER_SPEED,
+    );
+    expect(sched.energyByActorId["p1"]).toBe(expected);
   });
 
-  test("mid-round speed buff takes effect immediately", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 10 });
-    const p2 = makePlayer({ id: "p2", abilities: [], speed: 20 });
-
-    const sched = createSpeedSortedScheduler();
-    const parts = [p1, p2];
-
-    // First pick: p2 (speed 20).
-    expect(nextActor(sched, parts, { attrDefs })?.id).toBe("p2");
-    // Buff p1 during round.
-    p1.attrs.base[ATTR.SPEED] = 999;
-    p1.attrs.cache = {};  // invalidate so getAttr re-reads the new base
-    // Second pick this round: only p1 is un-acted, so it's p1 regardless.
-    expect(nextActor(sched, parts, { attrDefs })?.id).toBe("p1");
+  test("higher SPD -> higher initial energy", () => {
+    const slow = makePlayer({ id: "slow", abilities: [], speed: 20 });
+    const fast = makePlayer({ id: "fast", abilities: [], speed: 80 });
+    const sched = createAtbScheduler();
+    nextActor(sched, [slow, fast], { attrDefs });
+    expect(sched.energyByActorId["fast"]!).toBeGreaterThan(
+      sched.energyByActorId["slow"]!,
+    );
   });
 
-  test("new round is re-evaluated from the current alive/speed snapshot", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 10 });
-    const p2 = makePlayer({ id: "p2", abilities: [], speed: 20 });
+  test("tickScheduler charges energy proportional to SPD", () => {
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 80 }); // 2x base
+    const sched = createAtbScheduler();
+    nextActor(sched, [p1], { attrDefs });
+    const before = sched.energyByActorId["p1"]!;
+    tickScheduler(sched, [p1], { attrDefs });
+    const after = sched.energyByActorId["p1"]!;
+    const expectedGain = DEFAULT_ATB_BASE_ENERGY_GAIN * (80 / DEFAULT_ATB_BASE_SPEED);
+    expect(after - before).toBe(expectedGain);
+  });
 
-    const sched = createSpeedSortedScheduler();
-    const parts = [p1, p2];
+  test("nextActor returns null when no one above threshold", () => {
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const sched = createAtbScheduler();
+    expect(nextActor(sched, [p1], { attrDefs })).toBe(null);
+  });
 
-    // Round 1: p2, then p1.
-    nextActor(sched, parts, { attrDefs });
-    nextActor(sched, parts, { attrDefs });
+  test("nextActor returns the actor with highest energy above threshold", () => {
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const p2 = makePlayer({ id: "p2", abilities: [], speed: 80 });
+    const sched = createAtbScheduler();
+    for (let i = 0; i < 30; i++) tickScheduler(sched, [p1, p2], { attrDefs });
+    const actor = nextActor(sched, [p1, p2], { attrDefs });
+    expect(actor?.id).toBe("p2");
+  });
 
-    // Buff p1 so it outspeeds p2 for round 2.
-    p1.attrs.base[ATTR.SPEED] = 999;
-    p1.attrs.cache = {};  // invalidate so getAttr re-reads the new base
-    expect(nextActor(sched, parts, { attrDefs })?.id).toBe("p1");
+  test("onActionResolved drains energy by cost", () => {
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const sched = createAtbScheduler();
+    for (let i = 0; i < 30; i++) tickScheduler(sched, [p1], { attrDefs });
+    const before = sched.energyByActorId["p1"]!;
+    expect(before).toBeGreaterThanOrEqual(DEFAULT_ATB_ACTION_THRESHOLD);
+    onActionResolved(sched, p1, 1000);
+    expect(sched.energyByActorId["p1"]!).toBe(before - 1000);
   });
 
   test("skips dead participants", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 10 });
-    const p2 = makePlayer({ id: "p2", abilities: [], speed: 20 });
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const p2 = makePlayer({ id: "p2", abilities: [], speed: 80 });
     p2.currentHp = 0;
-
-    const sched = createSpeedSortedScheduler();
-    const parts = [p1, p2];
-
-    const first = nextActor(sched, parts, { attrDefs });
-    expect(first?.id).toBe("p1");
+    const sched = createAtbScheduler();
+    for (let i = 0; i < 30; i++) tickScheduler(sched, [p1, p2], { attrDefs });
+    const actor = nextActor(sched, [p1, p2], { attrDefs });
+    expect(actor?.id).toBe("p1");
   });
 
   test("returns null when no one is alive", () => {
     const p1 = makePlayer({ id: "p1", abilities: [] });
     p1.currentHp = 0;
-
-    const sched = createSpeedSortedScheduler();
+    const sched = createAtbScheduler();
+    for (let i = 0; i < 30; i++) tickScheduler(sched, [p1], { attrDefs });
     expect(nextActor(sched, [p1], { attrDefs })).toBe(null);
   });
 
-  test("ties in speed break on participant-list index (stable)", () => {
-    const a = makePlayer({ id: "a", abilities: [], speed: 10 });
-    const b = makePlayer({ id: "b", abilities: [], speed: 10 });
+  test("ties in energy break on participant-list index (stable)", () => {
+    const a = makePlayer({ id: "a", abilities: [], speed: 40 });
+    const b = makePlayer({ id: "b", abilities: [], speed: 40 });
+    const sched = createAtbScheduler();
+    for (let i = 0; i < 30; i++) tickScheduler(sched, [a, b], { attrDefs });
+    expect(nextActor(sched, [a, b], { attrDefs })?.id).toBe("a");
+  });
 
-    const sched = createSpeedSortedScheduler();
-    const parts = [a, b];
-    expect(nextActor(sched, parts, { attrDefs })?.id).toBe("a");
-    expect(nextActor(sched, parts, { attrDefs })?.id).toBe("b");
+  test("speed buff mid-combat affects energy gain immediately", () => {
+    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const sched = createAtbScheduler();
+    nextActor(sched, [p1], { attrDefs }); // init
+    tickScheduler(sched, [p1], { attrDefs });
+    const afterOneTick = sched.energyByActorId["p1"]!;
+    // Buff speed to 80
+    p1.attrs.base[ATTR.SPEED] = 80;
+    p1.attrs.cache = {};
+    tickScheduler(sched, [p1], { attrDefs });
+    const afterBuffTick = sched.energyByActorId["p1"]!;
+    const firstGain = DEFAULT_ATB_BASE_ENERGY_GAIN * (40 / DEFAULT_ATB_BASE_SPEED);
+    const buffGain = DEFAULT_ATB_BASE_ENERGY_GAIN * (80 / DEFAULT_ATB_BASE_SPEED);
+    expect(afterBuffTick - afterOneTick).toBe(buffGain);
+    expect(buffGain).toBe(firstGain * 2);
   });
 });

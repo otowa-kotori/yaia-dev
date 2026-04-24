@@ -68,8 +68,6 @@ export type DungeonPhase =
 export interface DungeonActivityOptions {
   dungeonSessionId: string;
   ctxProvider: () => ActivityContext;
-  /** Ticks of inaction per battle turn. Default 8. */
-  actionDelayTicks?: number;
   /** HP regen per tick during recovery, in [0, 1]. Default 0.02. */
   recoverHpPctPerTick?: number;
   /** Restore callback invoked on terminal states. Session layer provides this
@@ -97,7 +95,6 @@ export interface DungeonActivity extends WorldActivity {
 export function createDungeonActivity(
   opts: DungeonActivityOptions,
 ): DungeonActivity {
-  const actionDelay = opts.actionDelayTicks ?? 8;
   const recoverHp = opts.recoverHpPctPerTick ?? 0.02;
   const initialCtx = opts.ctxProvider();
 
@@ -117,7 +114,6 @@ export function createDungeonActivity(
       const ds = ctx.state.dungeons[opts.dungeonSessionId];
       if (!ds || isTerminal(activity.phase)) return;
       stepDungeon(activity, ds, ctx, {
-        actionDelayTicks: actionDelay,
         recoverHpPctPerTick: recoverHp,
         restoreParty: opts.restoreParty,
       });
@@ -146,7 +142,6 @@ function isTerminal(phase: DungeonPhase): boolean {
 // ---------- State machine ----------
 
 interface StepParams {
-  actionDelayTicks: number;
   recoverHpPctPerTick: number;
   restoreParty: (ctx: ActivityContext) => void;
 }
@@ -463,7 +458,6 @@ function openPartyBattle(
     id: battleId,
     mode: heroes.length > 1 ? "party" : "solo",
     participantIds: [...heroes.map((h) => h.id), ...enemies.map((e) => e.id)],
-    actionDelayTicks: params.actionDelayTicks,
     startedAtTick: ctx.currentTick,
     intents,
   });
