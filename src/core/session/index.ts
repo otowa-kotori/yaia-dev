@@ -94,6 +94,8 @@ import type { StageMode } from "../world/stage/types";
 // combat.ts / gather.ts and read here only during rehydrateActivity.
 
 interface CombatActivityData extends Record<string, unknown> {
+  stageId: string;
+  partyCharIds: string[];
   phase: CombatActivityPhase;
   currentBattleId: string | null;
   lastTransitionTick: number;
@@ -124,6 +126,7 @@ export interface CharacterController {
   isRunning(): boolean;
   enterLocation(locationId: string): void;
   leaveLocation(): void;
+  /** Start solo combat (convenience wrapper for startPartyCombat with 1 hero). */
   startFight(combatZoneId: string): void;
   startGather(nodeId: string): void;
   stopActivity(): void;
@@ -152,6 +155,8 @@ export interface GameSession {
 
   /** Start a dungeon run with the given party. All characters must be idle. */
   startDungeon(dungeonId: string, partyCharIds: string[]): void;
+  /** Start a party combat session in a combat zone. All characters must be idle. */
+  startPartyCombat(combatZoneId: string, partyCharIds: string[]): void;
   /** Abandon the currently active dungeon run for a character. No completion rewards. */
   abandonDungeon(charId: string): void;
 
@@ -202,7 +207,21 @@ export function createGameSession(
 
   // Activity self-completion cleanup — route by charId.
   bus.on("activityComplete", (payload) => {
-    if (payload.charId) {
+    if (payload.kind === ACTIVITY_COMBAT_KIND && payload.charId) {
+      // Combat is now a WorldActivity keyed by stageId; clean up from the map.
+      for (const [stageId, ca] of combatActivities) {
+        if (ca.partyCharIds.includes(payload.charId)) {
+          engine.unregister(ca.id);
+          combatActivities.delete(stageId);
+          // Clear _activity on all party members' controllers.
+          for (const charId of ca.partyCharIds) {
+            const cc = characters.get(charId);
+            if (cc) cc._activity = null;
+          }
+          break;
+        }
+      }
+    } else if (payload.charId) {
       const cc = characters.get(payload.charId);
       if (cc) cc._activity = null;
     }
@@ -210,6 +229,8 @@ export function createGameSession(
 
   // Active dungeon world activities, keyed by dungeonSessionId.
   const dungeonActivities = new Map<string, DungeonActivity>();
+  // Active combat world activities, keyed by stageId.
+  const combatActivities = new Map<string, CombatActivity>();
 
   // ---------- Context builder ----------
 
@@ -370,11 +391,38 @@ export function createGameSession(
   function tearDownCharInstance(cc: CharacterControllerImpl): void {
     // Stop activity.
     if (cc._activity) {
-      if (cc._activity.kind === ACTIVITY_COMBAT_KIND) cc._activity.phase = "stopped";
-      else if (cc._activity.kind === ACTIVITY_GATHER_KIND) cc._activity.stopRequested = true;
-      engine.unregister(cc._activity.id);
-      cc._activity = null;
-      cc.hero.activity = null;
+      if (cc._activity.kind === ACTIVITY_COMBAT_KIND) {
+        // CombatActivity is a shared WorldActivity — any member leaving
+        // stops the entire party (same semantics as dungeon abandon).
+        const ca = cc._activity as CombatActivity;
+        ca.phase = "stopped";
+        engine.unregister(ca.id);
+        combatActivities.delete(ca.stageId);
+        // Clear all party members' activity + stage references.
+        for (const charId of ca.partyCharIds) {
+          const otherCc = characters.get(charId);
+          if (otherCc) {
+            otherCc._activity = null;
+            otherCc.hero.activity = null;
+            if (otherCc.hero.stageId === ca.stageId) {
+              otherCc.hero.stageId = null;
+            }
+          }
+        }
+        // Tear down the shared stage.
+        const ctrl = stageControllers.get(ca.stageId);
+        if (ctrl) {
+          engine.unregister(ctrl.id);
+          stageControllers.delete(ca.stageId);
+        }
+        leaveStageCore(ca.stageId, buildCtx());
+        return; // stage already cleaned up above
+      } else if (cc._activity.kind === ACTIVITY_GATHER_KIND) {
+        (cc._activity as GatherActivity).stopRequested = true;
+        engine.unregister(cc._activity.id);
+        cc._activity = null;
+        cc.hero.activity = null;
+      }
     }
     // Leave stage (only if no other character references it).
     const stageId = cc.hero.stageId;
@@ -461,8 +509,8 @@ export function createGameSession(
 
       isRunning(): boolean {
         if (!cc._activity) return false;
-        if (cc._activity.kind === ACTIVITY_COMBAT_KIND) return cc._activity.phase !== "stopped";
-        if (cc._activity.kind === ACTIVITY_GATHER_KIND) return !cc._activity.stopRequested;
+        if (cc._activity.kind === ACTIVITY_COMBAT_KIND) return (cc._activity as CombatActivity).phase !== "stopped";
+        if (cc._activity.kind === ACTIVITY_GATHER_KIND) return !(cc._activity as GatherActivity).stopRequested;
         return false;
       },
 
@@ -482,17 +530,7 @@ export function createGameSession(
           console.warn("session.startFight: not in a location");
           return;
         }
-        const stageId = startStageInstance(cc, {
-          locationId: cc.hero.locationId,
-          mode: { kind: "combatZone", combatZoneId },
-        });
-        void stageId; // stageId is set on hero by startStageInstance
-        cc._activity = createCombatActivity({
-          ownerCharacterId: cc.hero.id,
-          ctxProvider: buildCtx,
-        });
-        cc._activity.onStart?.(buildCtx());
-        engine.register(cc._activity);
+        startPartyCombatImpl(combatZoneId, [cc.hero.id]);
       },
 
       startGather(nodeDefId: string): void {
@@ -684,6 +722,7 @@ export function createGameSession(
     }
     characters.clear();
     stageControllers.clear();
+    combatActivities.clear();
     assertRuntimeIdState(state);
 
     // Rebuild character controllers.
@@ -725,13 +764,24 @@ export function createGameSession(
     }
 
     // Rehydrate activities for each character.
+    // Combat activities are now WorldActivities keyed by stageId — deduplicate.
+    const rehydratedCombatStages = new Set<string>();
     for (const cc of characters.values()) {
       const hero = cc.hero;
       if (!hero.activity) continue;
       if (hero.activity.kind === ACTIVITY_COMBAT_KIND) {
         const data = hero.activity.data as CombatActivityData;
-        cc._activity = createCombatActivity({
-          ownerCharacterId: hero.id,
+        // Only create one CombatActivity per stageId (party shares it).
+        if (rehydratedCombatStages.has(data.stageId)) {
+          // Already rehydrated — just link the controller.
+          const existing = combatActivities.get(data.stageId);
+          if (existing) cc._activity = existing;
+          continue;
+        }
+        rehydratedCombatStages.add(data.stageId);
+        const ca = createCombatActivity({
+          stageId: data.stageId,
+          partyCharIds: data.partyCharIds ?? [hero.id],
           ctxProvider: buildCtx,
           resume: {
             phase: data.phase,
@@ -739,7 +789,9 @@ export function createGameSession(
             lastTransitionTick: data.lastTransitionTick,
           },
         });
-        if (cc._activity.phase !== "stopped") engine.register(cc._activity);
+        combatActivities.set(data.stageId, ca);
+        cc._activity = ca;
+        if (ca.phase !== "stopped") engine.register(ca);
       } else if (hero.activity.kind === ACTIVITY_GATHER_KIND) {
         const data = hero.activity.data as GatherActivityData;
         cc._activity = createGatherActivity({
@@ -750,6 +802,74 @@ export function createGameSession(
         });
         engine.register(cc._activity);
       }
+    }
+    // Link all party members' controllers to their shared combat activity.
+    for (const [stageId, ca] of combatActivities) {
+      for (const charId of ca.partyCharIds) {
+        const cc = characters.get(charId);
+        if (cc && !cc._activity) cc._activity = ca;
+      }
+    }
+  }
+
+  // ---------- Party combat lifecycle ----------
+
+  function startPartyCombatImpl(
+    combatZoneId: string,
+    partyCharIds: string[],
+  ): void {
+    if (partyCharIds.length === 0) {
+      throw new Error("session.startPartyCombat: partyCharIds must not be empty");
+    }
+
+    // Validate and collect all character controllers.
+    const ccs: CharacterControllerImpl[] = [];
+    for (const charId of partyCharIds) {
+      const cc = characters.get(charId);
+      if (!cc) throw new Error(`session.startPartyCombat: no character "${charId}"`);
+      ccs.push(cc);
+    }
+
+    // All characters must be in a location (use the first character's location).
+    const locationId = ccs[0]!.hero.locationId;
+    if (!locationId) {
+      throw new Error("session.startPartyCombat: first character not in a location");
+    }
+
+    // Tear down existing activities for all party members.
+    for (const cc of ccs) {
+      tearDownCharInstance(cc);
+    }
+
+    // Create a shared stage.
+    const stageId = mintStageId(state);
+    const ctrl = enterStageCore({
+      stageId,
+      locationId,
+      mode: { kind: "combatZone", combatZoneId },
+      ctxProvider: buildCtx,
+    });
+    stageControllers.set(stageId, ctrl);
+    engine.register(ctrl);
+
+    // Point all characters to the shared stage.
+    for (const cc of ccs) {
+      cc.hero.stageId = stageId;
+    }
+
+    // Create the shared CombatActivity (now a WorldActivity).
+    const combatActivity = createCombatActivity({
+      stageId,
+      partyCharIds: partyCharIds.slice(),
+      ctxProvider: buildCtx,
+    });
+    combatActivity.onStart?.(buildCtx());
+    combatActivities.set(stageId, combatActivity);
+    engine.register(combatActivity);
+
+    // Set _activity reference on all controllers for UI queries.
+    for (const cc of ccs) {
+      cc._activity = combatActivity;
     }
   }
 
@@ -936,6 +1056,8 @@ export function createGameSession(
     stageControllers.clear();
     for (const da of dungeonActivities.values()) engine.unregister(da.id);
     dungeonActivities.clear();
+    for (const ca of combatActivities.values()) engine.unregister(ca.id);
+    combatActivities.clear();
 
     state = createEmptyState(seed, SAVE_VERSION);
     rng = createRng(seed);
@@ -1032,6 +1154,7 @@ export function createGameSession(
     },
 
     startDungeon: startDungeonImpl,
+    startPartyCombat: startPartyCombatImpl,
     abandonDungeon: abandonDungeonImpl,
     setSpeedMultiplier,
     getSpeedMultiplier,

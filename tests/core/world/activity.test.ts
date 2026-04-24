@@ -87,7 +87,8 @@ describe("CombatActivity + Stage integration", () => {
     expect(state.stages[STAGE_ID]?.pendingCombatWaveSearch).toBeNull();
 
     const activity = createCombatActivity({
-      ownerCharacterId: hero.id,
+      stageId: STAGE_ID,
+      partyCharIds: [hero.id],
       ctxProvider,
 
     });
@@ -135,7 +136,8 @@ describe("CombatActivity + Stage integration", () => {
     engine.register(controller);
 
     const activity = createCombatActivity({
-      ownerCharacterId: hero.id,
+      stageId: STAGE_ID,
+      partyCharIds: [hero.id],
       ctxProvider,
 
     });
@@ -183,7 +185,8 @@ describe("CombatActivity + Stage integration", () => {
     engine.register(controller);
 
     const activity = createCombatActivity({
-      ownerCharacterId: hero.id,
+      stageId: STAGE_ID,
+      partyCharIds: [hero.id],
       ctxProvider,
 
       recoverHpPctPerTick: 0.5,
@@ -232,7 +235,8 @@ describe("CombatActivity + Stage integration", () => {
       engine.register(controller);
 
       const activity = createCombatActivity({
-        ownerCharacterId: hero.id,
+        stageId: STAGE_ID,
+        partyCharIds: [hero.id],
         ctxProvider,
 
         recoverHpPctPerTick: 0.01,
@@ -288,7 +292,8 @@ describe("CombatActivity + Stage integration", () => {
       engine.register(controller);
 
       const activity = createCombatActivity({
-        ownerCharacterId: hero.id,
+        stageId: STAGE_ID,
+        partyCharIds: [hero.id],
         ctxProvider,
 
         recoverHpPctPerTick: 0.1,
@@ -349,7 +354,8 @@ describe("CombatActivity + Stage integration", () => {
     });
     engine.register(controller);
     const activity = createCombatActivity({
-      ownerCharacterId: hero.id,
+      stageId: STAGE_ID,
+      partyCharIds: [hero.id],
       ctxProvider,
 
     });
@@ -392,7 +398,8 @@ describe("CombatActivity + Stage integration", () => {
     });
     engine.register(controller);
     const activity = createCombatActivity({
-      ownerCharacterId: hero.id,
+      stageId: STAGE_ID,
+      partyCharIds: [hero.id],
       ctxProvider,
 
     });

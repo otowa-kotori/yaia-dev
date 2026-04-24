@@ -30,8 +30,20 @@ export const T = {
   btn_stop: "停止",
   btn_cancel: "取消",
   btn_enterDungeon: "进入副本",
+  btn_startCombat: "开始战斗",
   btn_abandonDungeon: "放弃副本",
+  btn_stopCombat: "停止战斗",
   dialogClose: "关闭窗口",
+
+  // ── Party dialog (unified) ──
+  partyDialogTitle: "选择出战角色",
+  partyHintCombat: "选择要派遣到该区域的角色。多人组队共享战场和奖励。",
+  partyHintDungeon: "请选择要进入副本的角色。未选择的角色会保持当前状态。",
+  partySelected: "已选择 {count} 名角色",
+  partyLimitRange: "人数限制：{min} - {max}",
+  partyInvalid: "当前选择不符合人数限制。",
+
+  // ── Legacy dungeon party keys (kept for DungeonStatusPanel) ──
   dungeonPartyTitle: "选择出战角色",
   dungeonPartyHint: "请选择要进入副本的角色。未选择的角色会保持当前状态。",
   dungeonPartySelected: "已选择 {count} 名角色",
@@ -49,6 +61,7 @@ export const T = {
   inCombat: "战斗中",
   stopped: "已停止",
   enemies: "敌人",
+  combatPartyLabel: "队伍",
   gatheringLabel: "采集中",
   stageEmpty: "场景为空 — 等待刷新...",
   inThisStage: "当前场景",

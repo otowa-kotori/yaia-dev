@@ -29,7 +29,7 @@ import {
   CharacterSelectButtons,
   getCharacterSelectStatusLabel,
 } from "./CharacterSelectButtons";
-import { DungeonPartyDialog } from "./DungeonPartyDialog";
+import { PartyDialog, type PartyDialogMode } from "./PartyDialog";
 
 // ---------- Container ----------
 
@@ -318,7 +318,10 @@ function EntryList({
   const { store: s } = useStore(store);
   const cc = s.getFocusedCharacter();
   const content = getContent();
-  const [pendingDungeonId, setPendingDungeonId] = useState<string | null>(null);
+  const [pendingEntry, setPendingEntry] = useState<{
+    mode: PartyDialogMode;
+    targetId: string;
+  } | null>(null);
   const loc = content.locations[locationId];
   if (!loc) return null;
 
@@ -332,12 +335,12 @@ function EntryList({
               key={i}
               onClick={() => {
                 if (entry.kind === "combat") {
-                  cc.startFight(entry.combatZoneId);
+                  setPendingEntry({ mode: "combat", targetId: entry.combatZoneId });
                 } else if (entry.kind === "gather") {
                   const nodeId = entry.resourceNodes[0];
                   if (nodeId) cc.startGather(nodeId);
                 } else if (entry.kind === "dungeon") {
-                  setPendingDungeonId(entry.dungeonId);
+                  setPendingEntry({ mode: "dungeon", targetId: entry.dungeonId });
                 }
               }}
               style={btnStyle(false, true)}
@@ -347,15 +350,20 @@ function EntryList({
           );
         })}
       </div>
-      <DungeonPartyDialog
+      <PartyDialog
         store={store}
-        dungeonId={pendingDungeonId}
-        isOpen={pendingDungeonId !== null}
-        onClose={() => setPendingDungeonId(null)}
+        mode={pendingEntry?.mode ?? "combat"}
+        targetId={pendingEntry?.targetId ?? null}
+        isOpen={pendingEntry !== null}
+        onClose={() => setPendingEntry(null)}
         onConfirm={(partyCharIds) => {
-          if (!pendingDungeonId) return;
-          s.startDungeon(pendingDungeonId, partyCharIds);
-          setPendingDungeonId(null);
+          if (!pendingEntry) return;
+          if (pendingEntry.mode === "dungeon") {
+            s.startDungeon(pendingEntry.targetId, partyCharIds);
+          } else {
+            s.startPartyCombat(pendingEntry.targetId, partyCharIds);
+          }
+          setPendingEntry(null);
         }}
       />
     </>

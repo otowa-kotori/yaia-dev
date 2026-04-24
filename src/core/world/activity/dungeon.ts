@@ -508,15 +508,6 @@ function onParticipantKilled(
     def.currencyReward && Object.keys(def.currencyReward).length > 0;
   if (!hasXp && !hasCurrency) return;
 
-  const rewardEffect = {
-    id: `effect.runtime.dungeon_kill_reward.${enemy.defId}` as never,
-    kind: "instant" as const,
-    rewards: {
-      charXp: hasXp ? xpReward : undefined,
-      currencies: hasCurrency ? def.currencyReward : undefined,
-    },
-  };
-
   const ectx: EffectContext = {
     state: ctx.state,
     bus: ctx.bus,
@@ -525,12 +516,30 @@ function onParticipantKilled(
     currentTick: ctx.currentTick,
   };
 
-  // Grant kill rewards to all living party members.
+  // Grant kill rewards split across living party members.
   const heroes = getPartyHeroes(ds, ctx.state);
-  for (const hero of heroes) {
-    if (hero.currentHp > 0) {
-      applyEffect(rewardEffect, victim, hero, ectx);
-    }
+  const living = heroes.filter((h) => h.currentHp > 0);
+  if (living.length === 0) return;
+  const share = living.length;
+
+  const splitXp = hasXp ? Math.max(1, Math.floor(xpReward / share)) : undefined;
+  const splitCurrencies = hasCurrency
+    ? Object.fromEntries(
+        Object.entries(def.currencyReward!).map(([k, v]) => [k, Math.max(1, Math.floor(v / share))]),
+      )
+    : undefined;
+
+  const splitEffect = {
+    id: `effect.runtime.dungeon_kill_reward.${enemy.defId}` as never,
+    kind: "instant" as const,
+    rewards: {
+      charXp: splitXp,
+      currencies: splitCurrencies,
+    },
+  };
+
+  for (const hero of living) {
+    applyEffect(splitEffect, victim, hero, ectx);
   }
 }
 
@@ -541,13 +550,8 @@ function grantDungeonWaveRewards(
   ctx: ActivityContext,
 ): void {
   const heroes = getPartyHeroes(ds, ctx.state);
-  const effect = buildWaveRewardEffect(
-    session.locationId,
-    ds.currentWaveIndex,
-    rewards,
-    ctx,
-  );
-  if (!effect) return;
+  const living = heroes.filter((h) => h.currentHp > 0);
+  if (living.length === 0) return;
 
   const ectx: EffectContext = {
     state: ctx.state,
@@ -556,42 +560,40 @@ function grantDungeonWaveRewards(
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
   };
-  for (const hero of heroes) {
-    if (hero.currentHp > 0) {
-      applyEffect(effect, hero, hero, ectx);
-    }
-  }
-}
 
-function buildWaveRewardEffect(
-  locationId: string,
-  waveIndex: number,
-  rewards: WaveRewardDef | undefined,
-  ctx: ActivityContext,
-): EffectDef | null {
-  if (!rewards) return null;
-
+  // Items: roll once, give to a random living hero.
   const items: { itemId: ItemId; qty: number }[] = [];
   for (const drop of rewards.drops ?? []) {
     if (!ctx.rng.chance(drop.chance)) continue;
     const qty = ctx.rng.int(drop.minQty, drop.maxQty);
-    if (qty <= 0) continue;
-    items.push({ itemId: drop.itemId, qty });
+    if (qty > 0) items.push({ itemId: drop.itemId, qty });
+  }
+  if (items.length > 0) {
+    const lucky = ctx.rng.pick(living);
+    const itemEffect: EffectDef = {
+      id: `effect.runtime.dungeon_wave_reward.items.${session.locationId}.${ds.currentWaveIndex}` as never,
+      kind: "instant",
+      rewards: { items },
+    };
+    applyEffect(itemEffect, lucky, lucky, ectx);
   }
 
-  const hasItems = items.length > 0;
-  const hasCurrencies =
-    !!rewards.currencies && Object.keys(rewards.currencies).length > 0;
-  if (!hasItems && !hasCurrencies) return null;
-
-  return {
-    id: `effect.runtime.dungeon_wave_reward.${locationId}.${waveIndex}` as never,
-    kind: "instant",
-    rewards: {
-      items: hasItems ? items : undefined,
-      currencies: hasCurrencies ? rewards.currencies : undefined,
-    },
-  };
+  // Currencies: split evenly across living heroes.
+  const hasCurrencies = !!rewards.currencies && Object.keys(rewards.currencies).length > 0;
+  if (hasCurrencies) {
+    const share = living.length;
+    const splitCurrencies = Object.fromEntries(
+      Object.entries(rewards.currencies!).map(([k, v]) => [k, Math.max(1, Math.floor(v / share))]),
+    );
+    const currencyEffect: EffectDef = {
+      id: `effect.runtime.dungeon_wave_reward.currency.${session.locationId}.${ds.currentWaveIndex}` as never,
+      kind: "instant",
+      rewards: { currencies: splitCurrencies },
+    };
+    for (const hero of living) {
+      applyEffect(currencyEffect, hero, hero, ectx);
+    }
+  }
 }
 
 // ---------- Helpers ----------

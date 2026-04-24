@@ -1,4 +1,4 @@
-// CombatActivity — player "I am actively fighting in the current instance".
+// CombatActivity — party combat in a combat zone (infinite loop).
 //
 // This is strictly the ACTIVITY layer: it drives battle ticks, handles
 // hero recovery, explicitly requests enemy searches, and issues stop cleanup.
@@ -6,35 +6,29 @@
 // is the StageController's job — CombatActivity just looks at the world and
 // fights whatever enemies are currently in the running instance.
 //
+// Party model (unified with DungeonActivity):
+//   CombatActivity is a WorldActivity keyed by a shared stageId. It holds
+//   `partyCharIds` — one or more heroes that share the Stage + Battle.
+//   Solo mode is just partyCharIds = [heroId]. Kill rewards are distributed
+//   to all living party members.
+//
 // State machine:
 //
-//   searchingEnemies — the hero is actively looking for the next combat zone wave.
-//                      StageController only starts / progresses a wave search
-//                      when this phase requests it.
+//   searchingEnemies — actively looking for the next combat zone wave.
 //     | enemies appear -> fighting
 //     | stopRequested   -> stopped
 //   fighting          — a Battle is active; delegate ticks to tickBattle.
 //     | battle ends players_won -> searchingEnemies / recovering
 //     | battle ends enemies_won -> recovering
 //     | stopRequested (and battle ends) -> stopped
-//   recovering        — hero HP too low after battle. Regen HP per tick until full.
-//     | hero full-hp -> searchingEnemies
+//   recovering        — party HP too low after battle. Regen HP per tick until full.
+//     | party full-hp -> searchingEnemies
 //     | stopRequested (at full-hp) -> stopped
 //   stopped           — terminal.
 //
 // Kill rewards flow via the bus — CombatActivity subscribes to 'kill' for
-// enemies in its current battle and hands the hero an instant reward
-// Effect per kill. Wave rewards are granted only when the wave resolves with
-// players_won. See onParticipantKilled / grantWaveRewards below.
-//
-// Save/load: persisted in PlayerCharacter.activity.data = { phase,
-// currentBattleId, lastTransitionTick }. The stage instance the player is in
-// is persisted in GameState.stages[hero.stageId]; the activity does not
-// own instance state.
-//
-// hero.activity self-sync: every phase transition calls syncCombatToHero so
-// the persisted snapshot is always fresh. Session layer must NOT manually
-// mirror state — the activity is the single writer (mirrors gather.ts).
+// enemies in its current battle. Per-kill rewards (XP, currency) go to all
+// living party members. Wave rewards likewise.
 //
 // Lifecycle owners:
 //   - Pre-fight reset (refill HP/MP, wipe activeEffects/cooldowns) happens in
@@ -50,7 +44,7 @@ import {
 } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
 import { getMonster, getCombatZone } from "../../content/registry";
-import type { EffectDef, ItemId, WaveRewardDef } from "../../content/types";
+import type { EffectDef, ItemId } from "../../content/types";
 
 import type { GameState } from "../../infra/state/types";
 import {
@@ -68,12 +62,15 @@ import {
 } from "../stage";
 import { mintBattleId } from "../../runtime-ids";
 import type { StageSession } from "../stage/types";
-import type { CharacterActivity, ActivityContext } from "./types";
+import type { WorldActivity, ActivityContext } from "./types";
 
 export const ACTIVITY_COMBAT_KIND = "activity.combat";
 
 export interface CombatActivityOptions {
-  ownerCharacterId: string;
+  /** Shared stage id that all party members reference. */
+  stageId: string;
+  /** Character ids participating. Solo = [heroId]. */
+  partyCharIds: string[];
   ctxProvider: () => ActivityContext;
   /** HP regen per tick during `recovering`, in [0, 1]. Default 0.02. */
   recoverHpPctPerTick?: number;
@@ -91,8 +88,10 @@ export type CombatActivityPhase =
   | "recovering"
   | "stopped";
 
-export interface CombatActivity extends CharacterActivity {
+export interface CombatActivity extends WorldActivity {
   readonly kind: typeof ACTIVITY_COMBAT_KIND;
+  readonly stageId: string;
+  readonly partyCharIds: string[];
   phase: CombatActivityPhase;
   currentBattleId: string | null;
   /** Tick at which the last phase transition happened. */
@@ -114,10 +113,11 @@ export function createCombatActivity(
   const resume = opts.resume;
 
   const activity: CombatActivity = {
-    id: `combat:${opts.ownerCharacterId}`,
+    id: `combat:${opts.stageId}`,
     kind: ACTIVITY_COMBAT_KIND,
     startedAtTick: initialCtx.currentTick,
-    ownerCharacterId: opts.ownerCharacterId,
+    stageId: opts.stageId,
+    partyCharIds: opts.partyCharIds.slice(),
     phase: resume?.phase ?? "searchingEnemies",
     currentBattleId: resume?.currentBattleId ?? null,
     lastTransitionTick: resume?.lastTransitionTick ?? initialCtx.currentTick,
@@ -126,13 +126,13 @@ export function createCombatActivity(
     onStart(ctx) {
       // Fresh-start reset only. The resume path (opts.resume set) never hits
       // onStart because the caller skips it when rehydrating from a save.
-      const hero = findHero(activity, ctx.state);
-      if (!hero) return;
-      hero.currentHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
-      hero.currentMp = getAttr(hero, ATTR.MAX_MP, ctx.attrDefs);
-      hero.activeEffects = [];
-      hero.cooldowns = {};
-      syncCombatToHero(activity, hero);
+      for (const hero of getPartyHeroes(activity, ctx.state)) {
+        hero.currentHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
+        hero.currentMp = getAttr(hero, ATTR.MAX_MP, ctx.attrDefs);
+        hero.activeEffects = [];
+        hero.cooldowns = {};
+      }
+      syncCombatToHeroes(activity, ctx.state);
     },
 
     tick() {
@@ -194,9 +194,7 @@ function stepSearching(
     enterStopped(activity, ctx);
     return;
   }
-  const hero = findHero(activity, ctx.state);
-  if (!hero) return;
-  const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
+  const session = ctx.state.stages[activity.stageId];
   if (!session) return;
 
   if (!session.currentWave && !session.pendingCombatWaveSearch && session.mode.kind === "combatZone") {
@@ -207,7 +205,7 @@ function stepSearching(
   const enemies = stageEnemies(session, ctx.state).filter((e) => e.currentHp > 0);
   if (enemies.length === 0) return;
 
-  openBattle(activity, hero, enemies, ctx);
+  openBattle(activity, enemies, ctx);
 }
 
 function stepFighting(
@@ -220,8 +218,7 @@ function stepFighting(
     // Lost the battle reference somehow — fall back to searching.
     activity.phase = "searchingEnemies";
     activity.currentBattleId = null;
-    const hero = findHero(activity, ctx.state);
-    if (hero) syncCombatToHero(activity, hero);
+    syncCombatToHeroes(activity, ctx.state);
     return;
   }
 
@@ -242,18 +239,17 @@ function stepFighting(
   // reclaims / clears wave enemies on its own schedule.
   removeBattle(ctx.state, battle.id);
 
-  const hero = findHero(activity, ctx.state);
-  const session = hero?.stageId ? ctx.state.stages[hero.stageId] : undefined;
+  const session = ctx.state.stages[activity.stageId];
   const resolvedOutcome =
     battle.outcome === "players_won" ? "players_won" : "enemies_won";
   if (session?.currentWave?.status === "active") {
     session.currentWave.status =
       resolvedOutcome === "players_won" ? "victory" : "defeat";
-    if (resolvedOutcome === "players_won" && hero) {
-      grantWaveRewards(session, hero, ctx);
+    if (resolvedOutcome === "players_won") {
+      grantWaveRewards(activity, session, ctx);
     }
     ctx.bus.emit("waveResolved", {
-      charId: activity.ownerCharacterId,
+      charId: activity.partyCharIds[0] ?? "",
       locationId: session.locationId,
       combatZoneId: session.currentWave.combatZoneId,
       waveId: session.currentWave.waveId,
@@ -270,15 +266,16 @@ function stepFighting(
     return;
   }
 
-  if (!hero) {
+  const heroes = getPartyHeroes(activity, ctx.state);
+  if (heroes.length === 0) {
     activity.phase = "stopped";
     return;
   }
 
-  activity.phase = shouldRecoverAfterBattle(hero, ctx)
+  activity.phase = partyNeedsRecovery(activity, heroes, ctx)
     ? "recovering"
     : "searchingEnemies";
-  syncCombatToHero(activity, hero);
+  syncCombatToHeroes(activity, ctx.state);
 }
 
 function stepRecovering(
@@ -286,27 +283,29 @@ function stepRecovering(
   ctx: ActivityContext,
   params: StepParams,
 ): void {
-  const hero = findHero(activity, ctx.state);
-  if (!hero) {
+  const heroes = getPartyHeroes(activity, ctx.state);
+  if (heroes.length === 0) {
     enterStopped(activity, ctx);
     return;
   }
-  const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
-  if (maxHp <= 0) {
-    enterStopped(activity, ctx);
-    return;
-  }
-  const per = Math.max(1, Math.floor(maxHp * params.recoverHpPctPerTick));
-  hero.currentHp = Math.min(maxHp, hero.currentHp + per);
 
-  if (hero.currentHp >= maxHp) {
+  let allFull = true;
+  for (const hero of heroes) {
+    const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
+    if (maxHp <= 0) continue;
+    const per = Math.max(1, Math.floor(maxHp * params.recoverHpPctPerTick));
+    hero.currentHp = Math.min(maxHp, hero.currentHp + per);
+    if (hero.currentHp < maxHp) allFull = false;
+  }
+
+  if (allFull) {
     if (activity.stopRequested) {
       enterStopped(activity, ctx);
       return;
     }
     activity.phase = "searchingEnemies";
     activity.lastTransitionTick = ctx.currentTick;
-    syncCombatToHero(activity, hero);
+    syncCombatToHeroes(activity, ctx.state);
   }
 }
 
@@ -314,19 +313,21 @@ function stepRecovering(
 
 function openBattle(
   activity: CombatActivity,
-  hero: PlayerCharacter,
   enemies: Enemy[],
   ctx: ActivityContext,
 ): void {
+  const heroes = getPartyHeroes(activity, ctx.state);
+  if (heroes.length === 0) return;
+
   const intents: Record<string, string> = {};
-  intents[hero.id] = INTENT.RANDOM_ATTACK;
+  for (const h of heroes) intents[h.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
 
   const battleId = mintBattleId(ctx.state);
   const battle = createBattle({
     id: battleId,
-    mode: "solo",
-    participantIds: [hero.id, ...enemies.map((e) => e.id)],
+    mode: heroes.length > 1 ? "party" : "solo",
+    participantIds: [...heroes.map((h) => h.id), ...enemies.map((e) => e.id)],
     startedAtTick: ctx.currentTick,
     intents,
   });
@@ -334,7 +335,7 @@ function openBattle(
   activity.currentBattleId = battle.id;
   activity.phase = "fighting";
   activity.lastTransitionTick = ctx.currentTick;
-  syncCombatToHero(activity, hero);
+  syncCombatToHeroes(activity, ctx.state);
 }
 
 function removeBattle(state: GameState, battleId: string): void {
@@ -357,28 +358,14 @@ function onParticipantKilled(
     | undefined;
   if (!victim || !isEnemy(victim)) return;
 
-  const hero = findHero(activity, ctx.state);
-  if (!hero) return;
-
   const enemy = victim as Enemy;
   const def = getMonster(enemy.defId);
   const xpReward = def.xpReward;
 
-  // Build a runtime reward effect combining XP and currency. Skip entirely if
-  // neither is available to avoid a no-op applyEffect call.
   const hasXp = xpReward > 0;
   const hasCurrency =
     def.currencyReward && Object.keys(def.currencyReward).length > 0;
   if (!hasXp && !hasCurrency) return;
-
-  const rewardEffect = {
-    id: `effect.runtime.kill_reward.${enemy.defId}` as never,
-    kind: "instant" as const,
-    rewards: {
-      charXp: hasXp ? xpReward : undefined,
-      currencies: hasCurrency ? def.currencyReward : undefined,
-    },
-  };
 
   const ectx: EffectContext = {
     state: ctx.state,
@@ -387,12 +374,38 @@ function onParticipantKilled(
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
   };
-  applyEffect(rewardEffect, victim, hero, ectx);
+
+  // Grant kill rewards split across living party members.
+  // XP and currency are divided by headcount; each hero gets their share.
+  const heroes = getPartyHeroes(activity, ctx.state);
+  const living = heroes.filter((h) => h.currentHp > 0);
+  if (living.length === 0) return;
+  const share = living.length;
+
+  const splitXp = hasXp ? Math.max(1, Math.floor(xpReward / share)) : undefined;
+  const splitCurrencies = hasCurrency
+    ? Object.fromEntries(
+        Object.entries(def.currencyReward!).map(([k, v]) => [k, Math.max(1, Math.floor(v / share))]),
+      )
+    : undefined;
+
+  const splitEffect = {
+    id: `effect.runtime.kill_reward.${enemy.defId}` as never,
+    kind: "instant" as const,
+    rewards: {
+      charXp: splitXp,
+      currencies: splitCurrencies,
+    },
+  };
+
+  for (const hero of living) {
+    applyEffect(splitEffect, victim, hero, ectx);
+  }
 }
 
 function grantWaveRewards(
+  activity: CombatActivity,
   session: StageSession,
-  hero: PlayerCharacter,
   ctx: ActivityContext,
 ): void {
   const activeWave = session.currentWave;
@@ -400,14 +413,12 @@ function grantWaveRewards(
 
   const zone = getCombatZone(activeWave.combatZoneId);
   const wave = lookupWave(zone, activeWave.waveId);
-  const rewardEffect = buildWaveRewardEffect(
-    session.locationId,
-    activeWave.waveIndex,
-    wave.rewards,
-    ctx,
-  );
   activeWave.rewardGranted = true;
-  if (!rewardEffect) return;
+  if (!wave.rewards) return;
+
+  const heroes = getPartyHeroes(activity, ctx.state);
+  const living = heroes.filter((h) => h.currentHp > 0);
+  if (living.length === 0) return;
 
   const ectx: EffectContext = {
     state: ctx.state,
@@ -416,50 +427,55 @@ function grantWaveRewards(
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
   };
-  applyEffect(rewardEffect, hero, hero, ectx);
-}
 
-function buildWaveRewardEffect(
-  locationId: string,
-  waveIndex: number,
-  rewards: WaveRewardDef | undefined,
-  ctx: ActivityContext,
-): EffectDef | null {
-  if (!rewards) return null;
-
+  // Items: roll once, give to a random living hero.
   const items: { itemId: ItemId; qty: number }[] = [];
-
-  for (const drop of rewards.drops ?? []) {
+  for (const drop of wave.rewards.drops ?? []) {
     if (!ctx.rng.chance(drop.chance)) continue;
     const qty = ctx.rng.int(drop.minQty, drop.maxQty);
-    if (qty <= 0) continue;
-    items.push({ itemId: drop.itemId, qty });
+    if (qty > 0) items.push({ itemId: drop.itemId, qty });
+  }
+  if (items.length > 0) {
+    const lucky = ctx.rng.pick(living);
+    const itemEffect: EffectDef = {
+      id: `effect.runtime.wave_reward.items.${session.locationId}.${activeWave.waveIndex}` as never,
+      kind: "instant",
+      rewards: { items },
+    };
+    applyEffect(itemEffect, lucky, lucky, ectx);
   }
 
-  const hasItems = items.length > 0;
-  const hasCurrencies =
-    !!rewards.currencies && Object.keys(rewards.currencies).length > 0;
-  if (!hasItems && !hasCurrencies) return null;
-
-  return {
-    id: `effect.runtime.wave_reward.${locationId}.${waveIndex}` as never,
-    kind: "instant",
-    rewards: {
-      items: hasItems ? items : undefined,
-      currencies: hasCurrencies ? rewards.currencies : undefined,
-    },
-  };
+  // Currencies: split evenly across living heroes.
+  const rewards = wave.rewards;
+  const hasCurrencies = !!rewards.currencies && Object.keys(rewards.currencies).length > 0;
+  if (hasCurrencies) {
+    const share = living.length;
+    const splitCurrencies = Object.fromEntries(
+      Object.entries(rewards.currencies!).map(([k, v]) => [k, Math.max(1, Math.floor(v / share))]),
+    );
+    const currencyEffect: EffectDef = {
+      id: `effect.runtime.wave_reward.currency.${session.locationId}.${activeWave.waveIndex}` as never,
+      kind: "instant",
+      rewards: { currencies: splitCurrencies },
+    };
+    for (const hero of living) {
+      applyEffect(currencyEffect, hero, hero, ectx);
+    }
+  }
 }
 
 // ---------- Helpers ----------
 
-function findHero(
+function getPartyHeroes(
   activity: CombatActivity,
   state: GameState,
-): PlayerCharacter | null {
-  const a = state.actors.find((x) => x.id === activity.ownerCharacterId);
-  if (!a || !isPlayer(a)) return null;
-  return a;
+): PlayerCharacter[] {
+  const result: PlayerCharacter[] = [];
+  for (const charId of activity.partyCharIds) {
+    const a = state.actors.find((x) => x.id === charId);
+    if (a && isPlayer(a)) result.push(a);
+  }
+  return result;
 }
 
 function lookupBattle(
@@ -470,54 +486,64 @@ function lookupBattle(
   return state.battles.find((b) => b.id === activity.currentBattleId) ?? null;
 }
 
-function shouldRecoverAfterBattle(
-  hero: PlayerCharacter,
+function partyNeedsRecovery(
+  activity: CombatActivity,
+  heroes: PlayerCharacter[],
   ctx: ActivityContext,
 ): boolean {
-  if (hero.currentHp <= 0) return true;
-  const session = hero.stageId ? ctx.state.stages[hero.stageId] : undefined;
+  const session = ctx.state.stages[activity.stageId];
   if (!session || session.mode.kind !== "combatZone") return false;
   const zone = getCombatZone(session.mode.combatZoneId);
   const threshold = zone.recoverBelowHpFactor ?? 0;
   if (threshold <= 0) return false;
 
-  const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
-  if (maxHp <= 0) return true;
-  return hero.currentHp / maxHp <= threshold;
+  for (const hero of heroes) {
+    if (hero.currentHp <= 0) return true;
+    const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
+    if (maxHp > 0 && hero.currentHp / maxHp <= threshold) return true;
+  }
+  return false;
 }
 
 function enterStopped(activity: CombatActivity, ctx: ActivityContext): void {
   activity.phase = "stopped";
   activity.currentBattleId = null;
-  const hero = findHero(activity, ctx.state);
-  if (hero) hero.activity = null;
+  // Clear activity reference on all party heroes.
+  for (const hero of getPartyHeroes(activity, ctx.state)) {
+    hero.activity = null;
+  }
   const dispose = (activity as unknown as { __disposeKill?: () => void })
     .__disposeKill;
   if (dispose) dispose();
+  // Emit for the first party member (Session layer uses charId to route).
   ctx.bus.emit("activityComplete", {
-    charId: activity.ownerCharacterId,
+    charId: activity.partyCharIds[0] ?? "",
     kind: ACTIVITY_COMBAT_KIND,
   });
 }
 
-/** Mirror current activity state onto hero.activity so autosave captures
- *  the latest phase / battle / transition tick. Called at every phase
- *  transition; the activity is the single writer (mirrors gather.ts). */
-function syncCombatToHero(
+/** Mirror current activity state onto all party heroes so autosave captures
+ *  the latest phase / battle / transition tick. */
+function syncCombatToHeroes(
   activity: CombatActivity,
-  hero: PlayerCharacter,
+  state: GameState,
 ): void {
-  if (activity.phase === "stopped") {
-    hero.activity = null;
-    return;
+  const heroes = getPartyHeroes(activity, state);
+  for (const hero of heroes) {
+    if (activity.phase === "stopped") {
+      hero.activity = null;
+      continue;
+    }
+    hero.activity = {
+      kind: ACTIVITY_COMBAT_KIND,
+      startedAtTick: activity.startedAtTick,
+      data: {
+        stageId: activity.stageId,
+        partyCharIds: activity.partyCharIds,
+        phase: activity.phase,
+        currentBattleId: activity.currentBattleId,
+        lastTransitionTick: activity.lastTransitionTick,
+      },
+    };
   }
-  hero.activity = {
-    kind: ACTIVITY_COMBAT_KIND,
-    startedAtTick: activity.startedAtTick,
-    data: {
-      phase: activity.phase,
-      currentBattleId: activity.currentBattleId,
-      lastTransitionTick: activity.lastTransitionTick,
-    },
-  };
 }
