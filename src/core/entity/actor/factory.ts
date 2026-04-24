@@ -3,12 +3,14 @@
 // Rules:
 // - Factories produce a fully-populated Actor including derived fields.
 // - rebuildCharacterDerived(c) clears and re-derives attrs.modifiers /
-//   attrs.cache / abilities from the character's persisted SoT (equipped gear,
-//   activeEffects, knownAbilities). Call this:
+//   attrs.dynamicProviders / attrs.depGraph / attrs.cache / abilities from
+//   the character's persisted SoT (equipped gear, activeEffects, knownAbilities).
+//   Call this:
 //     * after loading a save
 //     * after equipping/unequipping gear
 //     * after an effect is applied/removed (effect pipeline does this)
-// - attrs.base is PERSISTED. Modifiers/cache/derived ability list are NOT.
+// - attrs.base is PERSISTED. Modifiers/dynamicProviders/depGraph/cache/
+//   derived ability list are NOT.
 
 import type { AbilityId, AttrDef, MonsterDef } from "../../content/types";
 import { getContent, getEffect, getItem } from "../../content/registry";
@@ -19,6 +21,7 @@ import {
   createAttrSet,
   getAttr as getAttrFromSet,
   invalidateAttrs,
+  rebuildDepGraph,
   type AttrSet,
 } from "../attribute";
 import type {
@@ -168,6 +171,8 @@ export function rebuildCharacterDerived(
 ): void {
   // 1) Wipe modifier stack and cache.
   c.attrs.modifiers = [];
+  c.attrs.dynamicProviders = [];
+  c.attrs.depGraph = {};
   invalidateAttrs(c.attrs);
 
   // 2) Equipped-item modifiers (players only). Each slot holds a GearInstance
@@ -222,6 +227,11 @@ export function rebuildCharacterDerived(
       // def lookup; stays empty, which is a visible failure.
     }
   }
+
+  // 4.5) Build dependency graph from AttrDefs + any installed dynamic providers.
+  //      Dynamic providers would be installed here by skills/effects in the future;
+  //      for now the graph is built from AttrDef.dependsOn edges only.
+  rebuildDepGraph(c.attrs, attrDefs);
 
   // 5) Cache is now dirty (invalidateAttrs above did it); clamp HP/MP.
   const maxHp = getAttrFromSet(c.attrs, ATTR.MAX_HP, attrDefs);
