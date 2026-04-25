@@ -11,21 +11,62 @@
 
 ## Ability
 
-`Ability` 表示一次可执行行为。
-
 - 执行前会校验 `cost`、`cooldown` 和 `target`
 - 校验通过后，会按顺序对每个目标应用它的 `effects`
 - 非战斗行为也可以复用同一条管线，例如采集挥击可以使用 `targetKind: "none"`
 
 ## Effect
 
-`Effect` 负责具体结算。目前有三种 `kind`，但都走同一条结算路径：
+`Effect` 负责具体结算。目前有三种 `kind`：
 
 - **instant**：立即结算，可带 `formula` 和 `rewards`
 - **duration**：安装 modifier，并登记 `ActiveEffect`；到期后撤销
 - **periodic**：以 `duration` 为基础，每隔 `periodTicks` 再触发一次 instant 结算
 
 伤害、治疗、XP、物品、货币、buff 都通过 effect 管线处理，而不是各走一套单独逻辑。
+
+## 伤害公式
+
+伤害类型由 `EffectDef.formula.kind` 决定，与施法者职业无关：
+
+### phys_damage_v1（物理伤害）
+
+ratio-power 破甲方案：
+
+```
+有效攻击 = PATK × skillMul
+excess   = max(0, PDEF / 有效攻击 − 1)
+破甲系数 = max(floor, K / (K + excess^p))
+最终伤害 = ⌊有效攻击 × 破甲系数⌋
+```
+
+默认参数：`K=0.8`、`p=1.5`、`floor=0.1`、`skillMul=1.0`。
+
+每段技能独立代入破甲公式，多段技能打高甲目标天然削弱。
+
+### magic_damage_v1（魔法伤害）
+
+```
+最终伤害 = ⌊MATK × skillMul × (1 − MRES)⌋
+```
+
+MRES 百分比减伤，上限 0.8，天然无零伤害问题。
+
+## 公式上下文变量
+
+`buildFormulaContext` 注入以下变量供公式使用：
+
+| 变量 | 含义 |
+|------|------|
+| `patk` / `pdef` | 施法者 PATK / 目标 PDEF |
+| `matk` / `mres` | 施法者 MATK / 目标 MRES |
+| `source_str/dex/int` | 施法者一级属性（供非伤害公式使用） |
+| `source_max_hp` / `source_current_hp` | 施法者 HP |
+| `target_max_hp` / `target_current_hp` | 目标 HP |
+
+## 升级触发 rebuild
+
+`grantCharacterXp` 升级时修改 `attrs.base`（应用 HeroConfig.growth 增量），但不主动刷缓存。effect 层检测到升级发生后调用 `rebuildCharacterDerived`，确保派生属性同步更新。
 
 ## 边界
 
@@ -34,5 +75,5 @@
 
 ## 入口
 
-- `src/core/effect/`
-- `src/core/ability/`
+- `src/core/behavior/effect/`
+- `src/core/behavior/ability/`

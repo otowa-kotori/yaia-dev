@@ -15,14 +15,18 @@
 | [monsters.md](./monsters.md) | 怪物与区域：敌人设计理念、区域划分 | 探索中 | combat-formula, equipment |
 | [gathering.md](./gathering.md) | 采集与生产：材料体系、生产链 | 探索中 | equipment, monsters |
 | [progression.md](./progression.md) | 经验公式与成长节奏：XP 曲线、等级差递减 | 探索中 | flow, monsters |
+| [skill-system.md](./skill-system.md) | 技能系统架构：TalentDef/EffectDef、reaction dispatch、intent | 设计稿 | combat-formula, jobs |
+| [reactive-attrs.md](./reactive-attrs.md) | 响应式属性：派生 base、动态 modifier、lazy invalidation | 设计稿 | combat-formula, skill-system |
 
 ## 级联更新规则
 
 ```
-combat-formula 变动 → 检查 jobs, equipment, monsters
+combat-formula 变动 → 检查 jobs, equipment, monsters, skill-system, reactive-attrs
 equipment 变动 → 检查 monsters, gathering
 monsters 变动 → 检查 flow 的数值锚点, progression
 progression 变动 → 检查 flow 的阶段时间线
+skill-system 变动 → 检查 reactive-attrs, monsters
+reactive-attrs 变动 → 检查 skill-system（属性刷新消费侧）
 ```
 
 ## 设计原则
