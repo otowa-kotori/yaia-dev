@@ -5,22 +5,21 @@
 // calls the actor's intent, gets a plan, then dispatches through
 // tryUseTalent which does all the validation and state changes.
 //
-// Intents are small and easy to compose. At MVP we ship RandomAttackIntent
-// and expose the Intent type so content can register more. A future
-// PriorityListIntent can read a rules table from content data without
-// changing Battle or tryUseTalent.
+// Intents are small and easy to compose. Built-in intents:
+//   - RANDOM_ATTACK: pick a random enemy, use first known talent.
+//   - PRIORITY_LIST: content-driven rule-based AI. Dynamically reads
+//     intentConfig from HeroConfig / MonsterDef at action time, so it
+//     survives save/load without per-actor registration.
 //
-// Registry model (added for save-file support):
+// Registry model (for save-file support):
 //   - Intents are functions. Functions can't be JSON-serialized, so Battle
 //     can't store them directly if we want battles to live in GameState.
 //   - Resolution is via a module-level registry keyed by string ID. Battle
 //     stores `intents: Record<actorId, intentId>`; at action time, the
 //     dispatcher looks up the function by id.
 //   - Registration happens once at boot (see `registerBuiltinIntents`).
+//     All built-in intents use stable IDs that survive serialization.
 //     Fallback on unknown id throws — alpha-stage loudness.
-//   - A PlayerCharacter with a custom AI could store its own intent id on
-//     the actor (future: `actor.intent: string`). For MVP we install the
-//     same intent id on every participant and done.
 
 import type { Character } from "../../entity/actor";
 import { isAlive } from "../../entity/actor";
@@ -52,6 +51,9 @@ export type Intent = (actor: Character, ctx: IntentContext) => IntentAction | nu
 export const INTENT = {
   /** RandomAttackIntent — default auto-attack. */
   RANDOM_ATTACK: "intent.random_attack",
+  /** PriorityListIntent — content-driven rule-based AI. Dynamically reads
+   *  intentConfig from HeroConfig / MonsterDef at action time. */
+  PRIORITY_LIST: "intent.priority_list",
 } as const;
 
 // Re-export PriorityList types and factory.
@@ -139,6 +141,7 @@ export const RandomAttackIntent: Intent = (actor, ctx) => {
  *  than once (idempotent overwrite). */
 export function registerBuiltinIntents(): void {
   registerIntent(INTENT.RANDOM_ATTACK, RandomAttackIntent);
+  registerIntent(INTENT.PRIORITY_LIST, PriorityListIntent);
 }
 
 // ---------- Weighted target selection ----------
@@ -171,47 +174,65 @@ export function pickWeightedTarget(
   return candidates[candidates.length - 1]!;
 }
 
-// ---------- Battle intent builder ----------
+// ---------- PriorityListIntent (content-driven) ----------
 
 import { getContent } from "../../content/registry";
 import { isPlayer, isEnemy } from "../../entity/actor";
 import type { PlayerCharacter, Enemy } from "../../entity/actor";
-import { createPriorityListIntent } from "./priority";
+import { createPriorityListIntent, type PriorityRule } from "./priority";
 
 /**
- * Build a per-actor intent map for a new battle. Reads intentConfig from
- * content (HeroConfig for players, MonsterDef for enemies). Each unique
- * config is registered as a separate intent in the registry (idempotent).
+ * A single shared intent that dynamically resolves intentConfig from content
+ * at action time. This avoids per-hero / per-monster intent registration and
+ * survives save/load without re-registration.
+ *
+ * Internally caches the compiled PriorityListIntent per config identity so
+ * we don't rebuild every tick.
+ */
+const _compiledCache = new Map<string, Intent>();
+
+const PriorityListIntent: Intent = (actor, ctx) => {
+  let rules: PriorityRule[] = [];
+  let cacheKey: string;
+
+  const content = getContent();
+
+  if (isPlayer(actor)) {
+    const pc = actor as PlayerCharacter;
+    cacheKey = pc.heroConfigId;
+    const heroCfg = content.starting?.heroes.find(h => h.id === pc.heroConfigId);
+    rules = heroCfg?.intentConfig ?? [];
+  } else if (isEnemy(actor)) {
+    const e = actor as Enemy;
+    cacheKey = e.defId as string;
+    const mdef = content.monsters[e.defId as string];
+    rules = mdef?.intentConfig ?? [];
+  } else {
+    return null;
+  }
+
+  let compiled = _compiledCache.get(cacheKey);
+  if (!compiled) {
+    compiled = createPriorityListIntent(rules);
+    _compiledCache.set(cacheKey, compiled);
+  }
+  return compiled(actor, ctx);
+};
+
+// ---------- Battle intent builder ----------
+
+/**
+ * Build a per-actor intent map for a new battle. All actors use the shared
+ * PRIORITY_LIST intent which dynamically reads intentConfig from content.
  *
  * Returns Record<actorId, intentId> suitable for CreateBattleOptions.intents.
  */
 export function buildBattleIntents(
   participants: readonly Character[],
 ): Record<string, string> {
-  const content = getContent();
   const intents: Record<string, string> = {};
-
   for (const actor of participants) {
-    if (isPlayer(actor)) {
-      const pc = actor as PlayerCharacter;
-      const heroCfg = content.starting?.heroes.find(h => h.id === pc.heroConfigId);
-      const rules = heroCfg?.intentConfig ?? [];
-      const intentId = `intent.${pc.heroConfigId}`;
-      if (!hasIntent(intentId)) {
-        registerIntent(intentId, createPriorityListIntent(rules));
-      }
-      intents[actor.id] = intentId;
-    } else if (isEnemy(actor)) {
-      const e = actor as Enemy;
-      const mdef = content.monsters[e.defId as string];
-      const rules = mdef?.intentConfig ?? [];
-      const intentId = `intent.monster.${e.defId}`;
-      if (!hasIntent(intentId)) {
-        registerIntent(intentId, createPriorityListIntent(rules));
-      }
-      intents[actor.id] = intentId;
-    }
+    intents[actor.id] = INTENT.PRIORITY_LIST;
   }
-
   return intents;
 }

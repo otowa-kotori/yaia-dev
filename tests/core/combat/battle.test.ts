@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { createBattle, tickBattle } from "../../../src/core/combat/battle";
-import { resetContent } from "../../../src/core/content";
+import { patchContent, resetContent } from "../../../src/core/content";
+
 import { createRng } from "../../../src/core/infra/rng";
 import { createGameEventBus } from "../../../src/core/infra/events";
 import { createEmptyState } from "../../../src/core/infra/state";
@@ -14,6 +15,8 @@ import {
   makeSlime,
 } from "../../fixtures/content";
 import type { PlayerCharacter, Enemy } from "../../../src/core/entity/actor";
+import type { TalentDef, TalentId } from "../../../src/core/content/types";
+
 import { INTENT } from "../../../src/core/combat/intent";
 
 function freshState(): GameState {
@@ -161,4 +164,120 @@ describe("Battle: tick loop", () => {
     }
     expect(b.log.length).toBe(logLen);
   });
+
+  test("createBattle rejects participants without explicit intents", () => {
+    const hero = makePlayer({
+      id: "p1",
+      talents: [basicAttackTalent.id],
+    });
+    const slime = makeSlime("s1");
+
+    expect(() =>
+      createBattle({
+        id: "b",
+        mode: "solo",
+        participantIds: [hero.id, slime.id],
+        startedAtTick: 0,
+        intents: {
+          [hero.id]: INTENT.RANDOM_ATTACK,
+        },
+      }),
+    ).toThrow(`battle b: no intent registered for participant "${slime.id}"`);
+  });
+
+  test("tickBattle throws when a participant is missing from GameState", () => {
+    const state = freshState();
+    const bus = createGameEventBus();
+    const rng = createRng(42);
+    const hero = makePlayer({
+      id: "p1",
+      talents: [basicAttackTalent.id],
+    });
+    state.actors = [hero];
+
+    const missingEnemyId = "enemy.missing";
+    const battle = createBattle({
+      id: "b",
+      mode: "solo",
+      participantIds: [hero.id, missingEnemyId],
+      startedAtTick: 0,
+      intents: {
+        [hero.id]: INTENT.RANDOM_ATTACK,
+        [missingEnemyId]: INTENT.RANDOM_ATTACK,
+      },
+    });
+
+    expect(() =>
+      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 }),
+    ).toThrow(
+      `battle b: missing participant actor "${missingEnemyId}" in GameState`,
+    );
+  });
+
+  test("unsubscribes damage listener when talent execution throws", () => {
+    const explodingTalent: TalentDef = {
+      id: "talent.test.exploding" as TalentId,
+      name: "Exploding Test Talent",
+      type: "active",
+      maxLevel: 1,
+      tpCost: 0,
+      getActiveParams: () => ({
+        mpCost: 0,
+        cooldownActions: 0,
+        energyCost: 1000,
+        targetKind: "single_enemy" as const,
+      }),
+      execute: (_level, caster, targets, castCtx) => {
+        castCtx.dealPhysicalDamage(caster, targets[0]!, 1);
+        throw new Error("boom");
+      },
+    };
+    patchContent({
+      talents: {
+        [explodingTalent.id]: explodingTalent,
+      },
+    });
+
+    const state = freshState();
+    const bus = createGameEventBus();
+    const rng = createRng(42);
+    const hero = makePlayer({
+      id: "p1",
+      talents: [explodingTalent.id],
+      atk: 10,
+      speed: 100,
+      maxHp: 50,
+    });
+    const slime = makeSlime("s1");
+    state.actors = [hero, slime];
+
+    const battle = createBattle({
+      id: "b",
+      mode: "solo",
+      participantIds: [hero.id, slime.id],
+      startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
+    });
+
+    expect(() =>
+      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 }),
+    ).toThrow("boom");
+
+    const damageEntriesBefore = battle.log.filter(
+      (entry) => entry.kind === "damage",
+    ).length;
+    expect(damageEntriesBefore).toBe(1);
+
+    bus.emit("damage", {
+      attackerId: "ghost.attacker",
+      targetId: slime.id,
+      amount: 99,
+    });
+
+    const damageEntriesAfter = battle.log.filter(
+      (entry) => entry.kind === "damage",
+    ).length;
+    expect(damageEntriesAfter).toBe(damageEntriesBefore);
+  });
 });
+
