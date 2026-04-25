@@ -161,28 +161,34 @@ export const gameLogRules = {
       },
     );
   },
-  battleActionResolved: (
-    payload: GameEvents["battleActionResolved"],
+  battleActionStarted: (
+    payload: GameEvents["battleActionStarted"],
     ctx: GameLogRuleContext,
   ) => {
     const scope = battleScope(payload);
     const actor = actorName(ctx.state, payload.actorId);
-    if (payload.outcome === "skip") {
-      const note = skipReasonText(payload.note);
-      return entry(
-        ctx,
-        "battle",
-        `${actor} 本回合未能行动${note ? `（${note}）` : ""}。`,
-        scope,
-      );
-    }
-
     const ability = talentName(payload.abilityId);
     const targets = listOrFallback(payload.targetIds.map((id) => actorName(ctx.state, id)), "目标未知");
     return entry(
       ctx,
       "battle",
       `${actor} 使用了 ${ability}，目标：${targets}。`,
+      scope,
+    );
+  },
+  battleActionResolved: (
+    payload: GameEvents["battleActionResolved"],
+    ctx: GameLogRuleContext,
+  ) => {
+    // Only log skips; successful actions are already announced by battleActionStarted.
+    if (payload.outcome !== "skip") return null;
+    const scope = battleScope(payload);
+    const actor = actorName(ctx.state, payload.actorId);
+    const note = skipReasonText(payload.note);
+    return entry(
+      ctx,
+      "battle",
+      `${actor} 本回合未能行动${note ? `（${note}）` : ""}。`,
       scope,
     );
   },

@@ -251,6 +251,16 @@ function runActorActionWindow(
     });
   });
 
+  // Announce intention before effects resolve, so the game log reads
+  // "X uses Y → X deals N damage" in the correct order.
+  ctx.bus.emit("battleActionStarted", {
+    battleId: battle.id,
+    actorId: actor.id,
+    targetIds: plan.targets.map((t) => t.id),
+    abilityId: plan.talentId,
+    ...battleEventScope(battle),
+  });
+
   const result: CastResult = tryUseTalent(actor, plan.talentId, plan.targets, {
     state: ctx.state,
     bus: ctx.bus,

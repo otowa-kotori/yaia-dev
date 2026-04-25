@@ -135,6 +135,16 @@ export type GameEvents = {
     dungeonSessionId?: string;
     dungeonId?: string;
   };
+  /** Fired just before a talent is cast (before damage/effects resolve). */
+  battleActionStarted: {
+    battleId: string;
+    actorId: string;
+    targetIds: string[];
+    abilityId: string;
+    stageId?: string;
+    locationId?: string;
+    dungeonSessionId?: string;
+  };
   battleActionResolved: {
     battleId: string;
     actorId: string;
