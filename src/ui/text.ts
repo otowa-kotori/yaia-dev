@@ -171,6 +171,7 @@ export const T = {
   noHeroYet: "尚无英雄。",
   noSkillsYet: "尚未习得技能。试试去采集！",
   label_maxHp: "生命上限",
+  label_maxMp: "法力上限",
   label_patk: "物攻",
   label_matk: "法攻",
   label_pdef: "物防",

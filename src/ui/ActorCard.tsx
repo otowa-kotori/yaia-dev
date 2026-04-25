@@ -38,7 +38,10 @@ export function ActorCard({
   statusLabel,
 }: ActorCardProps) {
   const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP, ATTR_DEFS));
+  const maxMp = Math.max(0, getAttr(actor, ATTR.MAX_MP, ATTR_DEFS));
   const hpPct = Math.max(0, Math.min(1, actor.currentHp / maxHp));
+  const mpPct = maxMp > 0 ? Math.max(0, Math.min(1, actor.currentMp / maxMp)) : 0;
+  const showMp = maxMp > 0;
   const dead = actor.currentHp <= 0;
   const isHero = variant === "hero";
 
@@ -84,6 +87,18 @@ export function ActorCard({
           </div>
         )}
       </div>
+
+      {/* MP bar */}
+      {showMp && (
+        <div style={{ marginTop: isHero ? 3 : 2 }}>
+          <Bar pct={mpPct} color={isHero ? "#58a6ff" : "#4d7fe0"} height={isHero ? 6 : 4} />
+          {isHero && (
+            <div style={barLabel}>
+              MP {Math.round(actor.currentMp)} / {Math.round(maxMp)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ATB gauge — subtle, no label */}
       {atbPct !== undefined && !dead && (

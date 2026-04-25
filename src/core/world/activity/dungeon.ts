@@ -569,6 +569,22 @@ function onParticipantKilled(
   for (const hero of living) {
     applyEffect(splitEffect, victim, hero, ectx);
   }
+
+  const items: { itemId: ItemId; qty: number }[] = [];
+  for (const drop of def.drops) {
+    if (!ctx.rng.chance(drop.chance)) continue;
+    const qty = ctx.rng.int(drop.minQty, drop.maxQty);
+    if (qty > 0) items.push({ itemId: drop.itemId, qty });
+  }
+  if (items.length > 0) {
+    const lucky = ctx.rng.pick(living);
+    const itemEffect: EffectDef = {
+      id: `effect.runtime.dungeon_kill_reward.items.${enemy.defId}` as never,
+      kind: "instant",
+      rewards: { items },
+    };
+    applyEffect(itemEffect, victim, lucky, ectx);
+  }
 }
 
 function grantDungeonWaveRewards(

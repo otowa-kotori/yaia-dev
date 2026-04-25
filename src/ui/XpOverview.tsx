@@ -20,6 +20,7 @@ const ATTR_DEFS = DEFAULT_CONTENT.attributes;
 /** Attribute ids we want to display, in order. */
 const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [
   { id: ATTR.MAX_HP,  label: T.label_maxHp },
+  { id: ATTR.MAX_MP,  label: T.label_maxMp },
   { id: ATTR.PATK,   label: T.label_patk },
   { id: ATTR.MATK,   label: T.label_matk },
   { id: ATTR.PDEF,   label: T.label_pdef },

@@ -1,7 +1,7 @@
 import type { HeroConfig, StartingConfig } from "../../core/content";
 import { ATTR } from "../../core/entity/attribute";
 import { compileInheritedCollection, type AuthoringDef } from "../compiler/inheritance";
-import { forestLocation } from "./locations";
+import { prairieLocation } from "./locations";
 import { defaultCharXpCurve } from "./formulas";
 import {
   basicAttackTalent,
@@ -154,5 +154,5 @@ export const clericHero = heroConfigs["hero.cleric"]!;
 
 export const startingConfig: StartingConfig = {
   heroes: [knightHero, rangerHero, mageHero, clericHero],
-  initialLocationId: forestLocation.id,
+  initialLocationId: prairieLocation.id,
 };

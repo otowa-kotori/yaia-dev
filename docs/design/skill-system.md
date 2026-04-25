@@ -208,17 +208,8 @@ grantEffects: (level, owner) => [{
 }],
 ```
 
-**怪物默认攻击**（声明式快捷路径）：
-```ts
-{
-  id: "talent.monster.basic_attack" as TalentId,
-  name: "普通攻击",
-  type: "active",
-  maxLevel: 1,
-  tpCost: 0,
-  effects: ["effect.basic_physical_hit" as EffectId],
-}
-```
+**怪物默认物理攻击**：直接复用通用 `talent.basic.attack`；只有怪物专用的魔法普攻才保留独立天赋定义。
+
 
 ---
 

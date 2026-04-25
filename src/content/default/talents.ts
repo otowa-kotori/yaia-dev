@@ -8,10 +8,7 @@ import {
   knightRetaliation,
   knightWarcry,
 } from "../behaviors/talents/knight";
-import {
-  monsterBasicAttack,
-  monsterMagicAttack,
-} from "../behaviors/talents/monster";
+import { monsterMagicAttack } from "../behaviors/talents/monster";
 import { magicStrikeEffect, strikeEffect } from "./effects";
 
 export const basicAttackTalent: TalentDef = {
@@ -48,7 +45,6 @@ export const magicBasicAttackTalent: TalentDef = {
 const authoredTalents = {
   [basicAttackTalent.id]: basicAttackTalent,
   [magicBasicAttackTalent.id]: magicBasicAttackTalent,
-  [monsterBasicAttack.id]: monsterBasicAttack,
   [monsterMagicAttack.id]: monsterMagicAttack,
   [knightPowerStrike.id]: knightPowerStrike,
   [knightFortitude.id]: knightFortitude,
@@ -70,6 +66,5 @@ export {
   knightRage,
   knightRetaliation,
   knightWarcry,
-  monsterBasicAttack,
   monsterMagicAttack,
 };

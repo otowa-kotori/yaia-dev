@@ -1,57 +1,67 @@
 import type { DungeonDef, DungeonId } from "../../core/content";
 import { compileInheritedCollection, type AuthoringDef } from "../compiler/inheritance";
-import { CURRENCY_GOLD } from "./currencies";
-import { slimeGel } from "./items";
-import { goblin, slime } from "./monsters";
+import { direWolf, duskWolf, blackfangAlpha, caveBat, oreCrab } from "./monsters";
 
-/** 史莱姆洞窟——三波固定顺序副本，适合两人组队。
- *  第一波：落单史莱姆试探。
- *  第二波：史莱姆群冲锋。
- *  第三波：哥布林指挥官 + 史莱姆护卫。
- *  通关额外奖励 10 金币。 */
-export const slimeCaveDungeon: DungeonDef = {
-  id: "dungeon.forest.slime_cave" as DungeonId,
-  name: "史莱姆洞窟",
-  recoverBelowHpFactor: 0.5,
+export const wolfDenDungeon: DungeonDef = {
+  id: "dungeon.twilight.wolf_den" as DungeonId,
+  name: "狼穴",
+  recoverBelowHpFactor: 0.6,
   waveTransitionTicks: 10,
   minPartySize: 1,
-  maxPartySize: 2,
+  maxPartySize: 3,
   waves: [
     {
-      id: "dungeon.slime_cave.wave0",
-      name: "洞口哨兵",
-      monsters: [slime.id],
-      rewards: {
-        drops: [{ itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 }],
-        currencies: { [CURRENCY_GOLD]: 2 },
-      },
+      id: "dungeon.wolf_den.wave0",
+      name: "狼群热身",
+      monsters: [duskWolf.id, duskWolf.id, duskWolf.id, duskWolf.id],
     },
     {
-      id: "dungeon.slime_cave.wave1",
-      name: "史莱姆群涌",
-      monsters: [slime.id, slime.id, slime.id],
-      rewards: {
-        drops: [{ itemId: slimeGel.id, chance: 1, minQty: 2, maxQty: 3 }],
-        currencies: { [CURRENCY_GOLD]: 4 },
-      },
+      id: "dungeon.wolf_den.wave1",
+      name: "巨狼现身",
+      monsters: [duskWolf.id, duskWolf.id, duskWolf.id, direWolf.id],
     },
     {
-      id: "dungeon.slime_cave.wave2",
-      name: "哥布林指挥官",
-      monsters: [goblin.id, slime.id, slime.id],
-      rewards: {
-        drops: [{ itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 2 }],
-        currencies: { [CURRENCY_GOLD]: 6 },
-      },
+      id: "dungeon.wolf_den.wave2",
+      name: "双巨狼压阵",
+      monsters: [duskWolf.id, duskWolf.id, direWolf.id, direWolf.id],
     },
   ],
-  completionRewards: {
-    currencies: { [CURRENCY_GOLD]: 10 },
-  },
+};
+
+export const blackfangSanctumDungeon: DungeonDef = {
+  id: "dungeon.boss.blackfang_sanctum" as DungeonId,
+  name: "黑牙兽巢",
+  recoverBelowHpFactor: 0.7,
+  waveTransitionTicks: 12,
+  minPartySize: 1,
+  maxPartySize: 3,
+  waves: [
+    {
+      id: "dungeon.blackfang.wave0",
+      name: "矿坑余孽",
+      monsters: [caveBat.id, caveBat.id, oreCrab.id],
+    },
+    {
+      id: "dungeon.blackfang.wave1",
+      name: "黑牙近卫",
+      monsters: [direWolf.id, direWolf.id],
+    },
+    {
+      id: "dungeon.blackfang.wave2",
+      name: "王前兽潮",
+      monsters: [caveBat.id, direWolf.id, direWolf.id],
+    },
+    {
+      id: "dungeon.blackfang.wave3",
+      name: "黑牙兽王",
+      monsters: [blackfangAlpha.id],
+    },
+  ],
 };
 
 const authoredDungeons = {
-  [slimeCaveDungeon.id]: slimeCaveDungeon,
+  [wolfDenDungeon.id]: wolfDenDungeon,
+  [blackfangSanctumDungeon.id]: blackfangSanctumDungeon,
 } satisfies Record<string, AuthoringDef<DungeonDef>>;
 
 export const dungeons = compileInheritedCollection<DungeonDef>({

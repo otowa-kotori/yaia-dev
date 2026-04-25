@@ -1,26 +1,64 @@
 import type { LocationDef, LocationId } from "../../core/content";
 import { compileInheritedCollection, type AuthoringDef } from "../compiler/inheritance";
-import { copperMineCombat, slimeHard, slimeNormal, trainingGroundCombat } from "./combat-zones";
-import { slimeCaveDungeon } from "./dungeons";
+import {
+  mineBatCrabMix,
+  mineBatShadowMix,
+  mineCaveBat,
+  mineOreCrab,
+  mineShadowFiend,
+  prairieBigSlime,
+  prairieGreenSlime,
+  prairieHornedRabbit,
+  prairieSlime,
+  prairieWildBoar,
+  trainingGroundCombat,
+  twilightDuskWolf,
+  twilightPoisonMushroom,
+  twilightSkeletonSoldier,
+} from "./combat-zones";
+import { blackfangSanctumDungeon, wolfDenDungeon } from "./dungeons";
 import { copperVein } from "./resource-nodes";
 
-export const forestLocation: LocationDef = {
-  id: "location.forest" as LocationId,
-  name: "阳光森林",
+export const prairieLocation: LocationDef = {
+  id: "location.prairie" as LocationId,
+  name: "翠风草原",
   entries: [
-    { kind: "combat", combatZoneId: slimeNormal.id, label: "史莱姆小径（普通）" },
-    { kind: "combat", combatZoneId: slimeHard.id, label: "史莱姆巢穴（困难）" },
-    { kind: "dungeon", dungeonId: slimeCaveDungeon.id, label: "史莱姆洞窟（副本）" },
+    { kind: "combat", combatZoneId: prairieGreenSlime.id, label: "1-1 绿史莱姆" },
+    { kind: "combat", combatZoneId: prairieSlime.id, label: "1-2 史莱姆" },
+    { kind: "combat", combatZoneId: prairieWildBoar.id, label: "1-3 野猪" },
+    { kind: "combat", combatZoneId: prairieHornedRabbit.id, label: "1-4 角兔" },
+    { kind: "combat", combatZoneId: prairieBigSlime.id, label: "1-5 大史莱姆" },
   ],
 };
 
-export const copperMineLocation: LocationDef = {
-  id: "location.mine.copper" as LocationId,
-  name: "铜矿洞",
+export const twilightLocation: LocationDef = {
+  id: "location.twilight" as LocationId,
+  name: "暮色林地",
   entries: [
-    { kind: "combat", combatZoneId: copperMineCombat.id, label: "矿洞深处（战斗）" },
-    { kind: "gather", resourceNodes: [copperVein.id], label: "铜矿脉" },
+    { kind: "combat", combatZoneId: twilightPoisonMushroom.id, label: "2-1 毒蘑菇" },
+    { kind: "combat", combatZoneId: twilightDuskWolf.id, label: "2-2 暮色狼" },
+    { kind: "combat", combatZoneId: twilightSkeletonSoldier.id, label: "2-3 骸骨兵" },
+    { kind: "dungeon", dungeonId: wolfDenDungeon.id, label: "2-4 狼穴" },
   ],
+};
+
+export const ironMineLocation: LocationDef = {
+  id: "location.mine.ironfang" as LocationId,
+  name: "铁牙矿坑",
+  entries: [
+    { kind: "combat", combatZoneId: mineCaveBat.id, label: "3-1 洞穴蝙蝠" },
+    { kind: "combat", combatZoneId: mineShadowFiend.id, label: "3-2 暗影魔" },
+    { kind: "combat", combatZoneId: mineOreCrab.id, label: "3-3 矿石蟹" },
+    { kind: "combat", combatZoneId: mineBatShadowMix.id, label: "3-4 蝙蝠 + 暗影魔" },
+    { kind: "combat", combatZoneId: mineBatCrabMix.id, label: "3-5 蝙蝠 + 矿石蟹" },
+    { kind: "gather", resourceNodes: [copperVein.id], label: "矿脉试采点" },
+  ],
+};
+
+export const bossSanctumLocation: LocationDef = {
+  id: "location.boss.blackfang" as LocationId,
+  name: "黑牙兽巢",
+  entries: [{ kind: "dungeon", dungeonId: blackfangSanctumDungeon.id, label: "首领战：黑牙兽王" }],
 };
 
 /** 训练场 — 玩家可在此测试技能效果。 */
@@ -31,8 +69,10 @@ export const trainingGroundLocation: LocationDef = {
 };
 
 const authoredLocations = {
-  [forestLocation.id]: forestLocation,
-  [copperMineLocation.id]: copperMineLocation,
+  [prairieLocation.id]: prairieLocation,
+  [twilightLocation.id]: twilightLocation,
+  [ironMineLocation.id]: ironMineLocation,
+  [bossSanctumLocation.id]: bossSanctumLocation,
   [trainingGroundLocation.id]: trainingGroundLocation,
 } satisfies Record<string, AuthoringDef<LocationDef>>;
 

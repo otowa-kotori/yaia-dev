@@ -12,7 +12,7 @@ export const monsterTemplateDrafts = {
     physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
     baseAttrs: {
       [ATTR.PDEF]: 0,
-      [ATTR.SPEED]: 30,
+      [ATTR.SPEED]: 40,
     },
     talents: [basicAttackTalent.id],
     drops: [],

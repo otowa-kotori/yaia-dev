@@ -17,6 +17,13 @@ export const items = compileInheritedCollection<ItemDef>({
 
 export const copperOre = items["item.ore.copper"]!;
 export const slimeGel = items["item.monster.slime_gel"]!;
+export const beastHide = items["item.monster.beast_hide"]!;
+export const twilightEssence = items["item.monster.twilight_essence"]!;
+export const boneDust = items["item.monster.bone_dust"]!;
+export const wolfKingFang = items["item.monster.wolf_king_fang"]!;
+export const carapace = items["item.monster.carapace"]!;
+export const shadowCore = items["item.monster.shadow_core"]!;
+export const bossCore = items["item.monster.boss_core"]!;
 export const trainingSword = items["item.weapon.training_sword"]!;
 export const trainingBow = items["item.weapon.training_bow"]!;
 export const trainingStaff = items["item.weapon.training_staff"]!;

@@ -46,9 +46,9 @@ export function PartyDialog({
   const heroes = s.listHeroes();
   const focusedHeroId = heroes.find((hero) => hero.id === s.focusedCharId)?.id ?? heroes[0]?.id ?? null;
 
-  // Party size limits: dungeons define their own; combat zones default to 1–all.
-  const minPartySize = dungeon?.minPartySize ?? 1;
-  const maxPartySize = dungeon?.maxPartySize ?? heroes.length;
+  // Party size limits come from the target content def; combat zones now support them too.
+  const minPartySize = dungeon?.minPartySize ?? combatZone?.minPartySize ?? 1;
+  const maxPartySize = dungeon?.maxPartySize ?? combatZone?.maxPartySize ?? heroes.length;
 
   const entryName =
     dungeon?.name ??

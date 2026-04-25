@@ -379,6 +379,10 @@ export interface CombatZoneDef {
   /** After a battle ends, pause to heal if HP ratio is at or below this threshold.
    *  Different difficulty zones can use different thresholds. */
   recoverBelowHpFactor?: number;
+  /** Minimum party size required to enter this combat zone. */
+  minPartySize?: number;
+  /** Maximum party size allowed in this combat zone. */
+  maxPartySize?: number;
   /** Which skill's XP this combat zone grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
 }

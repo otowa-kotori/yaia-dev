@@ -396,7 +396,8 @@ function onParticipantKilled(
   const hasXp = xpReward > 0;
   const hasCurrency =
     def.currencyReward && Object.keys(def.currencyReward).length > 0;
-  if (!hasXp && !hasCurrency) return;
+  const hasDrops = def.drops.length > 0;
+  if (!hasXp && !hasCurrency && !hasDrops) return;
 
   const ectx: EffectContext = {
     state: ctx.state,

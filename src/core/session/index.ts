@@ -43,7 +43,7 @@ import {
 } from "../infra/state";
 import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
-import { getItem, getLocation, getRecipe, getSkill, getDungeon, setContent } from "../content";
+import { getCombatZone, getItem, getLocation, getRecipe, getSkill, getDungeon, setContent } from "../content";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
@@ -998,8 +998,19 @@ export function createGameSession(
     combatZoneId: string,
     partyCharIds: string[],
   ): void {
+    const def = getCombatZone(combatZoneId);
     if (partyCharIds.length === 0) {
       throw new Error("session.startPartyCombat: partyCharIds must not be empty");
+    }
+    if (def.minPartySize && partyCharIds.length < def.minPartySize) {
+      throw new Error(
+        `session.startPartyCombat: need at least ${def.minPartySize} characters, got ${partyCharIds.length}`,
+      );
+    }
+    if (def.maxPartySize && partyCharIds.length > def.maxPartySize) {
+      throw new Error(
+        `session.startPartyCombat: max ${def.maxPartySize} characters, got ${partyCharIds.length}`,
+      );
     }
 
     // Validate and collect all character controllers.

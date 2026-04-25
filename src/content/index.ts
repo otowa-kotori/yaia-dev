@@ -24,25 +24,41 @@ export {
   knightRage,
   knightRetaliation,
   knightWarcry,
-  monsterBasicAttack,
   monsterMagicAttack,
 } from "./default/talents";
 export {
+  beastHide,
+  boneDust,
+  bossCore,
+  carapace,
   copperOre,
   copperSword,
   items,
+  shadowCore,
   slimeGel,
   trainingBow,
   trainingScepter,
   trainingStaff,
   trainingSword,
+  twilightEssence,
+  wolfKingFang,
 } from "./default/items";
 export {
+  bigSlime,
+  blackfangAlpha,
   caveBat,
-  goblin,
+  direWolf,
+  duskWolf,
+  greenSlime,
+  hornedRabbit,
   monsters,
+  oreCrab,
+  poisonMushroom,
+  shadowFiend,
+  skeletonSoldier,
   slime,
   trainingDummy,
+  wildBoar,
 } from "./default/monsters";
 export {
   heroConfigs,
@@ -57,16 +73,28 @@ export { copperSwordRecipe, recipes } from "./default/recipes";
 export { copperVein, resourceNodes } from "./default/resource-nodes";
 export {
   combatZones,
-  copperMineCombat,
-  slimeHard,
-  slimeNormal,
+  mineBatCrabMix,
+  mineBatShadowMix,
+  mineCaveBat,
+  mineOreCrab,
+  mineShadowFiend,
+  prairieBigSlime,
+  prairieGreenSlime,
+  prairieHornedRabbit,
+  prairieSlime,
+  prairieWildBoar,
   trainingGroundCombat,
+  twilightDuskWolf,
+  twilightPoisonMushroom,
+  twilightSkeletonSoldier,
 } from "./default/combat-zones";
-export { dungeons, slimeCaveDungeon } from "./default/dungeons";
+export { blackfangSanctumDungeon, dungeons, wolfDenDungeon } from "./default/dungeons";
 export {
-  copperMineLocation,
-  forestLocation,
+  bossSanctumLocation,
+  ironMineLocation,
   locations,
+  prairieLocation,
   trainingGroundLocation,
+  twilightLocation,
 } from "./default/locations";
 export { atkUpgrade, defUpgrade, upgrades } from "./default/upgrades";
