@@ -196,7 +196,7 @@ export function buildBattleIntents(
       const pc = actor as PlayerCharacter;
       const heroCfg = content.starting?.heroes.find(h => h.id === pc.heroConfigId);
       const rules = heroCfg?.intentConfig ?? [];
-      const intentId = `intent.hero.${pc.heroConfigId}`;
+      const intentId = `intent.${pc.heroConfigId}`;
       if (!hasIntent(intentId)) {
         registerIntent(intentId, createPriorityListIntent(rules));
       }

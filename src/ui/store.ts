@@ -87,13 +87,19 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   // ---------- Persistence ----------
 
+  /** Set true while catch-up is running so all persist calls are suppressed.
+   *  Declared here (before persistNow) because persistence helpers reference it. */
+  let catchUpRunning = false;
+
   let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSaveAt = 0;
   /** True until tryLoad resolves. While true, persistNow is a no-op to prevent
    *  the fresh resetToFresh state from overwriting an existing save. */
   let loadInProgress = true;
 
-  function persistNow(): void {
+  /** Force-persist ignoring catch-up guard. Only for beforeunload / page-hide
+   *  where we MUST flush no matter what. */
+  function persistNowForced(): void {
     if (loadInProgress) return;
     try {
       session.state.lastWallClockMs = now();
@@ -107,7 +113,13 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     }
   }
 
+  function persistNow(): void {
+    if (catchUpRunning) return;
+    persistNowForced();
+  }
+
   function schedulePersist(): void {
+    if (catchUpRunning) return;
     if (pendingSaveTimer !== null) return;
     const sinceLast = now() - lastSaveAt;
     const delay = Math.max(500, AUTOSAVE_INTERVAL_MS - sinceLast);
@@ -117,12 +129,26 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     }, delay);
   }
 
+  /** Minimum ms between two persist calls triggered by "soon" events.
+   *  High-frequency gameplay events (damage, log, loot) call persistSoon;
+   *  this gap prevents serializing every tick during combat. */
+  const MIN_PERSIST_GAP_MS = 2_000;
+
+  /** Schedule a persist within MIN_PERSIST_GAP_MS. If a timer already exists
+   *  it stays — we don't push the deadline further out so save latency is
+   *  bounded.  For truly critical moments use persistNowForced() directly. */
   function persistSoon(): void {
-    if (pendingSaveTimer !== null) {
-      clearTimeout(pendingSaveTimer);
-      pendingSaveTimer = null;
+    if (catchUpRunning) return;
+    if (pendingSaveTimer !== null) return;          // already scheduled
+    const sinceLast = now() - lastSaveAt;
+    if (sinceLast >= MIN_PERSIST_GAP_MS) {
+      persistNow();
+    } else {
+      pendingSaveTimer = setTimeout(() => {
+        pendingSaveTimer = null;
+        persistNow();
+      }, MIN_PERSIST_GAP_MS - sinceLast);
     }
-    persistNow();
   }
 
   // ---------- Engine + bus wiring ----------
@@ -138,17 +164,16 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   });
 
   const { bus } = session;
+
+  // --- High-frequency events: notify UI only; rely on tick autosave ---
   bus.on("damage", notify);
   bus.on("kill", notify);
-  bus.on("levelup", () => {
-    // Level-ups are rare and player-visible; flush immediately so the
-    // save file reflects them even if the tab is closed seconds later.
-    notify();
-    persistSoon();
-  });
   bus.on("loot", notify);
   bus.on("pendingLootChanged", notify);
-  bus.on("gameLogAppended", () => {
+  bus.on("gameLogAppended", notify);
+
+  // --- Low-frequency, player-visible mutations: persistSoon (throttled) ---
+  bus.on("levelup", () => {
     notify();
     persistSoon();
   });
@@ -156,7 +181,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     notify();
     persistSoon();
   });
-
   bus.on("equipmentChanged", () => {
     notify();
     persistSoon();
@@ -190,7 +214,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   /** Cancel flag for the currently running catch-up (if any). */
   let catchUpCancelRequested = false;
-  let catchUpRunning = false;
 
   /** Chunked catch-up executor. Small amounts run synchronously; larger amounts
    *  emit catchUpProgress each slice via rAF, then catchUpApplied when done.
@@ -282,7 +305,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       // Snapshot wall clock + logic tick before the browser throttles timers.
       hiddenAtMs = now();
       hiddenAtTick = session.engine.currentTick;
-      persistNow();
+      persistNowForced();
     } else if (document.visibilityState === "visible") {
       if (hiddenAtMs !== null && hiddenAtTick !== null) {
         applyCatchUp(hiddenAtMs, hiddenAtTick);
@@ -377,7 +400,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     (window as unknown as { __game: GameStore }).__game = store;
     window.addEventListener("beforeunload", () => {
       try {
-        persistNow();
+        persistNowForced();
       } catch {
         /* swallow — page is closing anyway */
       }
