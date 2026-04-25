@@ -39,16 +39,6 @@ import { resolveIntent, type IntentAction } from "../intent";
 
 export type BattleOutcome = "ongoing" | "players_won" | "enemies_won" | "draw";
 
-export interface BattleLogEntry {
-  tick: number;
-  kind: "action" | "damage" | "death" | "start" | "end" | "skip";
-  actorId?: string;
-  targetIds?: string[];
-  talentId?: string;
-  amount?: number;
-  note?: string;
-}
-
 export interface BattleMetadata {
   stageId?: string;
   locationId?: string;
@@ -67,8 +57,6 @@ export interface Battle {
   participantIds: string[];
   scheduler: SchedulerState;
   outcome: BattleOutcome;
-  /** Ring-free append-only log. Callers trim when they ship logs to the UI. */
-  log: BattleLogEntry[];
   /** Structured metadata mirrored by the activity layer for global log emission. */
   metadata?: BattleMetadata;
   /** Per-actor intent id. Looked up in the intent registry at dispatch time.
@@ -130,7 +118,8 @@ function assertCreateBattleOptions(opts: CreateBattleOptions): void {
  * Create a save-safe Battle state object.
  *
  * The battle stores only plain data: participant ids, scheduler state,
- * structured metadata and an internal timeline for debugging / UI mirroring.
+ * and structured metadata. Player-facing logs are handled by the global
+ * game-log system via bus events.
  */
 export function createBattle(opts: CreateBattleOptions): Battle {
 
@@ -143,13 +132,6 @@ export function createBattle(opts: CreateBattleOptions): Battle {
     participantIds: opts.participantIds.slice(),
     scheduler: opts.scheduler ?? createAtbScheduler(),
     outcome: "ongoing",
-    log: [
-      {
-        tick: opts.startedAtTick,
-        kind: "start",
-        note: `battle ${opts.id} started`,
-      },
-    ],
     metadata: opts.metadata
       ? {
           ...opts.metadata,
@@ -240,7 +222,7 @@ function runActorActionWindow(
   );
   if (!plannedAction) {
     schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
-    emitSkippedAction(battle, actor, [], "", undefined, "no valid plan", ctx);
+    emitSkippedAction(battle, actor, "no valid plan", ctx);
     decrementCooldowns(actor);
     return;
   }
@@ -332,54 +314,27 @@ function executePlannedAction(
   participants: readonly Character[],
   ctx: TickBattleContext,
 ): CastResult {
-  // Subscribe to damage events so every hit (including multi-hit, AoE,
-  // reaction counter-attacks) gets its own log entry.
-  const damageUnsub = ctx.bus.on("damage", (ev) => {
-    battle.log.push({
-      tick: ctx.currentTick,
-      kind: "damage",
-      actorId: ev.attackerId,
-      targetIds: [ev.targetId],
-      amount: ev.amount,
-    });
-  });
-
-  try {
-    emitActionStarted(battle, actor, plannedAction, ctx);
-    return tryUseTalent(actor, plannedAction.talentId, plannedAction.targets, {
-      state: ctx.state,
-      bus: ctx.bus,
-      rng: ctx.rng,
-      attrDefs: ctx.attrDefs,
-      currentTick: ctx.currentTick,
-      participants,
-    });
-  } finally {
-    damageUnsub();
-  }
-}
-
-/** Emit the pre-resolution summary event consumed by the global game log. */
-function emitActionStarted(
-  battle: Battle,
-  actor: Character,
-  plannedAction: PlannedAction,
-  ctx: TickBattleContext,
-): void {
-
   // Announce intention before effects resolve, so the game log reads
   // "X uses Y → X deals N damage" in the correct order.
   ctx.bus.emit("battleActionStarted", {
     battleId: battle.id,
     actorId: actor.id,
-    targetIds: plannedAction.targets.map((target) => target.id),
+    targetIds: plannedAction.targets.map((t) => t.id),
     abilityId: plannedAction.talentId,
-    ...battleEventScope(battle),
+  });
+
+  return tryUseTalent(actor, plannedAction.talentId, plannedAction.targets, {
+    state: ctx.state,
+    bus: ctx.bus,
+    rng: ctx.rng,
+    attrDefs: ctx.attrDefs,
+    currentTick: ctx.currentTick,
+    participants,
   });
 }
 
 /**
- * Mirror the cast result into battle log entries and summary bus events.
+ * Mirror the cast result into summary bus events.
  * Successful actions emit `battleActionResolved(action)`; failures become a
  * structured skip with the original target selection preserved.
  */
@@ -392,62 +347,32 @@ function emitPlannedActionResult(
 ): void {
 
   if (result.ok) {
-    const targetIds = result.targets.map((target) => target.id);
-    battle.log.push({
-      tick: ctx.currentTick,
-      kind: "action",
-      actorId: actor.id,
-      talentId: result.talentId,
-      targetIds,
-    });
     ctx.bus.emit("battleActionResolved", {
       battleId: battle.id,
       actorId: actor.id,
-      targetIds,
       abilityId: result.talentId,
       outcome: "action",
-      ...battleEventScope(battle),
     });
     return;
   }
 
   // Cast failed (e.g. on cooldown, insufficient mp) — the action window was
   // already consumed above, so we only log the skip here.
-  emitSkippedAction(
-    battle,
-    actor,
-    plannedAction.targets.map((target) => target.id),
-    plannedAction.talentId,
-    plannedAction.talentId,
-    result.reason,
-    ctx,
-  );
+  emitSkippedAction(battle, actor, result.reason, ctx);
 }
 
 function emitSkippedAction(
   battle: Battle,
   actor: Character,
-  targetIds: string[],
-  abilityId: string,
-  talentId: string | undefined,
   note: string,
   ctx: TickBattleContext,
 ): void {
-  battle.log.push({
-    tick: ctx.currentTick,
-    kind: "skip",
-    actorId: actor.id,
-    ...(talentId ? { talentId } : {}),
-    note,
-  });
   ctx.bus.emit("battleActionResolved", {
     battleId: battle.id,
     actorId: actor.id,
-    targetIds,
-    abilityId,
+    abilityId: "",
     outcome: "skip",
     note,
-    ...battleEventScope(battle),
   });
 }
 
@@ -490,15 +415,9 @@ function maybeTerminate(
   if (outcome !== null) {
     battle.outcome = outcome;
     battle.endedAtTick = ctx.currentTick;
-    battle.log.push({
-      tick: ctx.currentTick,
-      kind: "end",
-      note: `outcome: ${outcome}`,
-    });
     ctx.bus.emit("battleEnded", {
       battleId: battle.id,
       outcome,
-      ...battleEventScope(battle),
     });
   }
 }
@@ -520,15 +439,9 @@ function emitNewDeaths(
 
 function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
   battle.deathsReported[victim.id] = true;
-  battle.log.push({
-    tick: ctx.currentTick,
-    kind: "death",
-    actorId: victim.id,
-  });
   ctx.bus.emit("battleActorDied", {
     battleId: battle.id,
     victimId: victim.id,
-    ...battleEventScope(battle),
   });
   // kill event: we don't always know who delivered the final blow cleanly
   // (AoE, DoT). Emit with attackerId = "" for now; callers that care can
@@ -542,18 +455,6 @@ function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
 }
 
 // ---------- Resolution ----------
-
-function battleEventScope(battle: Battle): {
-  stageId?: string;
-  locationId?: string;
-  dungeonSessionId?: string;
-} {
-  return {
-    stageId: battle.metadata?.stageId,
-    locationId: battle.metadata?.locationId,
-    dungeonSessionId: battle.metadata?.dungeonSessionId,
-  };
-}
 
 /**
  * Resolve participant ids against `GameState.actors` while preserving declared

@@ -64,7 +64,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
 // ---------- App ----------
 
 export function App() {
-  const store = useMemo(() => createGameStore({ content: buildDefaultContent() }), []);
+  const store = useMemo(() => createGameStore({ content: DEFAULT_CONTENT }), []);
   const [activeTab, setActiveTab] = useState<TabId>("map");
 
   return (

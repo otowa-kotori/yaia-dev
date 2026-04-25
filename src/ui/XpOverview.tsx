@@ -11,10 +11,11 @@ import { getContent } from "../core/content";
 import { xpProgressToNextLevel } from "../core/growth/leveling";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
-import { buildDefaultContent } from "../content";
+import { DEFAULT_CONTENT } from "../content";
 import { T } from "./text";
 
-const ATTR_DEFS = buildDefaultContent().attributes;
+const ATTR_DEFS = DEFAULT_CONTENT.attributes;
+
 
 /** Attribute ids we want to display, in order. */
 const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [

@@ -13,13 +13,13 @@ import type { DungeonSession } from "../core/infra/state";
 import type { GameLogEntry } from "../core/infra/game-log";
 import type { StageSession } from "../core/world/stage/types";
 
-import { buildDefaultContent } from "../content";
+import { DEFAULT_CONTENT } from "../content";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import type { GameStore } from "./store";
 import { T, fmt } from "./text";
 
+const ATTR_DEFS = DEFAULT_CONTENT.attributes;
 
-const ATTR_DEFS = buildDefaultContent().attributes;
 
 export function DungeonStatusPanel({
   store,
@@ -39,7 +39,7 @@ export function DungeonStatusPanel({
   const phase = inferDungeonPhase(session, stage, party);
   const phaseLabel = getDungeonPhaseLabel(phase);
   const enemies = getDungeonEnemies(store, stage);
-  const localLog = getDungeonLogEntries(store.state.gameLog, dungeonSessionId, session.stageId);
+  const localLog = getDungeonLogEntries(store.state.gameLog, heroId);
   const totalWaves = dungeon?.waves.length ?? Math.max(1, session.currentWaveIndex + 1);
 
 
@@ -148,12 +148,10 @@ function getDungeonEnemies(store: GameStore, stage: StageSession | null): Charac
 
 function getDungeonLogEntries(
   entries: readonly GameLogEntry[],
-  dungeonSessionId: string,
-  stageId: string,
+  heroId: string,
 ): GameLogEntry[] {
   return entries.filter(
-    (entry) =>
-      entry.scope.dungeonSessionId === dungeonSessionId || entry.scope.stageId === stageId,
+    (entry) => entry.charId === heroId || entry.charId === undefined,
   );
 }
 

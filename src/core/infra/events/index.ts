@@ -141,34 +141,21 @@ export type GameEvents = {
     actorId: string;
     targetIds: string[];
     abilityId: string;
-    stageId?: string;
-    locationId?: string;
-    dungeonSessionId?: string;
   };
   battleActionResolved: {
     battleId: string;
     actorId: string;
-    targetIds: string[];
     abilityId: string;
     outcome: "action" | "skip";
     note?: string;
-    stageId?: string;
-    locationId?: string;
-    dungeonSessionId?: string;
   };
   battleActorDied: {
     battleId: string;
     victimId: string;
-    stageId?: string;
-    locationId?: string;
-    dungeonSessionId?: string;
   };
   battleEnded: {
     battleId: string;
     outcome: "players_won" | "enemies_won" | "draw";
-    stageId?: string;
-    locationId?: string;
-    dungeonSessionId?: string;
   };
   currencyChanged: {
     currencyId: string;

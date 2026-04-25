@@ -12,10 +12,11 @@
 import type { Character } from "../core/entity/actor";
 import { getAttr } from "../core/entity/actor";
 import { ATTR } from "../core/entity/attribute";
-import { buildDefaultContent } from "../content";
+import { DEFAULT_CONTENT } from "../content";
 import { T } from "./text";
 
-const ATTR_DEFS = buildDefaultContent().attributes;
+const ATTR_DEFS = DEFAULT_CONTENT.attributes;
+
 
 export interface ActorCardProps {
   actor: Character;

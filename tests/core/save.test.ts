@@ -35,8 +35,7 @@ describe("save / serialize+deserialize", () => {
     state.gameLog.push({
       tick: 12,
       category: "economy",
-      text: "购买了全局升级“战士训练” Lv.1，消耗 100 金币。",
-      scope: {},
+      text: "购买了全局升级\u201c战士训练\u201d Lv.1，消耗 100 金币。",
     });
 
     const raw = serialize(state);

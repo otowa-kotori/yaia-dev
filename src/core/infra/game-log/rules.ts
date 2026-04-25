@@ -2,7 +2,7 @@ import { isPlayer } from "../../entity/actor";
 import { getContent } from "../../content/registry";
 import type { GameEvents } from "../events";
 import type { GameState } from "../state/types";
-import type { GameLogCategory, GameLogEntry, GameLogScope } from "./types";
+import type { GameLogCategory, GameLogEntry } from "./types";
 
 export interface GameLogRuleContext {
   state: Readonly<GameState>;
@@ -16,15 +16,13 @@ export const gameLogRules = {
   levelup: (payload: GameEvents["levelup"], ctx: GameLogRuleContext) => {
     const heroName = actorName(ctx.state, payload.charId);
     if (payload.kind === "character") {
-      return entry(ctx, "growth", `${heroName} 升到了 ${payload.level} 级。`, {
-        charId: payload.charId,
-      });
+      return entry(ctx, "growth", `${heroName} 升到了 ${payload.level} 级。`, payload.charId);
     }
     return entry(
       ctx,
       "growth",
       `${heroName} 的 ${skillName(payload.skillId)} 升到了 ${payload.level} 级。`,
-      { charId: payload.charId },
+      payload.charId,
     );
   },
   locationEntered: (
@@ -35,7 +33,7 @@ export const gameLogRules = {
       ctx,
       "world",
       `${actorName(ctx.state, payload.charId)} 来到了 ${locationName(payload.locationId)}。`,
-      { charId: payload.charId, locationId: payload.locationId },
+      payload.charId,
     ),
   locationLeft: (
     payload: GameEvents["locationLeft"],
@@ -45,7 +43,7 @@ export const gameLogRules = {
       ctx,
       "world",
       `${actorName(ctx.state, payload.charId)} 离开了 ${locationName(payload.locationId)}。`,
-      { charId: payload.charId, locationId: payload.locationId },
+      payload.charId,
     ),
   activityStarted: (
     payload: GameEvents["activityStarted"],
@@ -58,34 +56,21 @@ export const gameLogRules = {
           ctx,
           "activity",
           `${heroName} 开始在 ${combatZoneName(payload.combatZoneId)} 战斗。`,
-          {
-            charId: payload.charId,
-            locationId: payload.locationId,
-            stageId: payload.stageId,
-          },
+          payload.charId,
         );
       case "gather":
         return entry(
           ctx,
           "activity",
           `${heroName} 开始采集 ${resourceNodeName(payload.resourceNodeId)}。`,
-          {
-            charId: payload.charId,
-            locationId: payload.locationId,
-            stageId: payload.stageId,
-          },
+          payload.charId,
         );
       case "dungeon":
         return entry(
           ctx,
           "dungeon",
           `${heroName} 与队伍进入了副本《${dungeonName(payload.dungeonId)}》。`,
-          {
-            charId: payload.charId,
-            locationId: payload.locationId,
-            stageId: payload.stageId,
-            dungeonSessionId: payload.dungeonSessionId,
-          },
+          payload.charId,
         );
     }
   },
@@ -97,36 +82,11 @@ export const gameLogRules = {
     const why = stopReasonText(payload.reason);
     switch (payload.kind) {
       case "combat":
-        return entry(
-          ctx,
-          "activity",
-          `${heroName}${why}停止了当前战斗。`,
-          {
-            charId: payload.charId,
-            stageId: payload.stageId,
-          },
-        );
+        return entry(ctx, "activity", `${heroName}${why}停止了当前战斗。`, payload.charId);
       case "gather":
-        return entry(
-          ctx,
-          "activity",
-          `${heroName}${why}结束了当前采集。`,
-          {
-            charId: payload.charId,
-            stageId: payload.stageId,
-          },
-        );
+        return entry(ctx, "activity", `${heroName}${why}结束了当前采集。`, payload.charId);
       case "dungeon":
-        return entry(
-          ctx,
-          "dungeon",
-          `${heroName}${why}离开了当前副本。`,
-          {
-            charId: payload.charId,
-            stageId: payload.stageId,
-            dungeonSessionId: payload.dungeonSessionId,
-          },
-        );
+        return entry(ctx, "dungeon", `${heroName}${why}离开了当前副本。`, payload.charId);
     }
   },
   battleStarted: (
@@ -134,46 +94,36 @@ export const gameLogRules = {
     ctx: GameLogRuleContext,
   ) => {
     const leader = partyLeadName(ctx.state, payload.participantIds);
+    const charId = payload.partyCharIds[0];
     if (payload.dungeonSessionId) {
       return entry(
         ctx,
         "battle",
         `${leader} 所在队伍在副本《${dungeonName(payload.dungeonId ?? payload.dungeonSessionId)}》第 ${payload.waveIndex + 1} 波遭遇了敌人。`,
-        {
-          charId: payload.partyCharIds[0],
-          locationId: payload.locationId,
-          stageId: payload.stageId,
-          battleId: payload.battleId,
-          dungeonSessionId: payload.dungeonSessionId,
-        },
+        charId,
       );
     }
-
     return entry(
       ctx,
       "battle",
       `${leader} 在 ${combatZoneName(payload.combatZoneId)} 遭遇了敌人。`,
-      {
-        charId: payload.partyCharIds[0],
-        locationId: payload.locationId,
-        stageId: payload.stageId,
-        battleId: payload.battleId,
-      },
+      charId,
     );
   },
   battleActionStarted: (
     payload: GameEvents["battleActionStarted"],
     ctx: GameLogRuleContext,
   ) => {
-    const scope = battleScope(payload);
     const actor = actorName(ctx.state, payload.actorId);
     const ability = talentName(payload.abilityId);
     const targets = listOrFallback(payload.targetIds.map((id) => actorName(ctx.state, id)), "目标未知");
+    // Attribute to the first player character involved, or the actor itself.
+    const charId = findPlayerCharIdForActor(ctx.state, payload.actorId);
     return entry(
       ctx,
       "battle",
       `${actor} 使用了 ${ability}，目标：${targets}。`,
-      scope,
+      charId,
     );
   },
   battleActionResolved: (
@@ -182,14 +132,14 @@ export const gameLogRules = {
   ) => {
     // Only log skips; successful actions are already announced by battleActionStarted.
     if (payload.outcome !== "skip") return null;
-    const scope = battleScope(payload);
     const actor = actorName(ctx.state, payload.actorId);
     const note = skipReasonText(payload.note);
+    const charId = findPlayerCharIdForActor(ctx.state, payload.actorId);
     return entry(
       ctx,
       "battle",
       `${actor} 本回合未能行动${note ? `（${note}）` : ""}。`,
-      scope,
+      charId,
     );
   },
   damage: (
@@ -198,30 +148,29 @@ export const gameLogRules = {
   ) => {
     const attacker = actorName(ctx.state, payload.attackerId);
     const target = actorName(ctx.state, payload.targetId);
-    // Find the active battle containing this attacker to inherit its scope.
-    const battle = ctx.state.battles.find(
-      b => b.outcome === "ongoing" && b.participantIds.includes(payload.attackerId),
-    );
-    const scope: GameLogScope = battle
-      ? { battleId: battle.id, stageId: battle.metadata?.stageId, locationId: battle.metadata?.locationId, dungeonSessionId: battle.metadata?.dungeonSessionId }
-      : {};
+    // Attribute to the player character involved (attacker or target).
+    const charId =
+      findPlayerCharIdForActor(ctx.state, payload.attackerId) ??
+      findPlayerCharIdForActor(ctx.state, payload.targetId);
     return entry(
       ctx,
       "battle",
       `${attacker} 对 ${target} 造成了 ${payload.amount} 点伤害。`,
-      scope,
+      charId,
     );
   },
   battleActorDied: (
     payload: GameEvents["battleActorDied"],
     ctx: GameLogRuleContext,
-  ) =>
-    entry(
+  ) => {
+    const charId = findPlayerCharIdForActor(ctx.state, payload.victimId);
+    return entry(
       ctx,
       "battle",
       `${actorName(ctx.state, payload.victimId)} 被击倒了。`,
-      battleScope(payload),
-    ),
+      charId,
+    );
+  },
   battleEnded: (
     payload: GameEvents["battleEnded"],
     ctx: GameLogRuleContext,
@@ -232,18 +181,14 @@ export const gameLogRules = {
         : payload.outcome === "enemies_won"
           ? "战斗失败。"
           : "战斗以平局结束。";
-    return entry(ctx, "battle", outcome, battleScope(payload));
+    return entry(ctx, "battle", outcome, undefined);
   },
   loot: (payload: GameEvents["loot"], ctx: GameLogRuleContext) =>
     entry(
       ctx,
       "reward",
       `${actorName(ctx.state, payload.charId)} 获得了 ${itemName(payload.itemId)}×${payload.qty}。`,
-      {
-        charId: payload.charId,
-        stageId: payload.stageId,
-        dungeonSessionId: payload.dungeonSessionId,
-      },
+      payload.charId,
     ),
   equipmentUpdated: (
     payload: GameEvents["equipmentUpdated"],
@@ -255,14 +200,14 @@ export const gameLogRules = {
       payload.action === "equip"
         ? `${actorName(ctx.state, payload.charId)} 装备了 ${itemName(payload.itemId)}。`
         : `${actorName(ctx.state, payload.charId)} 卸下了 ${itemName(payload.itemId)}。`,
-      { charId: payload.charId },
+      payload.charId,
     ),
   crafted: (payload: GameEvents["crafted"], ctx: GameLogRuleContext) =>
     entry(
       ctx,
       "inventory",
       `${actorName(ctx.state, payload.charId)} 制作了 ${recipeName(payload.recipeId)}。`,
-      { charId: payload.charId },
+      payload.charId,
     ),
   currencyChanged: (
     payload: GameEvents["currencyChanged"],
@@ -277,11 +222,7 @@ export const gameLogRules = {
       ctx,
       "economy",
       `${owner}${verb}${absAmount} ${currencyName(payload.currencyId)}${source ? `（${source}）` : ""}。`,
-      {
-        charId: payload.charId,
-        stageId: payload.stageId,
-        dungeonSessionId: payload.dungeonSessionId,
-      },
+      payload.charId,
     );
   },
   upgradePurchased: (
@@ -292,12 +233,12 @@ export const gameLogRules = {
       ctx,
       "economy",
       `购买了全局升级\u201c${upgradeName(payload.upgradeId)}\u201d Lv.${payload.level}，消耗 ${payload.cost} ${currencyName(payload.costCurrency)}。`,
-      {},
+      undefined,
     ),
   talentAllocated: (payload: GameEvents["talentAllocated"], ctx: GameLogRuleContext) =>
     entry(ctx, "growth",
       `${actorName(ctx.state, payload.charId)} 的天赋\u201c${talentName(payload.talentId)}\u201d升到了 ${payload.newLevel} 级。`,
-      { charId: payload.charId }),
+      payload.charId),
   pendingLootOverflowed: (
     payload: GameEvents["pendingLootOverflowed"],
     ctx: GameLogRuleContext,
@@ -306,7 +247,7 @@ export const gameLogRules = {
       ctx,
       "inventory",
       `${actorName(ctx.state, payload.charId)} 的背包已满，${itemName(payload.itemId)}×${payload.qty} 被放入待拾取。`,
-      { charId: payload.charId, stageId: payload.stageId },
+      payload.charId,
     ),
   pendingLootPicked: (
     payload: GameEvents["pendingLootPicked"],
@@ -316,7 +257,7 @@ export const gameLogRules = {
       ctx,
       "inventory",
       `${actorName(ctx.state, payload.charId)} 拾取了 ${itemName(payload.itemId)}×${payload.qty}。`,
-      { charId: payload.charId, stageId: payload.stageId },
+      payload.charId,
     ),
   pendingLootLost: (
     payload: GameEvents["pendingLootLost"],
@@ -330,7 +271,7 @@ export const gameLogRules = {
       ctx,
       "inventory",
       `${actorName(ctx.state, payload.charId)} 离开场景后遗失了 ${summary}。`,
-      { charId: payload.charId, stageId: payload.stageId },
+      payload.charId,
     );
   },
   waveResolved: (
@@ -345,12 +286,7 @@ export const gameLogRules = {
       ctx,
       "battle",
       `${actorName(ctx.state, payload.charId)} ${result}`,
-      {
-        charId: payload.charId,
-        locationId: payload.locationId,
-        stageId: payload.stageId,
-        battleId: payload.battleId,
-      },
+      payload.charId,
     );
   },
   dungeonWaveCleared: (
@@ -361,10 +297,7 @@ export const gameLogRules = {
       ctx,
       "dungeon",
       `副本《${dungeonName(payload.dungeonId)}》第 ${payload.waveIndex + 1} 波已清理。`,
-      {
-        stageId: payload.stageId,
-        dungeonSessionId: payload.dungeonSessionId,
-      },
+      undefined,
     ),
   dungeonCompleted: (
     payload: GameEvents["dungeonCompleted"],
@@ -374,10 +307,7 @@ export const gameLogRules = {
       ctx,
       "dungeon",
       `副本《${dungeonName(payload.dungeonId)}》已通关。`,
-      {
-        stageId: payload.stageId,
-        dungeonSessionId: payload.dungeonSessionId,
-      },
+      undefined,
     ),
   dungeonFailed: (
     payload: GameEvents["dungeonFailed"],
@@ -387,10 +317,7 @@ export const gameLogRules = {
       ctx,
       "dungeon",
       `副本《${dungeonName(payload.dungeonId)}》挑战失败，止步第 ${payload.waveIndex + 1} 波。`,
-      {
-        stageId: payload.stageId,
-        dungeonSessionId: payload.dungeonSessionId,
-      },
+      undefined,
     ),
   dungeonAbandoned: (
     payload: GameEvents["dungeonAbandoned"],
@@ -400,10 +327,7 @@ export const gameLogRules = {
       ctx,
       "dungeon",
       `已放弃副本《${dungeonName(payload.dungeonId)}》。`,
-      {
-        stageId: payload.stageId,
-        dungeonSessionId: payload.dungeonSessionId,
-      },
+      undefined,
     ),
 } satisfies Partial<{
   [K in LoggedGameEventName]: (
@@ -416,13 +340,13 @@ function entry(
   ctx: GameLogRuleContext,
   category: GameLogCategory,
   text: string,
-  scope: GameLogScope,
+  charId: string | undefined,
 ): GameLogEntry {
   return {
     tick: ctx.currentTick,
     category,
     text,
-    scope,
+    ...(charId ? { charId } : {}),
   };
 }
 
@@ -436,6 +360,27 @@ function partyLeadName(state: Readonly<GameState>, participantIds: readonly stri
     if (actor && isPlayer(actor)) return actor.name;
   }
   return actorName(state, participantIds[0] ?? "未知角色");
+}
+
+/** For battle events that carry an actorId (which may be an enemy),
+ *  find the player character in the same battle, or return the actorId
+ *  itself if it's already a player. */
+function findPlayerCharIdForActor(
+  state: Readonly<GameState>,
+  actorId: string,
+): string | undefined {
+  const actor = state.actors.find((a) => a.id === actorId);
+  if (actor && isPlayer(actor)) return actorId;
+  // Find the battle this actor is in, then return the first player char.
+  const battle = state.battles.find(
+    (b) => b.outcome === "ongoing" && b.participantIds.includes(actorId),
+  );
+  if (!battle) return undefined;
+  for (const pid of battle.participantIds) {
+    const p = state.actors.find((a) => a.id === pid);
+    if (p && isPlayer(p)) return pid;
+  }
+  return undefined;
 }
 
 function talentName(id: string): string {
@@ -536,18 +481,4 @@ function skipReasonText(note?: string): string {
 
 function listOrFallback(values: readonly string[], fallback: string): string {
   return values.length > 0 ? values.join("、") : fallback;
-}
-
-function battleScope(payload: {
-  battleId: string;
-  stageId?: string;
-  dungeonSessionId?: string;
-  locationId?: string;
-}): GameLogScope {
-  return {
-    battleId: payload.battleId,
-    stageId: payload.stageId,
-    dungeonSessionId: payload.dungeonSessionId,
-    locationId: payload.locationId,
-  };
 }

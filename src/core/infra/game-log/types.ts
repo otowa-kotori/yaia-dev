@@ -1,7 +1,7 @@
 // Persisted player-facing game log.
 //
 // Rules:
-// - Player-visible only. Internal debug traces still live elsewhere (`Battle.log`).
+// - Player-visible only. Internal debug traces live elsewhere.
 // - Plain data only; entries must survive JSON round-trips unchanged.
 // - Fixed-size tail buffer to keep saves bounded.
 
@@ -20,19 +20,12 @@ export const GAME_LOG_CATEGORIES = [
 
 export type GameLogCategory = (typeof GAME_LOG_CATEGORIES)[number];
 
-export interface GameLogScope {
-  charId?: string;
-  locationId?: string;
-  stageId?: string;
-  battleId?: string;
-  dungeonSessionId?: string;
-}
-
 export interface GameLogEntry {
   tick: number;
   category: GameLogCategory;
   text: string;
-  scope: GameLogScope;
+  /** The character this entry is most relevant to (for per-hero filtering). */
+  charId?: string;
 }
 
 const GAME_LOG_CATEGORY_SET = new Set<string>(GAME_LOG_CATEGORIES);
@@ -75,25 +68,7 @@ function assertGameLogEntry(value: unknown, index: number): asserts value is Gam
   ) {
     throw new Error(`save: gameLog[${index}].category is invalid`);
   }
-  assertScope(entry.scope, index);
-}
-
-function assertScope(value: unknown, index: number): asserts value is GameLogScope {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`save: gameLog[${index}].scope must be an object`);
-  }
-
-  const scope = value as Record<string, unknown>;
-  for (const key of [
-    "charId",
-    "locationId",
-    "stageId",
-    "battleId",
-    "dungeonSessionId",
-  ] as const) {
-    const field = scope[key];
-    if (field !== undefined && typeof field !== "string") {
-      throw new Error(`save: gameLog[${index}].scope.${key} must be a string when present`);
-    }
+  if (entry.charId !== undefined && typeof entry.charId !== "string") {
+    throw new Error(`save: gameLog[${index}].charId must be a string when present`);
   }
 }

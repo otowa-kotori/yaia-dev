@@ -92,12 +92,18 @@ describe("Battle: tick loop", () => {
         startedAtTick: 0,
         intents: testIntents(hero.id, slime.id),
       });
+      // Collect bus events as a determinism trace.
+      const trace: string[] = [];
+      bus.on("damage", (ev) => trace.push(`damage:${ev.attackerId}:${ev.targetId}:${ev.amount}`));
+      bus.on("battleActionStarted", (ev) => trace.push(`action:${ev.actorId}:${ev.abilityId}`));
+      bus.on("battleActorDied", (ev) => trace.push(`death:${ev.victimId}`));
+      bus.on("battleEnded", (ev) => trace.push(`end:${ev.outcome}`));
       let t = 0;
       while (b.outcome === "ongoing" && t < 500) {
         t += 1;
         tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
       }
-      return b.log.map((e) => `${e.tick}:${e.kind}:${e.actorId ?? ""}:${e.amount ?? ""}`);
+      return trace;
     }
     expect(runOnce()).toEqual(runOnce());
   });
@@ -157,12 +163,15 @@ describe("Battle: tick loop", () => {
       if (b.outcome !== "ongoing") break;
     }
     expect(b.outcome).toBe("players_won");
-    const logLen = b.log.length;
-    // Further ticks must be no-ops.
+    // Further ticks must be no-ops — no more events emitted.
+    let extraEvents = 0;
+    bus.on("battleActionStarted", () => extraEvents++);
+    bus.on("damage", () => extraEvents++);
+    bus.on("battleEnded", () => extraEvents++);
     for (let t = 2; t < 10; t++) {
       tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
     }
-    expect(b.log.length).toBe(logLen);
+    expect(extraEvents).toBe(0);
   });
 
   test("createBattle rejects participants without explicit intents", () => {
@@ -214,7 +223,7 @@ describe("Battle: tick loop", () => {
     );
   });
 
-  test("unsubscribes damage listener when talent execution throws", () => {
+  test("talent execution throw propagates correctly", () => {
     const explodingTalent: TalentDef = {
       id: "talent.test.exploding" as TalentId,
       name: "Exploding Test Talent",
@@ -262,22 +271,6 @@ describe("Battle: tick loop", () => {
     expect(() =>
       tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 }),
     ).toThrow("boom");
-
-    const damageEntriesBefore = battle.log.filter(
-      (entry) => entry.kind === "damage",
-    ).length;
-    expect(damageEntriesBefore).toBe(1);
-
-    bus.emit("damage", {
-      attackerId: "ghost.attacker",
-      targetId: slime.id,
-      amount: 99,
-    });
-
-    const damageEntriesAfter = battle.log.filter(
-      (entry) => entry.kind === "damage",
-    ).length;
-    expect(damageEntriesAfter).toBe(damageEntriesBefore);
   });
 });
 

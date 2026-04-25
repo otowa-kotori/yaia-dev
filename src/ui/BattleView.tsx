@@ -88,7 +88,7 @@ export function BattleView({ store }: { store: GameStore }) {
 
   // ── Gather ──
   if (activity?.kind === ACTIVITY_GATHER_KIND) {
-    const gatherLog = logsForStage(s.state.gameLog, hero.stageId);
+    const gatherLog = logsForHero(s.state.gameLog, hero.id);
     return (
       <div>
         <HeroCard hero={hero} statusOverride={T.status_hero_gathering} />
@@ -125,7 +125,7 @@ function CombatPanel({
   battle: Battle | null;
 }) {
   const phaseLabel = combatPhaseLabel(activity.phase);
-  const localLog = logsForStage(store.state.gameLog, activity.stageId);
+  const localLog = logsForHero(store.state.gameLog, activity.partyCharIds[0]);
 
   const partyHeroes = activity.partyCharIds
 
@@ -219,7 +219,7 @@ function DungeonCombatPanel({
     return b.participantIds.some((pid) => partyIds.has(pid));
   }) ?? null;
   const dungeonSessionId = partyHeroes.find((partyHero) => partyHero.id === heroId)?.dungeonSessionId ?? null;
-  const localLog = logsForDungeon(store.state.gameLog, dungeonSessionId, ds.stageId);
+  const localLog = logsForHero(store.state.gameLog, heroId);
 
   const totalWaves = dungeon?.waves.length ?? Math.max(1, ds.currentWaveIndex + 1);
 
@@ -447,21 +447,9 @@ function StageRoster({ store }: { store: GameStore }) {
 // Helpers
 // ============================================================
 
-function logsForStage(entries: readonly GameLogEntry[], stageId: string | null | undefined): GameLogEntry[] {
-  if (!stageId) return [];
-  return entries.filter((entry) => entry.scope.stageId === stageId);
-}
-
-function logsForDungeon(
-  entries: readonly GameLogEntry[],
-  dungeonSessionId: string | null,
-  stageId?: string | null,
-): GameLogEntry[] {
-  return entries.filter(
-    (entry) =>
-      (dungeonSessionId !== null && entry.scope.dungeonSessionId === dungeonSessionId) ||
-      (stageId !== null && stageId !== undefined && entry.scope.stageId === stageId),
-  );
+function logsForHero(entries: readonly GameLogEntry[], heroId: string | null | undefined): GameLogEntry[] {
+  if (!heroId) return [];
+  return entries.filter((e) => e.charId === heroId || e.charId === undefined);
 }
 
 function findCurrentBattle(
