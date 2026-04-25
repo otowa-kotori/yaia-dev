@@ -30,12 +30,13 @@
 存档节流由 store 管理：
 
 - 每 10 秒自动存一次
-- `levelup`、`activityComplete`、`beforeunload` 等重要事件会立即 flush
+- `levelup`、`activityComplete`、`gameLogAppended`、`beforeunload` 等重要事件会立即 flush
 
 ## 约定
 
 - `GameState` 必须能进行 JSON 往返
-- Alpha 阶段默认不补 migration；旧档版本不匹配时直接报错并清档
+- `gameLog` 是持久化字段，按固定上限尾部保留最近记录，避免存档无限增长
+- Alpha 阶段默认不补 migration；旧档版本不匹配或缺少必要字段（例如 `gameLog`）时直接报错并清档
 
 - `save` 允许单向读取 content 注册表，用于补回派生字段
 - 新游戏初始化不走 save 管线，而是由 `session.resetToFresh` 读取 `ContentDb.starting`

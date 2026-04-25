@@ -63,7 +63,11 @@ export function grantCharacterXp(
       }
     }
 
-    ctx.bus.emit("levelup", { charId: pc.id, level: pc.level });
+    ctx.bus.emit("levelup", {
+      kind: "character",
+      charId: pc.id,
+      level: pc.level,
+    });
   }
   return gained;
 }
@@ -96,7 +100,12 @@ export function grantSkillXp(
     sp.xp -= cost;
     sp.level += 1;
     gained += 1;
-    ctx.bus.emit("levelup", { charId: `${pc.id}:${skillDef.id}`, level: sp.level });
+    ctx.bus.emit("levelup", {
+      kind: "skill",
+      charId: pc.id,
+      skillId: skillDef.id,
+      level: sp.level,
+    });
   }
   return gained;
 }

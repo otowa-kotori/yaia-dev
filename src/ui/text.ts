@@ -11,11 +11,13 @@
 export const T = {
   // ── Tabs ──
   tab_map: "地图 & 战斗",
+  tab_log: "日志",
   tab_inventory: "背包",
   tab_crafting: "合成",
   tab_xp: "经验总览",
   tab_upgrades: "全局升级",
   tab_settings: "设置",
+
 
   // ── Character bar / status ──
   status_idle: "待命",
@@ -78,9 +80,20 @@ export const T = {
   dungeonPhaseLabel: "阶段",
   dungeonPartyLabel: "队伍",
   dungeonEnemyLabel: "当前敌人",
-  activityLogTitle: "战斗日志",
-  activityLogEmpty: "当前没有可展示的战斗日志。",
+  activityLogTitle: "当前日志",
+  activityLogEmpty: "当前范围暂无日志。",
+  gameLogTitle: "全局日志",
+  gameLogEmpty: "当前还没有新的旅程记录。",
+  logCategory_world: "地点",
+  logCategory_activity: "活动",
+  logCategory_battle: "战斗",
+  logCategory_reward: "奖励",
+  logCategory_inventory: "物品",
+  logCategory_economy: "经济",
+  logCategory_growth: "成长",
+  logCategory_dungeon: "副本",
   dungeonNoEnemy: "本波敌人尚未出现。",
+
   dungeonNoParty: "当前没有可展示的队伍成员。",
   dungeonNoLog: "当前阶段暂无战斗日志。",
   dungeonProgress: "第 {current} / {total} 波",

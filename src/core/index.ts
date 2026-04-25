@@ -10,6 +10,7 @@ export * as events from "./infra/events";
 export * as tick from "./infra/tick";
 export * as state from "./infra/state";
 export * as formula from "./infra/formula";
+export * as gameLog from "./infra/game-log";
 
 // content (flat)
 export * as content from "./content";

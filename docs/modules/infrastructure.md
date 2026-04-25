@@ -27,9 +27,17 @@
 
 ## events
 
-- 这是一个不依赖具体类型定义的事件总线
+- 这是一个 typed event bus；事件名和 payload 结构都集中定义在 `src/core/infra/events/index.ts`
 - 常见事件包括 `damage`、`kill`、`levelup`、`loot`、`activityComplete`
-- 它用于跨模块解耦：例如战斗模块发事件，奖励、UI、存档逻辑各自监听
+- 玩家可见日志相关事件也走同一总线，例如 `locationEntered`、`activityStarted`、`currencyChanged`、`battleActionResolved`
+- 它用于跨模块解耦：例如战斗模块发事件，奖励、日志收集器、UI、存档逻辑各自监听
+
+## game-log
+
+- `src/core/infra/game-log/` 负责把 typed event 转成玩家可读中文日志
+- `rules.ts` 集中维护“事件 → 文案”的配置化规则表
+- `collector.ts` 监听事件总线，把日志写入 `GameState.gameLog`，并通过 `gameLogAppended` 通知 UI / Store
+- 日志只保存最小纯数据：`tick`、`category`、`text`、`scope`，避免把原始 payload 和运行时对象塞进存档
 
 ## formula
 
@@ -40,7 +48,7 @@
 ## state
 
 - `GameState` 是根状态容器，且必须保持为可序列化的纯数据
-- 它聚合 `actors`、`inventories`、`currencies`、`battles`、`stages`、`worldRecord` 等子状态
+- 它聚合 `actors`、`inventories`、`currencies`、`battles`、`stages`、`worldRecord`、`gameLog` 等子状态
 - 所有进入存档的字段都必须能进行 JSON 往返
 - 派生字段应只存在于内存中，不直接写入序列化结果
 

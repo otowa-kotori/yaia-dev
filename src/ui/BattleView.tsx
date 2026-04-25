@@ -22,8 +22,8 @@ import { xpProgressToNextLevel } from "../core/growth/leveling";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
-  ACTIVITY_DUNGEON_KIND,
   type CombatActivity,
+
   type GatherActivity,
 } from "../core/world/activity";
 import type { GameStore } from "./store";
@@ -36,7 +36,9 @@ import type { Battle } from "../core/combat/battle/battle";
 import { getAtbGaugePct } from "../core/combat/battle/scheduler";
 import { getContent } from "../core/content";
 import type { DungeonSession } from "../core/infra/state/types";
+import type { GameLogEntry } from "../core/infra/game-log";
 import type { StageSession } from "../core/world/stage/types";
+
 
 export function BattleView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
@@ -86,14 +88,18 @@ export function BattleView({ store }: { store: GameStore }) {
 
   // ── Gather ──
   if (activity?.kind === ACTIVITY_GATHER_KIND) {
+    const gatherLog = logsForStage(s.state.gameLog, hero.stageId);
     return (
       <div>
         <HeroCard hero={hero} statusOverride={T.status_hero_gathering} />
         {lootPanel}
         <GatherPanel activity={activity} store={s} />
+        <SectionTitle>{T.activityLogTitle}</SectionTitle>
+        <ActivityLogPanel entries={gatherLog} />
       </div>
     );
   }
+
 
   // ── Idle in a location ──
   return (
@@ -119,8 +125,10 @@ function CombatPanel({
   battle: Battle | null;
 }) {
   const phaseLabel = combatPhaseLabel(activity.phase);
+  const localLog = logsForStage(store.state.gameLog, activity.stageId);
 
   const partyHeroes = activity.partyCharIds
+
     .map((id) => store.state.actors.find((a) => a.id === id))
     .filter((a): a is PlayerCharacter => a !== undefined && isPlayer(a));
 
@@ -135,9 +143,12 @@ function CombatPanel({
           ))}
         </div>
         <StageRoster store={store} />
+        <SectionTitle>{T.activityLogTitle}</SectionTitle>
+        <ActivityLogPanel entries={localLog} />
       </div>
     );
   }
+
 
   const enemies = battle.participantIds
     .map((id) => store.state.actors.find((a) => a.id === id))
@@ -166,10 +177,12 @@ function CombatPanel({
         ))}
       </div>
 
-      <ActivityLogPanel log={battle.log} />
+      <SectionTitle>{T.activityLogTitle}</SectionTitle>
+      <ActivityLogPanel entries={localLog} />
     </div>
   );
 }
+
 
 // ============================================================
 // Dungeon panel — reuses the same layout structure
@@ -205,8 +218,12 @@ function DungeonCombatPanel({
     const partyIds = new Set(ds.partyCharIds);
     return b.participantIds.some((pid) => partyIds.has(pid));
   }) ?? null;
+  const dungeonSessionId = partyHeroes.find((partyHero) => partyHero.id === heroId)?.dungeonSessionId ?? null;
+  const localLog = logsForDungeon(store.state.gameLog, dungeonSessionId, ds.stageId);
 
   const totalWaves = dungeon?.waves.length ?? Math.max(1, ds.currentWaveIndex + 1);
+
+
   const currentWave = Math.min(totalWaves, ds.currentWaveIndex + 1);
 
   return (
@@ -246,10 +263,12 @@ function DungeonCombatPanel({
         </>
       )}
 
+      <SectionTitle>{T.activityLogTitle}</SectionTitle>
       <ActivityLogPanel
-        log={activeBattle?.log ?? []}
+        entries={localLog}
         emptyMessage={T.dungeonNoLog}
       />
+
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
         <button
@@ -428,7 +447,25 @@ function StageRoster({ store }: { store: GameStore }) {
 // Helpers
 // ============================================================
 
+function logsForStage(entries: readonly GameLogEntry[], stageId: string | null | undefined): GameLogEntry[] {
+  if (!stageId) return [];
+  return entries.filter((entry) => entry.scope.stageId === stageId);
+}
+
+function logsForDungeon(
+  entries: readonly GameLogEntry[],
+  dungeonSessionId: string | null,
+  stageId?: string | null,
+): GameLogEntry[] {
+  return entries.filter(
+    (entry) =>
+      (dungeonSessionId !== null && entry.scope.dungeonSessionId === dungeonSessionId) ||
+      (stageId !== null && stageId !== undefined && entry.scope.stageId === stageId),
+  );
+}
+
 function findCurrentBattle(
+
   activity: CombatActivity,
   store: GameStore,
 ): Battle | null {

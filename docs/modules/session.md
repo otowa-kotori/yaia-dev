@@ -10,7 +10,7 @@
 
 ## 职责
 
-- **全局指令**：`setSpeedMultiplier`、`getSpeedMultiplier`、`loadFromSave`、`resetToFresh`、`dispose`
+- **全局指令**：`purchaseUpgrade`、`setSpeedMultiplier`、`getSpeedMultiplier`、`loadFromSave`、`resetToFresh`、`dispose`
 - **角色管理**：`getCharacter(charId)`、`getFocusedCharacter()`、`setFocusedChar(charId)`、`listHeroes()`
 - **单角色指令**：
   - `enterLocation(locationId)` / `leaveLocation()`
@@ -35,12 +35,15 @@
 
 `session` 自己不做 React 刷新；它通过事件总线把状态变化通知给上层：
 
-- `inventoryChanged`：背包内容发生变化
-- `equipmentChanged`：装备槽位发生变化
+- `locationEntered` / `locationLeft`：角色切换地点
+- `activityStarted` / `activityStopped`：开始或停止战斗、采集、副本
+- `equipmentChanged` / `equipmentUpdated`：装备槽位变化与玩家可读装备结果
 - `crafted`：一次制作成功完成
+- `pendingLootPicked` / `pendingLootLost`：待拾取物品被拿走或在离场时丢失
+- `upgradePurchased`：一次全局升级购买完成
 - `activityComplete`：活动自然结束
 
-`src/ui/store.ts` 监听这些事件后触发订阅通知并安排持久化。
+`src/ui/store.ts` 监听这些事件以及 `gameLogAppended` 后触发订阅通知并安排持久化；Store 不再自己执行升级购买交易，只委托 `session.purchaseUpgrade()`。
 
 ## 边界
 

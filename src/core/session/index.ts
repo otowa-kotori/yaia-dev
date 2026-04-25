@@ -34,6 +34,7 @@
 
 import { createTickEngine, type TickEngine } from "../infra/tick";
 import { createGameEventBus, type GameEventBus } from "../infra/events";
+import { attachGameLogCollector } from "../infra/game-log";
 import { createRng, restoreRng, type Rng } from "../infra/rng";
 import {
   createEmptyState,
@@ -76,11 +77,13 @@ import {
 import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance, type GearInstance } from "../item";
 import { grantSkillXp } from "../growth/leveling";
+import { purchaseUpgrade as purchaseUpgradeCore } from "../growth/upgrade-manager";
 import {
   enterStage as enterStageCore,
   leaveStage as leaveStageCore,
   type StageController,
 } from "../world/stage";
+
 import {
   assertRuntimeIdState,
   mintDungeonSessionId,
@@ -159,8 +162,11 @@ export interface GameSession {
   startPartyCombat(combatZoneId: string, partyCharIds: string[]): void;
   /** Abandon the currently active dungeon run for a character. No completion rewards. */
   abandonDungeon(charId: string): void;
+  /** Purchase the next level of a global upgrade. */
+  purchaseUpgrade(upgradeId: string): void;
 
   // Global commands.
+
   setSpeedMultiplier(mul: number): void;
   getSpeedMultiplier(): number;
 
@@ -204,6 +210,11 @@ export function createGameSession(
 
   // The engine runs in real time; Store attaches __ui_notifier on top.
   const stopLoop = engine.start();
+  const disposeGameLogCollector = attachGameLogCollector({
+    bus,
+    getState: () => state,
+    getCurrentTick: () => engine.currentTick,
+  });
 
   // Activity self-completion cleanup — route by charId.
   bus.on("activityComplete", (payload) => {
@@ -387,14 +398,41 @@ export function createGameSession(
 
   // ---------- Stage lifecycle helpers ----------
 
+  function pendingLootEntrySummary(entry: StageSession["pendingLoot"][number]) {
+    if (entry.kind === "stack") {
+      return { itemId: entry.itemId, qty: entry.qty };
+    }
+    return { itemId: entry.instance.itemId, qty: 1 };
+  }
+
+  function emitPendingLootLost(charId: string, stageId: string): void {
+    const session = state.stages[stageId];
+    if (!session || session.pendingLoot.length === 0) return;
+    bus.emit("pendingLootLost", {
+      charId,
+      stageId,
+      entries: session.pendingLoot.map((entry) => pendingLootEntrySummary(entry)),
+    });
+  }
+
   /** Tear down a character's current stage + activity. */
-  function tearDownCharInstance(cc: CharacterControllerImpl): void {
+  function tearDownCharInstance(
+    cc: CharacterControllerImpl,
+    reason: "player" | "left_location" | "switch_activity" | "system" = "system",
+  ): void {
     // Stop activity.
     if (cc._activity) {
       if (cc._activity.kind === ACTIVITY_COMBAT_KIND) {
         // CombatActivity is a shared WorldActivity — any member leaving
         // stops the entire party (same semantics as dungeon abandon).
         const ca = cc._activity as CombatActivity;
+        emitPendingLootLost(cc.hero.id, ca.stageId);
+        bus.emit("activityStopped", {
+          charId: cc.hero.id,
+          kind: "combat",
+          reason,
+          stageId: ca.stageId,
+        });
         ca.phase = "stopped";
         engine.unregister(ca.id);
         combatActivities.delete(ca.stageId);
@@ -418,6 +456,16 @@ export function createGameSession(
         leaveStageCore(ca.stageId, buildCtx());
         return; // stage already cleaned up above
       } else if (cc._activity.kind === ACTIVITY_GATHER_KIND) {
+        const stageId = cc.hero.stageId;
+        if (stageId) {
+          emitPendingLootLost(cc.hero.id, stageId);
+        }
+        bus.emit("activityStopped", {
+          charId: cc.hero.id,
+          kind: "gather",
+          reason,
+          stageId: stageId ?? undefined,
+        });
         (cc._activity as GatherActivity).stopRequested = true;
         engine.unregister(cc._activity.id);
         cc._activity = null;
@@ -439,6 +487,7 @@ export function createGameSession(
     }
   }
 
+
   function hasOtherStageParticipant(stageId: string, excludeCharId: string): boolean {
     for (const [id, cc] of characters) {
       if (id !== excludeCharId && cc.hero.stageId === stageId) return true;
@@ -453,8 +502,9 @@ export function createGameSession(
       mode?: StageMode;
       resourceNodes?: string[];
     },
+    teardownReason: "player" | "left_location" | "switch_activity" | "system" = "switch_activity",
   ): string {
-    tearDownCharInstance(cc);
+    tearDownCharInstance(cc, teardownReason);
     const stageId = mintStageId(state);
     const ctrl = enterStageCore({
       stageId,
@@ -516,13 +566,24 @@ export function createGameSession(
 
       enterLocation(locationId: string): void {
         getLocation(locationId);
-        tearDownCharInstance(cc);
+        const previousLocationId = cc.hero.locationId;
+        tearDownCharInstance(cc, "left_location");
         cc.hero.locationId = locationId;
+        if (previousLocationId && previousLocationId !== locationId) {
+          bus.emit("locationLeft", { charId: cc.hero.id, locationId: previousLocationId });
+        }
+        if (previousLocationId !== locationId) {
+          bus.emit("locationEntered", { charId: cc.hero.id, locationId });
+        }
       },
 
       leaveLocation(): void {
-        tearDownCharInstance(cc);
+        const previousLocationId = cc.hero.locationId;
+        tearDownCharInstance(cc, "left_location");
         cc.hero.locationId = null;
+        if (previousLocationId) {
+          bus.emit("locationLeft", { charId: cc.hero.id, locationId: previousLocationId });
+        }
       },
 
       startFight(combatZoneId: string): void {
@@ -538,8 +599,9 @@ export function createGameSession(
           console.warn("session.startGather: not in a location");
           return;
         }
+        const locationId = cc.hero.locationId;
         const stageId = startStageInstance(cc, {
-          locationId: cc.hero.locationId,
+          locationId,
           resourceNodes: [nodeDefId],
         });
         const nodeActorId = findSpawnedResourceNodeActorId(stageId, nodeDefId);
@@ -549,11 +611,19 @@ export function createGameSession(
           ctxProvider: buildCtx,
         });
         engine.register(cc._activity);
+        bus.emit("activityStarted", {
+          charId: cc.hero.id,
+          kind: "gather",
+          locationId,
+          stageId,
+          resourceNodeId: nodeDefId,
+        });
       },
 
       stopActivity(): void {
-        tearDownCharInstance(cc);
+        tearDownCharInstance(cc, "player");
       },
+
 
       equipItem(slotIndex: number): void {
         const hero = cc.hero;
@@ -587,6 +657,12 @@ export function createGameSession(
         }
 
         rebuildHeroDerived(hero);
+        bus.emit("equipmentUpdated", {
+          charId: hero.id,
+          slot: def.slot,
+          itemId: removed.instance.itemId,
+          action: "equip",
+        });
         bus.emit("equipmentChanged", { charId: hero.id, slot: def.slot });
       },
 
@@ -596,6 +672,7 @@ export function createGameSession(
         if (!equipped) {
           throw new Error(`session.unequipItem: slot "${slot}" is empty`);
         }
+        const unequippedItemId = equipped.itemId;
         const res = addGear(getInventoryByOwner(hero.id), equipped);
         if (!res.ok) {
           throw new Error(
@@ -604,8 +681,15 @@ export function createGameSession(
         }
         hero.equipped[slot] = null;
         rebuildHeroDerived(hero);
+        bus.emit("equipmentUpdated", {
+          charId: hero.id,
+          slot,
+          itemId: unequippedItemId,
+          action: "unequip",
+        });
         bus.emit("equipmentChanged", { charId: hero.id, slot });
       },
+
 
       craftRecipe(recipeId: string): void {
         if (cc._activity) {
@@ -644,6 +728,10 @@ export function createGameSession(
 
         const entry = session.pendingLoot[index]!;
         const hero = cc.hero;
+        const stageId = hero.stageId;
+        if (!stageId) {
+          throw new Error("session.pickUpPendingLoot: pending loot exists without hero.stageId");
+        }
         const inv = getInventoryByOwner(hero.id);
 
         if (entry.kind === "stack") {
@@ -660,16 +748,25 @@ export function createGameSession(
         }
 
         session.pendingLoot.splice(index, 1);
+        bus.emit("pendingLootPicked", {
+          charId: hero.id,
+          stageId,
+          itemId: entry.kind === "stack" ? entry.itemId : entry.instance.itemId,
+          qty: entry.kind === "stack" ? entry.qty : 1,
+        });
         bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
-        bus.emit("pendingLootChanged", { charId: hero.id, stageId: hero.stageId! });
+        bus.emit("pendingLootChanged", { charId: hero.id, stageId });
         return true;
       },
+
 
       pickUpAllPendingLoot(): number {
         const session = cc.stageSession;
         if (!session) return 0;
 
         const hero = cc.hero;
+        const stageId = hero.stageId;
+        if (!stageId) return session.pendingLoot.length;
         const inv = getInventoryByOwner(hero.id);
         const before = session.pendingLoot.length;
         const kept: typeof session.pendingLoot = [];
@@ -682,6 +779,15 @@ export function createGameSession(
               entry.qty,
               getInventoryStackLimit(state, hero.id, attrDefs),
             );
+            const pickedQty = res.ok ? entry.qty : entry.qty - res.remaining;
+            if (pickedQty > 0) {
+              bus.emit("pendingLootPicked", {
+                charId: hero.id,
+                stageId,
+                itemId: entry.itemId,
+                qty: pickedQty,
+              });
+            }
             if (!res.ok) {
               // Partial placement: addStack already committed what fits.
               // Keep the remainder in pending.
@@ -694,13 +800,19 @@ export function createGameSession(
               kept.push(entry);
               continue;
             }
+            bus.emit("pendingLootPicked", {
+              charId: hero.id,
+              stageId,
+              itemId: entry.instance.itemId,
+              qty: 1,
+            });
           }
         }
 
         session.pendingLoot = kept;
         if (kept.length < before) {
           bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
-          bus.emit("pendingLootChanged", { charId: hero.id, stageId: hero.stageId! });
+          bus.emit("pendingLootChanged", { charId: hero.id, stageId });
         }
         return kept.length;
       },
@@ -804,12 +916,13 @@ export function createGameSession(
       }
     }
     // Link all party members' controllers to their shared combat activity.
-    for (const [stageId, ca] of combatActivities) {
+    for (const ca of combatActivities.values()) {
       for (const charId of ca.partyCharIds) {
         const cc = characters.get(charId);
         if (cc && !cc._activity) cc._activity = ca;
       }
     }
+
   }
 
   // ---------- Party combat lifecycle ----------
@@ -838,8 +951,9 @@ export function createGameSession(
 
     // Tear down existing activities for all party members.
     for (const cc of ccs) {
-      tearDownCharInstance(cc);
+      tearDownCharInstance(cc, "switch_activity");
     }
+
 
     // Create a shared stage.
     const stageId = mintStageId(state);
@@ -871,7 +985,16 @@ export function createGameSession(
     for (const cc of ccs) {
       cc._activity = combatActivity;
     }
+
+    bus.emit("activityStarted", {
+      charId: partyCharIds[0]!,
+      kind: "combat",
+      locationId,
+      stageId,
+      combatZoneId,
+    });
   }
+
 
   // ---------- Dungeon lifecycle ----------
 
@@ -962,8 +1085,9 @@ export function createGameSession(
           ? { ...cc.hero.activity, data: { ...cc.hero.activity.data } }
           : null,
       };
-      tearDownCharInstance(cc);
+      tearDownCharInstance(cc, "switch_activity");
     }
+
 
     // Create shared stage for the dungeon.
     const stageId = mintStageId(state);
@@ -1017,7 +1141,17 @@ export function createGameSession(
     });
     dungeonActivities.set(dungeonSessionId, dungeonActivity);
     engine.register(dungeonActivity);
+
+    bus.emit("activityStarted", {
+      charId: partyCharIds[0]!,
+      kind: "dungeon",
+      locationId,
+      stageId,
+      dungeonSessionId,
+      dungeonId,
+    });
   }
+
 
   function abandonDungeonImpl(charId: string): void {
     const cc = characters.get(charId);
@@ -1036,6 +1170,31 @@ export function createGameSession(
       restoreDungeonParty(dsId, { state });
     }
   }
+
+  function purchaseUpgradeImpl(upgradeId: string): void {
+    const result = purchaseUpgradeCore(upgradeId, {
+      state,
+      content,
+      attrDefs,
+    });
+    if (!result.success) return;
+
+    if (result.cost !== 0) {
+      bus.emit("currencyChanged", {
+        currencyId: result.costCurrency,
+        amount: -result.cost,
+        total: state.currencies[result.costCurrency] ?? 0,
+        source: "upgrade_purchase",
+      });
+    }
+    bus.emit("upgradePurchased", {
+      upgradeId,
+      level: result.level,
+      costCurrency: result.costCurrency,
+      cost: result.cost,
+    });
+  }
+
 
   // ---------- Public lifecycle ----------
 
@@ -1175,13 +1334,17 @@ export function createGameSession(
     startDungeon: startDungeonImpl,
     startPartyCombat: startPartyCombatImpl,
     abandonDungeon: abandonDungeonImpl,
+    purchaseUpgrade: purchaseUpgradeImpl,
     setSpeedMultiplier,
+
     getSpeedMultiplier,
     loadFromSave,
     resetToFresh,
     dispose() {
+      disposeGameLogCollector();
       stopLoop();
     },
+
   };
 
   return session;

@@ -1,0 +1,525 @@
+import { isPlayer } from "../../entity/actor";
+import { getContent } from "../../content/registry";
+import type { GameEvents } from "../events";
+import type { GameState } from "../state/types";
+import type { GameLogCategory, GameLogEntry, GameLogScope } from "./types";
+
+export interface GameLogRuleContext {
+  state: Readonly<GameState>;
+  currentTick: number;
+}
+
+type LoggedGameEventName = Exclude<keyof GameEvents, "gameLogAppended">;
+type GameLogRuleResult = GameLogEntry | GameLogEntry[] | null;
+
+export const gameLogRules = {
+  levelup: (payload: GameEvents["levelup"], ctx: GameLogRuleContext) => {
+    const heroName = actorName(ctx.state, payload.charId);
+    if (payload.kind === "character") {
+      return entry(ctx, "growth", `${heroName} 升到了 ${payload.level} 级。`, {
+        charId: payload.charId,
+      });
+    }
+    return entry(
+      ctx,
+      "growth",
+      `${heroName} 的 ${skillName(payload.skillId)} 升到了 ${payload.level} 级。`,
+      { charId: payload.charId },
+    );
+  },
+  locationEntered: (
+    payload: GameEvents["locationEntered"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "world",
+      `${actorName(ctx.state, payload.charId)} 来到了 ${locationName(payload.locationId)}。`,
+      { charId: payload.charId, locationId: payload.locationId },
+    ),
+  locationLeft: (
+    payload: GameEvents["locationLeft"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "world",
+      `${actorName(ctx.state, payload.charId)} 离开了 ${locationName(payload.locationId)}。`,
+      { charId: payload.charId, locationId: payload.locationId },
+    ),
+  activityStarted: (
+    payload: GameEvents["activityStarted"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const heroName = actorName(ctx.state, payload.charId);
+    switch (payload.kind) {
+      case "combat":
+        return entry(
+          ctx,
+          "activity",
+          `${heroName} 开始在 ${combatZoneName(payload.combatZoneId)} 战斗。`,
+          {
+            charId: payload.charId,
+            locationId: payload.locationId,
+            stageId: payload.stageId,
+          },
+        );
+      case "gather":
+        return entry(
+          ctx,
+          "activity",
+          `${heroName} 开始采集 ${resourceNodeName(payload.resourceNodeId)}。`,
+          {
+            charId: payload.charId,
+            locationId: payload.locationId,
+            stageId: payload.stageId,
+          },
+        );
+      case "dungeon":
+        return entry(
+          ctx,
+          "dungeon",
+          `${heroName} 与队伍进入了副本《${dungeonName(payload.dungeonId)}》。`,
+          {
+            charId: payload.charId,
+            locationId: payload.locationId,
+            stageId: payload.stageId,
+            dungeonSessionId: payload.dungeonSessionId,
+          },
+        );
+    }
+  },
+  activityStopped: (
+    payload: GameEvents["activityStopped"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const heroName = actorName(ctx.state, payload.charId);
+    const why = stopReasonText(payload.reason);
+    switch (payload.kind) {
+      case "combat":
+        return entry(
+          ctx,
+          "activity",
+          `${heroName}${why}停止了当前战斗。`,
+          {
+            charId: payload.charId,
+            stageId: payload.stageId,
+          },
+        );
+      case "gather":
+        return entry(
+          ctx,
+          "activity",
+          `${heroName}${why}结束了当前采集。`,
+          {
+            charId: payload.charId,
+            stageId: payload.stageId,
+          },
+        );
+      case "dungeon":
+        return entry(
+          ctx,
+          "dungeon",
+          `${heroName}${why}离开了当前副本。`,
+          {
+            charId: payload.charId,
+            stageId: payload.stageId,
+            dungeonSessionId: payload.dungeonSessionId,
+          },
+        );
+    }
+  },
+  battleStarted: (
+    payload: GameEvents["battleStarted"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const leader = partyLeadName(ctx.state, payload.participantIds);
+    if (payload.dungeonSessionId) {
+      return entry(
+        ctx,
+        "battle",
+        `${leader} 所在队伍在副本《${dungeonName(payload.dungeonId ?? payload.dungeonSessionId)}》第 ${payload.waveIndex + 1} 波遭遇了敌人。`,
+        {
+          charId: payload.partyCharIds[0],
+          locationId: payload.locationId,
+          stageId: payload.stageId,
+          battleId: payload.battleId,
+          dungeonSessionId: payload.dungeonSessionId,
+        },
+      );
+    }
+
+    return entry(
+      ctx,
+      "battle",
+      `${leader} 在 ${combatZoneName(payload.combatZoneId)} 遭遇了敌人。`,
+      {
+        charId: payload.partyCharIds[0],
+        locationId: payload.locationId,
+        stageId: payload.stageId,
+        battleId: payload.battleId,
+      },
+    );
+  },
+  battleActionResolved: (
+    payload: GameEvents["battleActionResolved"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const scope = battleScope(payload);
+    const actor = actorName(ctx.state, payload.actorId);
+    if (payload.outcome === "skip") {
+      const note = skipReasonText(payload.note);
+      return entry(
+        ctx,
+        "battle",
+        `${actor} 本回合未能行动${note ? `（${note}）` : ""}。`,
+        scope,
+      );
+    }
+
+    const ability = abilityName(payload.abilityId);
+    const targets = listOrFallback(payload.targetIds.map((id) => actorName(ctx.state, id)), "目标未知");
+    const magnitudes = payload.magnitudes.filter((value) => value > 0);
+    const magnitudeText =
+      magnitudes.length > 0 ? `（数值 ${magnitudes.join(" / ")}）` : "";
+    return entry(
+      ctx,
+      "battle",
+      `${actor} 使用了 ${ability}，目标：${targets}${magnitudeText}。`,
+      scope,
+    );
+  },
+  battleActorDied: (
+    payload: GameEvents["battleActorDied"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "battle",
+      `${actorName(ctx.state, payload.victimId)} 被击倒了。`,
+      battleScope(payload),
+    ),
+  battleEnded: (
+    payload: GameEvents["battleEnded"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const outcome =
+      payload.outcome === "players_won"
+        ? "战斗胜利。"
+        : payload.outcome === "enemies_won"
+          ? "战斗失败。"
+          : "战斗以平局结束。";
+    return entry(ctx, "battle", outcome, battleScope(payload));
+  },
+  loot: (payload: GameEvents["loot"], ctx: GameLogRuleContext) =>
+    entry(
+      ctx,
+      "reward",
+      `${actorName(ctx.state, payload.charId)} 获得了 ${itemName(payload.itemId)}×${payload.qty}。`,
+      {
+        charId: payload.charId,
+        stageId: payload.stageId,
+        dungeonSessionId: payload.dungeonSessionId,
+      },
+    ),
+  equipmentUpdated: (
+    payload: GameEvents["equipmentUpdated"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "inventory",
+      payload.action === "equip"
+        ? `${actorName(ctx.state, payload.charId)} 装备了 ${itemName(payload.itemId)}。`
+        : `${actorName(ctx.state, payload.charId)} 卸下了 ${itemName(payload.itemId)}。`,
+      { charId: payload.charId },
+    ),
+  crafted: (payload: GameEvents["crafted"], ctx: GameLogRuleContext) =>
+    entry(
+      ctx,
+      "inventory",
+      `${actorName(ctx.state, payload.charId)} 制作了 ${recipeName(payload.recipeId)}。`,
+      { charId: payload.charId },
+    ),
+  currencyChanged: (
+    payload: GameEvents["currencyChanged"],
+    ctx: GameLogRuleContext,
+  ) => {
+    if (payload.amount === 0) return null;
+    const absAmount = Math.abs(payload.amount);
+    const verb = payload.amount > 0 ? "获得了" : "失去了";
+    const owner = payload.charId ? `${actorName(ctx.state, payload.charId)} ` : "";
+    const source = currencySourceLabel(payload.source);
+    return entry(
+      ctx,
+      "economy",
+      `${owner}${verb}${absAmount} ${currencyName(payload.currencyId)}${source ? `（${source}）` : ""}。`,
+      {
+        charId: payload.charId,
+        stageId: payload.stageId,
+        dungeonSessionId: payload.dungeonSessionId,
+      },
+    );
+  },
+  upgradePurchased: (
+    payload: GameEvents["upgradePurchased"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "economy",
+      `购买了全局升级“${upgradeName(payload.upgradeId)}” Lv.${payload.level}，消耗 ${payload.cost} ${currencyName(payload.costCurrency)}。`,
+      {},
+    ),
+  pendingLootOverflowed: (
+    payload: GameEvents["pendingLootOverflowed"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "inventory",
+      `${actorName(ctx.state, payload.charId)} 的背包已满，${itemName(payload.itemId)}×${payload.qty} 被放入待拾取。`,
+      { charId: payload.charId, stageId: payload.stageId },
+    ),
+  pendingLootPicked: (
+    payload: GameEvents["pendingLootPicked"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "inventory",
+      `${actorName(ctx.state, payload.charId)} 拾取了 ${itemName(payload.itemId)}×${payload.qty}。`,
+      { charId: payload.charId, stageId: payload.stageId },
+    ),
+  pendingLootLost: (
+    payload: GameEvents["pendingLootLost"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const summary = listOrFallback(
+      payload.entries.map((entryDef) => `${itemName(entryDef.itemId)}×${entryDef.qty}`),
+      "未拾取物品",
+    );
+    return entry(
+      ctx,
+      "inventory",
+      `${actorName(ctx.state, payload.charId)} 离开场景后遗失了 ${summary}。`,
+      { charId: payload.charId, stageId: payload.stageId },
+    );
+  },
+  waveResolved: (
+    payload: GameEvents["waveResolved"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const result =
+      payload.outcome === "players_won"
+        ? `清理了 ${combatZoneName(payload.combatZoneId)} 的第 ${payload.waveIndex + 1} 波。`
+        : `在 ${combatZoneName(payload.combatZoneId)} 的第 ${payload.waveIndex + 1} 波败退了。`;
+    return entry(
+      ctx,
+      "battle",
+      `${actorName(ctx.state, payload.charId)} ${result}`,
+      {
+        charId: payload.charId,
+        locationId: payload.locationId,
+        stageId: payload.stageId,
+        battleId: payload.battleId,
+      },
+    );
+  },
+  dungeonWaveCleared: (
+    payload: GameEvents["dungeonWaveCleared"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "dungeon",
+      `副本《${dungeonName(payload.dungeonId)}》第 ${payload.waveIndex + 1} 波已清理。`,
+      {
+        stageId: payload.stageId,
+        dungeonSessionId: payload.dungeonSessionId,
+      },
+    ),
+  dungeonCompleted: (
+    payload: GameEvents["dungeonCompleted"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "dungeon",
+      `副本《${dungeonName(payload.dungeonId)}》已通关。`,
+      {
+        stageId: payload.stageId,
+        dungeonSessionId: payload.dungeonSessionId,
+      },
+    ),
+  dungeonFailed: (
+    payload: GameEvents["dungeonFailed"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "dungeon",
+      `副本《${dungeonName(payload.dungeonId)}》挑战失败，止步第 ${payload.waveIndex + 1} 波。`,
+      {
+        stageId: payload.stageId,
+        dungeonSessionId: payload.dungeonSessionId,
+      },
+    ),
+  dungeonAbandoned: (
+    payload: GameEvents["dungeonAbandoned"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "dungeon",
+      `已放弃副本《${dungeonName(payload.dungeonId)}》。`,
+      {
+        stageId: payload.stageId,
+        dungeonSessionId: payload.dungeonSessionId,
+      },
+    ),
+} satisfies Partial<{
+  [K in LoggedGameEventName]: (
+    payload: GameEvents[K],
+    ctx: GameLogRuleContext,
+  ) => GameLogRuleResult;
+}>;
+
+function entry(
+  ctx: GameLogRuleContext,
+  category: GameLogCategory,
+  text: string,
+  scope: GameLogScope,
+): GameLogEntry {
+  return {
+    tick: ctx.currentTick,
+    category,
+    text,
+    scope,
+  };
+}
+
+function actorName(state: Readonly<GameState>, actorId: string): string {
+  return state.actors.find((actor) => actor.id === actorId)?.name ?? actorId;
+}
+
+function partyLeadName(state: Readonly<GameState>, participantIds: readonly string[]): string {
+  for (const id of participantIds) {
+    const actor = state.actors.find((candidate) => candidate.id === id);
+    if (actor && isPlayer(actor)) return actor.name;
+  }
+  return actorName(state, participantIds[0] ?? "未知角色");
+}
+
+function abilityName(id: string): string {
+  return getContent().abilities[id]?.name ?? id;
+}
+
+function combatZoneName(id: string): string {
+  return getContent().combatZones[id]?.name ?? id;
+}
+
+function dungeonName(id: string): string {
+  return getContent().dungeons[id]?.name ?? id;
+}
+
+function itemName(id: string): string {
+  return getContent().items[id]?.name ?? id;
+}
+
+function locationName(id: string): string {
+  return getContent().locations[id]?.name ?? id;
+}
+
+function recipeName(id: string): string {
+  return getContent().recipes[id]?.name ?? id;
+}
+
+function resourceNodeName(id: string): string {
+  return getContent().resourceNodes[id]?.name ?? id;
+}
+
+function skillName(id: string): string {
+  return getContent().skills[id]?.name ?? id;
+}
+
+function upgradeName(id: string): string {
+  return getContent().upgrades[id]?.name ?? id;
+}
+
+function currencyName(id: string): string {
+  if (id === "currency.gold") return "金币";
+  return id;
+}
+
+function currencySourceLabel(source: GameEvents["currencyChanged"]["source"]): string {
+  switch (source) {
+    case "kill_reward":
+      return "击杀奖励";
+    case "wave_reward":
+      return "波次奖励";
+    case "dungeon_reward":
+      return "副本奖励";
+    case "upgrade_purchase":
+      return "升级购买";
+    case "other":
+      return "";
+  }
+}
+
+function stopReasonText(reason: GameEvents["activityStopped"]["reason"]): string {
+  switch (reason) {
+    case "player":
+      return "主动";
+    case "left_location":
+      return "因离开地点而";
+    case "switch_activity":
+      return "因切换活动而";
+    case "system":
+      return "因系统状态变化而";
+  }
+}
+
+function skipReasonText(note?: string): string {
+  if (!note) return "";
+  switch (note) {
+    case "no valid plan":
+      return "没有有效目标";
+    case "on_cooldown":
+      return "技能冷却中";
+    case "insufficient_mp":
+      return "法力不足";
+    case "no_valid_targets":
+      return "没有可用目标";
+    case "wrong_target_count":
+      return "目标数量不正确";
+    case "target_wrong_side":
+      return "目标阵营不正确";
+    case "not_known":
+      return "尚未学会该技能";
+    case "caster_dead":
+      return "角色已倒下";
+    case "unknown_ability":
+      return "技能不存在";
+    default:
+      return note;
+  }
+}
+
+function listOrFallback(values: readonly string[], fallback: string): string {
+  return values.length > 0 ? values.join("、") : fallback;
+}
+
+function battleScope(payload: {
+  battleId: string;
+  stageId?: string;
+  dungeonSessionId?: string;
+  locationId?: string;
+}): GameLogScope {
+  return {
+    battleId: payload.battleId,
+    stageId: payload.stageId,
+    dungeonSessionId: payload.dungeonSessionId,
+    locationId: payload.locationId,
+  };
+}

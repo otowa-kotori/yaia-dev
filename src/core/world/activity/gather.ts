@@ -145,7 +145,9 @@ function grantSwingRewards(
     rng: ctx.rng,
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
+    currencyChangeSource: "other",
   };
+
   // Target is the hero herself — gather rewards land in the hero's
   // inventory + skill progression.
   applyEffect(rewardEffect, hero, hero, ectx);

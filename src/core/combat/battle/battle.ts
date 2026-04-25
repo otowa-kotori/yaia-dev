@@ -48,6 +48,17 @@ export interface BattleLogEntry {
   note?: string;
 }
 
+export interface BattleMetadata {
+  stageId?: string;
+  locationId?: string;
+  dungeonSessionId?: string;
+  dungeonId?: string;
+  combatZoneId?: string;
+  waveId?: string;
+  waveIndex?: number;
+  partyCharIds?: string[];
+}
+
 export interface Battle {
   id: string;
   mode: BattleMode;
@@ -57,6 +68,8 @@ export interface Battle {
   outcome: BattleOutcome;
   /** Ring-free append-only log. Callers trim when they ship logs to the UI. */
   log: BattleLogEntry[];
+  /** Structured metadata mirrored by the activity layer for global log emission. */
+  metadata?: BattleMetadata;
   /** Per-actor intent id. Looked up in the intent registry at dispatch time.
    *  Actors missing here fall back to INTENT.RANDOM_ATTACK. */
   intents: Record<string, string>;
@@ -77,7 +90,9 @@ export interface CreateBattleOptions {
   scheduler?: SchedulerState;
   intents?: Record<string, string>;
   startedAtTick: number;
+  metadata?: BattleMetadata;
 }
+
 
 const MAX_ACTIONS_PER_TICK_FACTOR = 32;
 
@@ -95,7 +110,14 @@ export function createBattle(opts: CreateBattleOptions): Battle {
         note: `battle ${opts.id} started`,
       },
     ],
+    metadata: opts.metadata
+      ? {
+          ...opts.metadata,
+          partyCharIds: opts.metadata.partyCharIds?.slice(),
+        }
+      : undefined,
     intents: opts.intents ?? {},
+
     startedAtTick: opts.startedAtTick,
     endedAtTick: null,
     deathsReported: [],
@@ -188,9 +210,20 @@ function runActorActionWindow(
       actorId: actor.id,
       note: "no valid plan",
     });
+    ctx.bus.emit("battleActionResolved", {
+      battleId: battle.id,
+      actorId: actor.id,
+      targetIds: [],
+      abilityId: "",
+      magnitudes: [],
+      outcome: "skip",
+      note: "no valid plan",
+      ...battleEventScope(battle),
+    });
     schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
     return;
   }
+
 
   const ability = getAbility(plan.abilityId);
   const energyCost = resolveAbilityEnergyCost(ability, defaultEnergyCost);
@@ -205,13 +238,24 @@ function runActorActionWindow(
   });
 
   if (result.ok) {
+    const targetIds = result.targets.map((t) => t.id);
+    const magnitudes = result.magnitudes.slice();
     battle.log.push({
       tick: ctx.currentTick,
       kind: "action",
       actorId: actor.id,
       abilityId: result.abilityId,
-      targetIds: result.targets.map((t) => t.id),
-      magnitudes: result.magnitudes.slice(),
+      targetIds,
+      magnitudes,
+    });
+    ctx.bus.emit("battleActionResolved", {
+      battleId: battle.id,
+      actorId: actor.id,
+      targetIds,
+      abilityId: result.abilityId,
+      magnitudes,
+      outcome: "action",
+      ...battleEventScope(battle),
     });
     return;
   }
@@ -223,9 +267,20 @@ function runActorActionWindow(
     kind: "skip",
     actorId: actor.id,
     abilityId: plan.abilityId,
-    note: `cast failed: ${result.reason}`,
+    note: result.reason,
+  });
+  ctx.bus.emit("battleActionResolved", {
+    battleId: battle.id,
+    actorId: actor.id,
+    targetIds: plan.targets.map((target) => target.id),
+    abilityId: plan.abilityId,
+    magnitudes: [],
+    outcome: "skip",
+    note: result.reason,
+    ...battleEventScope(battle),
   });
 }
+
 
 function getDefaultEnergyCost(state: SchedulerState): number {
   switch (state.kind) {
@@ -268,8 +323,14 @@ function maybeTerminate(battle: Battle, ctx: TickBattleContext): void {
       kind: "end",
       note: `outcome: ${outcome}`,
     });
+    ctx.bus.emit("battleEnded", {
+      battleId: battle.id,
+      outcome,
+      ...battleEventScope(battle),
+    });
   }
 }
+
 
 function emitNewDeaths(
   battle: Battle,
@@ -290,6 +351,11 @@ function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
     kind: "death",
     actorId: victim.id,
   });
+  ctx.bus.emit("battleActorDied", {
+    battleId: battle.id,
+    victimId: victim.id,
+    ...battleEventScope(battle),
+  });
   // kill event: we don't always know who delivered the final blow cleanly
   // (AoE, DoT). Emit with attackerId = "" for now; callers that care can
   // correlate to the most recent `damage` event.
@@ -301,12 +367,28 @@ function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
   ctx.bus.emit("kill", { attackerId: "", victimId: victim.id });
 }
 
+
 // ---------- Resolution ----------
 
+function battleEventScope(battle: Battle): {
+
+  stageId?: string;
+  locationId?: string;
+  dungeonSessionId?: string;
+} {
+  return {
+    stageId: battle.metadata?.stageId,
+    locationId: battle.metadata?.locationId,
+    dungeonSessionId: battle.metadata?.dungeonSessionId,
+  };
+}
+
 export function resolveParticipants(
+
   battle: Battle,
   state: GameState,
 ): Character[] {
+
   // The order returned MUST be stable across calls because the scheduler uses
   // participant array index as a deterministic tie-break. Preserve
   // participantIds order. Non-character actors (ResourceNode etc) are silently

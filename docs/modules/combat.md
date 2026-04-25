@@ -24,16 +24,20 @@
 ## 核心结构
 
 - `Battle` 是可序列化的纯数据对象，存放在 `state.battles[]` 中
+- `Battle.log` 保留为内部结构化时间线；同时，`Battle.metadata` 提供最小作用域信息，供 battle 摘要事件镜像到统一玩家日志
 - `SchedulerState` 也是纯数据；`nextActor()` 是独立自由函数
 - 每次轮到 actor 行动时，战斗流程会先解析其 `Intent`，再通过 `tryUseAbility` 执行对应动作
+
 
 ## 胜负与奖励
 
 - 胜负由 `tickBattle` 判断
 - `combat` 自己不直接发放奖励，只负责发出战斗相关事件
+- `Battle` 层会镜像发出 `battleActionResolved`、`battleActorDied`、`battleEnded`；`CombatActivity` / `DungeonActivity` 负责在开战时发出 `battleStarted`
 - `kill` 事件会被 listener（如 `CombatActivity`）接收，再通过 `applyEffect(synthesizedInstantEffect)` 发放逐个怪物的击杀奖励
 - 波次奖励不属于 `Battle` 本身；它由 `CombatActivity` 在战斗结束且结果为 `players_won` 时，根据当前 combat zone 的 wave reward 配置统一结算
 - `waveResolved` 事件描述的是波次层面的结算，不是 `Battle` 内部调度的一部分
+
 
 ## 边界
 

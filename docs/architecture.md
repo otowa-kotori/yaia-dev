@@ -21,13 +21,16 @@ Game Core 各模块              负责数据结构与游戏规则
 ```
 
 Store 层只负责订阅与存档，不承载游戏规则。新游戏初始化也属于 session 或更下层的职责。
+统一玩家日志由 `core/infra/game-log/` 通过 typed event bus 收集到 `GameState.gameLog`；Store 只监听 `gameLogAppended` 做刷新与及时持久化，不直接拼日志文案。
 新增游戏指令时，优先加在 `GameSession` 上；UI 直接调用，不需要额外转发层。
+
 
 ## 模块地图
 
 | 分组 | 目录 | 模块 | 职责 | 文档 |
 |---|---|---|---|---|
-| 基础设施 | `infra/` | `tick` `rng` `events` `formula` `state` | 时间、确定性随机、事件总线、命名公式、根状态 | [infrastructure](./modules/infrastructure.md) |
+| 基础设施 | `infra/` | `tick` `rng` `events` `formula` `state` `game-log` | 时间、确定性随机、事件总线、命名公式、根状态、统一玩家日志收集 | [infrastructure](./modules/infrastructure.md) |
+
 | 内容 | — | `content` | 静态定义注册表与 ID 命名空间 | [content](./modules/content.md) |
 | 实体 | `entity/` | `actor` `attribute` | Actor 层级、工厂、ATTR 常量与 modifier 堆叠 | [actor](./modules/actor.md) · [attribute](./modules/attribute.md) |
 | 物品 | — | `item` `inventory` | `GearInstance` 创建与固定位置网格背包 | [item-inventory](./modules/item-inventory.md) |
@@ -64,7 +67,8 @@ UI → Store → GameSession → Core 各模块
 ## 启动流程
 
 1. UI 调用 `createGameStore({ content })`，内部创建 `GameSession`。
-2. Store 挂载 `__ui_notifier` Tickable 与 bus 监听，用于 revision bump 和存档调度。
+2. Store 挂载 `__ui_notifier` Tickable 与 bus 监听，用于 revision bump 和存档调度；其中 `gameLogAppended` 会立即触发 UI 刷新与及时持久化。
 3. 自动加载时：如果已有存档，则调用 `session.loadFromSave`；否则调用 `session.resetToFresh`，并读取 `ContentDb.starting` 初始化新游戏。
+
 
 新游戏初始化完全由内容配置驱动：起始英雄与初始 location 都写在 `ContentDb.starting` 中。未配置时直接抛出异常，不做兜底。

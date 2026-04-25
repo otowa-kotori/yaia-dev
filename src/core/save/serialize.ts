@@ -20,6 +20,7 @@
 // ./migrations.ts.
 
 import type { GameState } from "../infra/state/types";
+import { assertGameLogEntries } from "../infra/game-log";
 import { isCharacter, isEnemy, isPlayer, rebuildCharacterDerived } from "../entity/actor";
 import type { AttrDef } from "../content/types";
 import { getMonster } from "../content/registry";
@@ -94,8 +95,10 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
 
   const state = data as unknown as GameState;
   state.version = SAVE_VERSION;
+  assertGameLogEntries(state.gameLog);
 
   // Rebuild derived state on every character. Non-character actors pass
+
   // through untouched.
   for (const a of state.actors) {
     if (isEnemy(a)) {

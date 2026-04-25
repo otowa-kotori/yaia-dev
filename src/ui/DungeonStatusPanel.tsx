@@ -8,10 +8,11 @@ import type { Actor, Character, PlayerCharacter } from "../core/entity/actor";
 import { getAttr, isEnemy, isPlayer } from "../core/entity/actor";
 import { ACTIVITY_DUNGEON_KIND, type DungeonPhase } from "../core/world/activity";
 import { ATTR } from "../core/entity/attribute";
-import type { Battle } from "../core/combat/battle/battle";
 import { getContent } from "../core/content";
 import type { DungeonSession } from "../core/infra/state";
+import type { GameLogEntry } from "../core/infra/game-log";
 import type { StageSession } from "../core/world/stage/types";
+
 import { buildDefaultContent } from "../content";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import type { GameStore } from "./store";
@@ -38,8 +39,9 @@ export function DungeonStatusPanel({
   const phase = inferDungeonPhase(session, stage, party);
   const phaseLabel = getDungeonPhaseLabel(phase);
   const enemies = getDungeonEnemies(store, stage);
-  const activeBattle = getActiveDungeonBattle(store, session);
+  const localLog = getDungeonLogEntries(store.state.gameLog, dungeonSessionId, session.stageId);
   const totalWaves = dungeon?.waves.length ?? Math.max(1, session.currentWaveIndex + 1);
+
 
   const currentWave = Math.min(totalWaves, session.currentWaveIndex + 1);
 
@@ -84,10 +86,11 @@ export function DungeonStatusPanel({
 
       <Section title={T.activityLogTitle}>
         <ActivityLogPanel
-          log={activeBattle?.log ?? []}
+          entries={localLog}
           emptyMessage={T.dungeonNoLog}
         />
       </Section>
+
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
 
@@ -143,21 +146,19 @@ function getDungeonEnemies(store: GameStore, stage: StageSession | null): Charac
     .filter((actor): actor is Character => actor !== undefined && isEnemy(actor));
 }
 
-function getActiveDungeonBattle(
-  store: GameStore,
-  session: DungeonSession,
-): Battle | null {
-  const partyIds = new Set(session.partyCharIds);
-  return (
-    store.state.battles.find(
-      (battle) =>
-        battle.outcome === "ongoing" &&
-        battle.participantIds.some((participantId) => partyIds.has(participantId)),
-    ) ?? null
+function getDungeonLogEntries(
+  entries: readonly GameLogEntry[],
+  dungeonSessionId: string,
+  stageId: string,
+): GameLogEntry[] {
+  return entries.filter(
+    (entry) =>
+      entry.scope.dungeonSessionId === dungeonSessionId || entry.scope.stageId === stageId,
   );
 }
 
 function inferDungeonPhase(
+
 
   session: DungeonSession,
   stage: StageSession | null,

@@ -15,13 +15,15 @@ import type { EffectDef, AttrDef, ItemId } from "../../content/types";
 import { getEffect, getItem, getSkill } from "../../content/registry";
 import { evalFormula, type FormulaContext } from "../../infra/formula";
 import type { Rng } from "../../infra/rng";
-import type { GameEventBus } from "../../infra/events";
+import type { CurrencyChangeSource, GameEventBus } from "../../infra/events";
+
 import type { ActiveEffect, GameState } from "../../infra/state/types";
 import type { Character, PlayerCharacter } from "../../entity/actor";
 import { getAttr, isPlayer, rebuildCharacterDerived } from "../../entity/actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../../entity/attribute";
 import { grantCharacterXp, grantSkillXp } from "../../growth/leveling";
-import { addStack, addGear, type AddStackResult, type AddGearResult } from "../../inventory";
+import { addStack, addGear } from "../../inventory";
+
 import { getInventoryStackLimit } from "../../inventory/stack-limit";
 import { createGearInstance } from "../../item";
 import type { PendingLootEntry } from "../../world/stage/types";
@@ -33,7 +35,10 @@ export interface EffectContext {
   attrDefs: Readonly<Record<string, AttrDef>>;
   /** Current logic tick; used to timestamp applied-at markers and compute cooldown/expiry. */
   currentTick: number;
+  /** Optional semantic source for emitted currency change events. */
+  currencyChangeSource?: CurrencyChangeSource;
 }
+
 
 /**
  * Apply an effect from `source` onto `target`. Returns the resulting magnitude
@@ -114,8 +119,17 @@ function applyInstantPulse(
     });
   } else if (mode === "heal" && magnitude > 0) {
     const maxHp = getAttr(target, ATTR.MAX_HP, ctx.attrDefs);
-    target.currentHp = Math.min(maxHp, target.currentHp + magnitude);
+    const healedAmount = Math.max(0, Math.min(maxHp, target.currentHp + magnitude) - target.currentHp);
+    target.currentHp += healedAmount;
+    if (healedAmount > 0) {
+      ctx.bus.emit("heal", {
+        sourceId: source.id,
+        targetId: target.id,
+        amount: healedAmount,
+      });
+    }
   }
+
 
   if (effect.rewards) applyRewards(effect, target, ctx);
   return magnitude;
@@ -132,13 +146,21 @@ function applyRewards(
   if (!isPlayer(target)) return; // Monsters don't collect rewards.
   const charId = target.id;
   const pc = target as PlayerCharacter;
+  const scope = playerLogScope(pc);
 
   if (rewards.items?.length) {
     for (const { itemId, qty } of rewards.items) {
       addItemToInventory(ctx, charId, itemId, qty);
-      ctx.bus.emit("loot", { charId, itemId, qty });
+      ctx.bus.emit("loot", {
+        charId,
+        itemId,
+        qty,
+        stageId: scope.stageId,
+        dungeonSessionId: scope.dungeonSessionId,
+      });
     }
   }
+
 
   if (rewards.xp?.length) {
     for (const { skillId, amount } of rewards.xp) {
@@ -155,16 +177,24 @@ function applyRewards(
     }
   }
 
-  // Currency rewards are written directly to state.currencies.
-  // No event emitted — the store's per-tick notify() covers UI updates.
   if (rewards.currencies) {
     for (const [currId, amount] of Object.entries(rewards.currencies)) {
-      if (amount > 0) {
-        ctx.state.currencies[currId] = (ctx.state.currencies[currId] ?? 0) + amount;
-      }
+      if (amount === 0) continue;
+      const nextTotal = (ctx.state.currencies[currId] ?? 0) + amount;
+      ctx.state.currencies[currId] = nextTotal;
+      ctx.bus.emit("currencyChanged", {
+        currencyId: currId,
+        amount,
+        total: nextTotal,
+        source: ctx.currencyChangeSource ?? "other",
+        charId,
+        stageId: scope.stageId,
+        dungeonSessionId: scope.dungeonSessionId,
+      });
     }
   }
 }
+
 
 // Dispatch into the per-item-class inventory API:
 //   - stackable items merge into an existing stack or claim a new slot.
@@ -223,8 +253,10 @@ function pushToPendingLoot(
   const hero = ctx.state.actors.find((a) => a.id === charId);
   if (!hero || !isPlayer(hero)) return;
   const stageId = hero.stageId;
-  const session = stageId ? ctx.state.stages[stageId] : undefined;
+  if (!stageId) return;
+  const session = ctx.state.stages[stageId];
   if (!session) return;
+
 
   if (entry.kind === "stack") {
     const existing = session.pendingLoot.find(
@@ -236,11 +268,34 @@ function pushToPendingLoot(
     } else {
       session.pendingLoot.push(entry);
     }
+    ctx.bus.emit("pendingLootOverflowed", {
+      charId,
+      stageId,
+      itemId: entry.itemId,
+      qty: entry.qty,
+    });
   } else {
     session.pendingLoot.push(entry);
+    ctx.bus.emit("pendingLootOverflowed", {
+      charId,
+      stageId,
+      itemId: entry.instance.itemId,
+      qty: 1,
+    });
   }
 
-  ctx.bus.emit("pendingLootChanged", { charId, stageId: stageId! });
+  ctx.bus.emit("pendingLootChanged", { charId, stageId });
+}
+
+
+function playerLogScope(hero: PlayerCharacter): {
+  stageId?: string;
+  dungeonSessionId?: string;
+} {
+  return {
+    stageId: hero.stageId ?? undefined,
+    dungeonSessionId: hero.dungeonSessionId ?? undefined,
+  };
 }
 
 function buildFormulaContext(
@@ -248,6 +303,7 @@ function buildFormulaContext(
   target: Character,
   attrDefs: Readonly<Record<string, AttrDef>>,
 ): FormulaContext {
+
   // Variables available to formulas. Names here are part of the FORMULA
   // DATA CONTRACT — designers reference them by string in content JSON
   // (e.g. `{ kind: "linear", xVar: "target_def" }`). Treat these names as

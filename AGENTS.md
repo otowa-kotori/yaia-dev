@@ -38,7 +38,7 @@ Project-specific conventions for Claude. Read before editing code.
 - All gameplay RNG flows through `ctx.rng`. No `Math.random()` in core.
 - Battles / scheduler state / intent state must be JSON-safe (plain data) so `GameState` can round-trip through a save file.
 - For type narrowing, prefer shared type guards like `isPlayer()` instead of direct checks such as `actor.kind === "player"` when a guard already exists.
-- Persisted actor fields: currentHp, currentMp, activeEffects, cooldowns, attrs.base, per-kind source fields (level/exp/equipped/talents/knownAbilities/xpCurve/skills for PlayerCharacter; defId for Enemy). Derived fields (attrs.modifiers, attrs.cache, runtime abilities list) are rebuilt on load.
+- Persisted actor fields: currentHp, currentMp, activeEffects, cooldowns, attrs.base, per-kind source fields (level/exp/equipped/talents/knownAbilities/xpCurve/skills/heroConfigId for PlayerCharacter; defId for Enemy). Derived fields (attrs.modifiers, attrs.cache, attrs.dynamicProviders, runtime abilities list) are rebuilt on load. growth/physScaling/magScaling are content-layer fields on HeroConfig/MonsterDef, NOT persisted on the actor.
 - Content IDs are dot-namespaced (`ability.fire.fireball`, `item.ore.copper`). Coin the ID once; renaming later costs a migration.
 
 ## Text

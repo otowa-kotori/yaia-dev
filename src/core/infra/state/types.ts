@@ -18,6 +18,7 @@ import {
   DEFAULT_SHARED_STACK_LIMIT,
   createInventory,
 } from "../../inventory";
+import type { GameLogEntry } from "../game-log";
 
 // ---------- Active effects ----------
 
@@ -146,6 +147,8 @@ export interface GameState {
   /** Shared inventory stack limit. null means unlimited stacking. */
   sharedInventoryStackLimit: number | null;
   worldActivities: WorldActivityState[];
+  /** Recent player-facing log history. Fixed-size tail buffer. */
+  gameLog: GameLogEntry[];
   /** Generic counters / unlock flags / quest progress. */
   flags: Record<string, number>;
   /** Accumulated currencies (gold, gems, …). key = currency id string.
@@ -182,6 +185,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     },
     sharedInventoryStackLimit: DEFAULT_SHARED_STACK_LIMIT,
     worldActivities: [],
+    gameLog: [],
     flags: {},
     currencies: {},
     worldRecord: { upgrades: {} },

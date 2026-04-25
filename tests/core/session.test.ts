@@ -225,6 +225,24 @@ describe("GameSession location flow", () => {
     ).toBe(true);
   });
 
+  test("purchaseUpgrade is routed through session and appends player-facing logs", () => {
+    const { session } = createDefaultSession();
+    session.state.currencies["currency.gold"] = 1000;
+
+    session.purchaseUpgrade("upgrade.combat.atk");
+
+    expect(session.state.worldRecord.upgrades["upgrade.combat.atk"]).toBe(1);
+    expect(
+      session.state.gameLog.some((entry) =>
+        entry.text.includes("购买了全局升级“") && entry.text.includes("Lv.1"),
+      ),
+    ).toBe(true);
+
+    expect(
+      session.state.gameLog.some((entry) => entry.text.includes("升级购买")),
+    ).toBe(true);
+  });
+
   test("multiple heroes can exist and be focused independently", () => {
     const { session } = createDefaultSession();
     const heroes = session.listHeroes();
@@ -240,3 +258,4 @@ describe("GameSession location flow", () => {
     expect(cc2.hero.name).toBe("游侠");
   });
 });
+

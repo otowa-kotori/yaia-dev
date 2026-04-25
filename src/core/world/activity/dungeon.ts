@@ -453,6 +453,10 @@ function openPartyBattle(
   for (const h of heroes) intents[h.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
 
+  if (!session.currentWave) {
+    throw new Error(`dungeon.openPartyBattle: stage "${ds.stageId}" has enemies but no active wave`);
+  }
+
   const battleId = mintBattleId(ctx.state);
   const battle = createBattle({
     id: battleId,
@@ -460,13 +464,36 @@ function openPartyBattle(
     participantIds: [...heroes.map((h) => h.id), ...enemies.map((e) => e.id)],
     startedAtTick: ctx.currentTick,
     intents,
+    metadata: {
+      stageId: ds.stageId,
+      locationId: session.locationId,
+      dungeonSessionId: activity.dungeonSessionId,
+      dungeonId: ds.dungeonId,
+      combatZoneId: session.currentWave.combatZoneId,
+      waveId: session.currentWave.waveId,
+      waveIndex: session.currentWave.waveIndex,
+      partyCharIds: ds.partyCharIds.slice(),
+    },
   });
   ctx.state.battles.push(battle);
   activity.currentBattleId = battle.id;
   activity.phase = "fighting";
   activity.transitionTick = ctx.currentTick;
   syncDungeonToState(activity, ds);
+  ctx.bus.emit("battleStarted", {
+    battleId: battle.id,
+    stageId: ds.stageId,
+    locationId: session.locationId,
+    participantIds: battle.participantIds.slice(),
+    partyCharIds: ds.partyCharIds.slice(),
+    combatZoneId: session.currentWave.combatZoneId,
+    waveId: session.currentWave.waveId,
+    waveIndex: session.currentWave.waveIndex,
+    dungeonSessionId: activity.dungeonSessionId,
+    dungeonId: ds.dungeonId,
+  });
 }
+
 
 function findBattle(
   activity: DungeonActivity,
@@ -514,9 +541,11 @@ function onParticipantKilled(
     rng: ctx.rng,
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
+    currencyChangeSource: "kill_reward",
   };
 
   // Grant kill rewards split across living party members.
+
   const heroes = getPartyHeroes(ds, ctx.state);
   const living = heroes.filter((h) => h.currentHp > 0);
   if (living.length === 0) return;
@@ -559,9 +588,11 @@ function grantDungeonWaveRewards(
     rng: ctx.rng,
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
+    currencyChangeSource: "dungeon_reward",
   };
 
   // Items: roll once, give to a random living hero.
+
   const items: { itemId: ItemId; qty: number }[] = [];
   for (const drop of rewards.drops ?? []) {
     if (!ctx.rng.chance(drop.chance)) continue;

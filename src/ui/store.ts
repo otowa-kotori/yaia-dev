@@ -21,8 +21,7 @@ import {
   serialize,
   type SaveAdapter,
 } from "../core/save";
-import { purchaseUpgrade as purchaseUpgradeImpl, type UpgradePurchaseContext } from "../core/growth/upgrade-manager";
-import { isPlayer, rebuildCharacterDerived } from "../core/entity/actor";
+
 
 const SAVE_KEY = "yaia:save";
 const AUTOSAVE_INTERVAL_MS = 10_000;
@@ -37,11 +36,9 @@ export interface GameStore extends GameSession {
   getRevision(): number;
   /** Delete the save and reboot the session to content.starting. */
   clearSaveAndReset(): Promise<void>;
-  /** Purchase the next level of an upgrade. No-op on funded failure.
-   *  Kept here (not on GameSession) because the upgrade-manager lives in
-   *  its own module and is already a pure state transaction; the store
-   *  just glues in notify + persistSoon. */
+  /** Purchase the next level of an upgrade. Implemented by the underlying session. */
   purchaseUpgrade(upgradeId: string): void;
+
   /** Currently held upgrade ids, for UI listing. Thin pass-through —
    *  future UI may read directly from content. */
   listLocationIds(): string[];
@@ -147,10 +144,15 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   });
   bus.on("loot", notify);
   bus.on("pendingLootChanged", notify);
+  bus.on("gameLogAppended", () => {
+    notify();
+    persistSoon();
+  });
   bus.on("inventoryChanged", () => {
     notify();
     persistSoon();
   });
+
   bus.on("equipmentChanged", () => {
     notify();
     persistSoon();
@@ -321,24 +323,10 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     getCurrencies: () => session.state.currencies,
     getWorldRecord: () => session.state.worldRecord,
     purchaseUpgrade(upgradeId: string) {
-      const ctx: UpgradePurchaseContext = {
-        state: session.state,
-        content: opts.content,
-        attrDefs,
-      };
-      const result = purchaseUpgradeImpl(upgradeId, ctx);
-      if (result.success) {
-        // Rebuild derived attrs for ALL heroes (world upgrades affect everyone).
-        for (const actor of session.state.actors) {
-          if (isPlayer(actor)) {
-            rebuildCharacterDerived(actor, attrDefs, session.state.worldRecord);
-          }
-        }
-        notify();
-        persistSoon();
-      }
+      session.purchaseUpgrade(upgradeId);
     },
     debugSimulateCatchUp(hours: number) {
+
       if (catchUpRunning) return; // one at a time
       const ticks = Math.min(
         Math.round((hours * 3_600_000) / TICK_MS),

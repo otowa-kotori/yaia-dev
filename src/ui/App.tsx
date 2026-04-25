@@ -23,6 +23,7 @@ import { InventoryView } from "./InventoryView";
 import { CraftingView } from "./CraftingView";
 import { XpOverview } from "./XpOverview";
 import { UpgradesView } from "./UpgradesView";
+import { ActivityLogPanel } from "./ActivityLogPanel";
 import { useStore } from "./useStore";
 import { T, fmt } from "./text";
 import {
@@ -46,10 +47,11 @@ const containerStyle: React.CSSProperties = {
 
 // ---------- Tab definitions ----------
 
-type TabId = "map" | "inventory" | "crafting" | "xp" | "upgrades" | "settings";
+type TabId = "map" | "log" | "inventory" | "crafting" | "xp" | "upgrades" | "settings";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "map",       label: T.tab_map },
+  { id: "log",       label: T.tab_log },
   { id: "inventory", label: T.tab_inventory },
   { id: "crafting",  label: T.tab_crafting },
   { id: "xp",        label: T.tab_xp },
@@ -247,6 +249,8 @@ function TabPanel({
   switch (activeTab) {
     case "map":
       return <MapTab store={store} />;
+    case "log":
+      return <LogTab store={store} />;
     case "inventory":
       return <InventoryView store={store} />;
     case "crafting":
@@ -268,6 +272,22 @@ function MapTab({ store }: { store: GameStore }) {
       <LocationSelector store={store} />
       <Controls store={store} />
       <BattleView store={store} />
+    </div>
+  );
+}
+
+function LogTab({ store }: { store: GameStore }) {
+  const { store: s } = useStore(store);
+  return (
+    <div style={{ background: "#222", borderRadius: 6, padding: 12, border: "1px solid #333" }}>
+      <div style={{ fontSize: 11, opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.4 }}>
+        {T.gameLogTitle}
+      </div>
+      <ActivityLogPanel
+        entries={s.state.gameLog}
+        emptyMessage={T.gameLogEmpty}
+        limit={40}
+      />
     </div>
   );
 }

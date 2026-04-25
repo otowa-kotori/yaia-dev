@@ -7,12 +7,12 @@
 // - Rebuild character-derived attributes after purchase
 //
 // All operations are pure transactions on the provided GameState; no side effects
-// beyond mutation. The caller owns persistence and UI notification.
+// beyond mutation. The caller owns persistence, event emission, and UI notification.
 
 import { upgradeCost } from "../worldrecord";
 import { isPlayer, rebuildCharacterDerived } from "../../entity/actor";
-import type { GameState, WorldRecord } from "../../infra/state/types";
-import type { ContentDb, UpgradeDef, AttrDef } from "../../content/types";
+import type { GameState } from "../../infra/state/types";
+import type { ContentDb, AttrDef } from "../../content/types";
 
 export interface UpgradePurchaseContext {
   state: GameState;
@@ -20,17 +20,23 @@ export interface UpgradePurchaseContext {
   attrDefs: Readonly<Record<string, AttrDef>>;
 }
 
-export interface UpgradePurchaseResult {
-  success: boolean;
-  reason?: string; // "unknown" | "already_maxed" | "insufficient_funds"
-}
+export type UpgradePurchaseResult =
+  | {
+      success: true;
+      level: number;
+      cost: number;
+      costCurrency: string;
+    }
+  | {
+      success: false;
+      reason: "unknown" | "already_maxed" | "insufficient_funds";
+    };
 
 /** Attempt to purchase the next level of an upgrade.
- *  
- *  Returns { success: true } on successful purchase, with state mutated.
- *  Returns { success: false, reason } if the purchase cannot proceed (no-op on state).
- *  
- *  Caller must call persistNow() and notify() after checking success. */
+ *
+ * Returns structured purchase details on success so outer command layers can
+ * emit logs / analytics without re-deriving what just happened.
+ */
 export function purchaseUpgrade(
   upgradeId: string,
   ctx: UpgradePurchaseContext,
@@ -62,16 +68,22 @@ export function purchaseUpgrade(
 
   // All checks passed; mutate state.
   ctx.state.currencies[def.costCurrency] = balance - cost;
-  ctx.state.worldRecord.upgrades[upgradeId] = currentLevel + 1;
+  const nextLevel = currentLevel + 1;
+  ctx.state.worldRecord.upgrades[upgradeId] = nextLevel;
 
   // Rebuild derived state for every PlayerCharacter so world modifiers take effect.
-  for (const a of ctx.state.actors) {
-    if (isPlayer(a)) {
-      rebuildCharacterDerived(a, ctx.attrDefs, ctx.state.worldRecord);
+  for (const actor of ctx.state.actors) {
+    if (isPlayer(actor)) {
+      rebuildCharacterDerived(actor, ctx.attrDefs, ctx.state.worldRecord);
     }
   }
 
-  return { success: true };
+  return {
+    success: true,
+    level: nextLevel,
+    cost,
+    costCurrency: def.costCurrency,
+  };
 }
 
 /** Query the next upgrade level's cost without mutation.

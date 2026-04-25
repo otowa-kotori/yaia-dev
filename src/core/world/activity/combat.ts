@@ -251,11 +251,14 @@ function stepFighting(
     ctx.bus.emit("waveResolved", {
       charId: activity.partyCharIds[0] ?? "",
       locationId: session.locationId,
+      stageId: activity.stageId,
+      battleId: battle.id,
       combatZoneId: session.currentWave.combatZoneId,
       waveId: session.currentWave.waveId,
       waveIndex: session.currentWave.waveIndex,
       outcome: resolvedOutcome,
     });
+
   }
 
   activity.currentBattleId = null;
@@ -319,6 +322,11 @@ function openBattle(
   const heroes = getPartyHeroes(activity, ctx.state);
   if (heroes.length === 0) return;
 
+  const session = ctx.state.stages[activity.stageId];
+  if (!session?.currentWave) {
+    throw new Error(`combat.openBattle: stage "${activity.stageId}" has enemies but no active wave`);
+  }
+
   const intents: Record<string, string> = {};
   for (const h of heroes) intents[h.id] = INTENT.RANDOM_ATTACK;
   for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
@@ -330,13 +338,32 @@ function openBattle(
     participantIds: [...heroes.map((h) => h.id), ...enemies.map((e) => e.id)],
     startedAtTick: ctx.currentTick,
     intents,
+    metadata: {
+      stageId: activity.stageId,
+      locationId: session.locationId,
+      combatZoneId: session.currentWave.combatZoneId,
+      waveId: session.currentWave.waveId,
+      waveIndex: session.currentWave.waveIndex,
+      partyCharIds: activity.partyCharIds.slice(),
+    },
   });
   ctx.state.battles.push(battle);
   activity.currentBattleId = battle.id;
   activity.phase = "fighting";
   activity.lastTransitionTick = ctx.currentTick;
   syncCombatToHeroes(activity, ctx.state);
+  ctx.bus.emit("battleStarted", {
+    battleId: battle.id,
+    stageId: activity.stageId,
+    locationId: session.locationId,
+    participantIds: battle.participantIds.slice(),
+    partyCharIds: activity.partyCharIds.slice(),
+    combatZoneId: session.currentWave.combatZoneId,
+    waveId: session.currentWave.waveId,
+    waveIndex: session.currentWave.waveIndex,
+  });
 }
+
 
 function removeBattle(state: GameState, battleId: string): void {
   state.battles = state.battles.filter((b) => b.id !== battleId);
@@ -373,9 +400,11 @@ function onParticipantKilled(
     rng: ctx.rng,
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
+    currencyChangeSource: "kill_reward",
   };
 
   // Grant kill rewards split across living party members.
+
   // XP and currency are divided by headcount; each hero gets their share.
   const heroes = getPartyHeroes(activity, ctx.state);
   const living = heroes.filter((h) => h.currentHp > 0);
@@ -426,9 +455,11 @@ function grantWaveRewards(
     rng: ctx.rng,
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
+    currencyChangeSource: "wave_reward",
   };
 
   // Items: roll once, give to a random living hero.
+
   const items: { itemId: ItemId; qty: number }[] = [];
   for (const drop of wave.rewards.drops ?? []) {
     if (!ctx.rng.chance(drop.chance)) continue;

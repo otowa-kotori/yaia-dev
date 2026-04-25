@@ -30,7 +30,31 @@ describe("save / serialize+deserialize", () => {
     expect(restored.battles).toEqual([]);
   });
 
+  test("round-trips player-facing game log entries", () => {
+    const state = createEmptyState(123, 1);
+    state.gameLog.push({
+      tick: 12,
+      category: "economy",
+      text: "购买了全局升级“战士训练” Lv.1，消耗 100 金币。",
+      scope: {},
+    });
+
+    const raw = serialize(state);
+    const restored = deserialize(raw, { attrDefs });
+
+    expect(restored.gameLog).toEqual(state.gameLog);
+  });
+
+  test("throws when gameLog field is missing", () => {
+    const state = createEmptyState(123, 1);
+    const payload = JSON.parse(serialize(state)) as { version: number; state: Record<string, unknown> };
+    delete payload.state.gameLog;
+
+    expect(() => deserialize(JSON.stringify(payload), { attrDefs })).toThrow();
+  });
+
   test("round-trips PC level / exp / currentHp / xpCurve", () => {
+
     const state = createEmptyState(42, 1);
     const hero = makePlayer({
       id: "hero.1",

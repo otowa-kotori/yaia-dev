@@ -62,8 +62,12 @@ describe("UpgradeManager", () => {
     test("fails for unknown upgrade", () => {
       const result = purchaseUpgrade("upgrade.unknown", ctx);
       expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("expected purchase to fail for unknown upgrade");
+      }
       expect(result.reason).toBe("unknown");
     });
+
 
     test("succeeds and mutates state on valid purchase", () => {
       const result = purchaseUpgrade("upgrade.atk_boost", ctx);
@@ -76,15 +80,23 @@ describe("UpgradeManager", () => {
       state.worldRecord.upgrades["upgrade.atk_boost"] = 5;
       const result = purchaseUpgrade("upgrade.atk_boost", ctx);
       expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("expected purchase to fail when upgrade is already maxed");
+      }
       expect(result.reason).toBe("already_maxed");
     });
+
 
     test("fails when insufficient funds", () => {
       state.currencies["currency.gold"] = 10;
       const result = purchaseUpgrade("upgrade.atk_boost", ctx);
       expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("expected purchase to fail when funds are insufficient");
+      }
       expect(result.reason).toBe("insufficient_funds");
     });
+
 
     test("deducts correct currency amount", () => {
       const cost = getUpgradeCost("upgrade.atk_boost", ctx);
