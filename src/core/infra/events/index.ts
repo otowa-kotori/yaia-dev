@@ -176,6 +176,7 @@ export type GameEvents = {
     costCurrency: string;
     cost: number;
   };
+  talentAllocated: { charId: string; talentId: string; newLevel: number };
   waveResolved: {
     charId: string;
     locationId: string;

@@ -3,8 +3,8 @@
 
 import { ATTR } from "../core/entity/attribute";
 import type {
-  AbilityDef,
-  AbilityId,
+  TalentDef,
+  TalentId,
   AttrDef,
   ContentDb,
   EffectDef,
@@ -31,6 +31,8 @@ import type {
 import { emptyContentDb } from "../core/content";
 import type { FormulaRef } from "../core/infra/formula";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
+import { monsterBasicAttack, monsterMagicAttack } from "./behaviors/talents/monster";
+import { knightPowerStrike } from "./behaviors/talents/knight";
 
 // ---------- Currency IDs ----------
 
@@ -202,20 +204,36 @@ export const magicStrikeEffect: EffectDef = {
   formula: { kind: "magic_damage_v1" },
 };
 
-// ---------- Abilities ----------
+// ---------- Talents ----------
 
-export const basicAttack: AbilityDef = {
-  id: "ability.basic.attack" as AbilityId,
+export const basicAttackTalent: TalentDef = {
+  id: "talent.basic.attack" as TalentId,
   name: "攻击",
-  targetKind: "single_enemy",
+  type: "active",
+  maxLevel: 1,
+  tpCost: 0,
+  getActiveParams: () => ({
+    mpCost: 0,
+    cooldownActions: 0,
+    energyCost: 1000,
+    targetKind: "single_enemy" as const,
+  }),
   effects: [strikeEffect.id],
 };
 
-/** 魔法基础攻击——法师/圣女专用。 */
-export const magicBasicAttack: AbilityDef = {
-  id: "ability.basic.magic_attack" as AbilityId,
+/** 魔法基础攻击——法师/圣女平A使用。 */
+export const magicBasicAttackTalent: TalentDef = {
+  id: "talent.basic.magic_attack" as TalentId,
   name: "魔法攻击",
-  targetKind: "single_enemy",
+  type: "active",
+  maxLevel: 1,
+  tpCost: 0,
+  getActiveParams: () => ({
+    mpCost: 0,
+    cooldownActions: 0,
+    energyCost: 1000,
+    targetKind: "single_enemy" as const,
+  }),
   effects: [magicStrikeEffect.id],
 };
 
@@ -232,7 +250,7 @@ export const slime: MonsterDef = {
     [ATTR.PDEF]: 1,         // 原 DEF
     [ATTR.SPEED]: 12,       // very slow — acts roughly every 84 ticks (8.4 s)
   },
-  abilities: [basicAttack.id],
+  talents: [basicAttackTalent.id],
   drops: [],
   xpReward: 10,
   currencyReward: { [CURRENCY_GOLD]: 5 },
@@ -249,7 +267,7 @@ export const goblin: MonsterDef = {
     [ATTR.PDEF]: 0,
     [ATTR.SPEED]: 32,       // medium — acts roughly every 32 ticks (3.2 s)
   },
-  abilities: [basicAttack.id],
+  talents: [basicAttackTalent.id],
   drops: [],
   xpReward: 14,
   currencyReward: { [CURRENCY_GOLD]: 7 },
@@ -267,7 +285,7 @@ export const caveBat: MonsterDef = {
     [ATTR.PDEF]: 0,
     [ATTR.SPEED]: 72,       // nearly 2x player speed — acts roughly every 14 ticks (1.4 s)
   },
-  abilities: [basicAttack.id],
+  talents: [basicAttackTalent.id],
   drops: [],
   xpReward: 12,
   currencyReward: { [CURRENCY_GOLD]: 6 },
@@ -622,9 +640,12 @@ export function buildDefaultContent(): ContentDb {
       [strikeEffect.id]: strikeEffect,
       [magicStrikeEffect.id]: magicStrikeEffect,
     },
-    abilities: {
-      [basicAttack.id]: basicAttack,
-      [magicBasicAttack.id]: magicBasicAttack,
+    talents: {
+      [basicAttackTalent.id]: basicAttackTalent,
+      [magicBasicAttackTalent.id]: magicBasicAttackTalent,
+      [monsterBasicAttack.id]: monsterBasicAttack,
+      [monsterMagicAttack.id]: monsterMagicAttack,
+      [knightPowerStrike.id]: knightPowerStrike,
     },
     monsters: {
       [slime.id]: slime,
@@ -671,7 +692,8 @@ export function buildDefaultContent(): ContentDb {
           id: "hero.knight",
           name: "骑士",
           xpCurve: defaultCharXpCurve,
-          knownAbilities: [basicAttack.id],
+          knownTalents: [basicAttackTalent.id],
+          availableTalents: [knightPowerStrike.id],
           startingItems: [{ itemId: trainingSword.id, qty: 1 }],
           baseAttrs: {
             [ATTR.MAX_HP]: 180,
@@ -695,7 +717,7 @@ export function buildDefaultContent(): ContentDb {
           id: "hero.ranger",
           name: "游侠",
           xpCurve: defaultCharXpCurve,
-          knownAbilities: [basicAttack.id],
+          knownTalents: [basicAttackTalent.id],
           startingItems: [{ itemId: trainingBow.id, qty: 1 }],
           baseAttrs: {
             [ATTR.MAX_HP]: 120,
@@ -720,7 +742,7 @@ export function buildDefaultContent(): ContentDb {
           id: "hero.mage",
           name: "法师",
           xpCurve: defaultCharXpCurve,
-          knownAbilities: [magicBasicAttack.id],
+          knownTalents: [magicBasicAttackTalent.id],
           startingItems: [{ itemId: trainingStaff.id, qty: 1 }],
           baseAttrs: {
             [ATTR.MAX_HP]: 90,
@@ -746,7 +768,7 @@ export function buildDefaultContent(): ContentDb {
           id: "hero.cleric",
           name: "圣女",
           xpCurve: defaultCharXpCurve,
-          knownAbilities: [magicBasicAttack.id],
+          knownTalents: [magicBasicAttackTalent.id],
           startingItems: [{ itemId: trainingScepter.id, qty: 1 }],
           baseAttrs: {
             [ATTR.MAX_HP]: 110,

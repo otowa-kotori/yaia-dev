@@ -1,8 +1,8 @@
 import { ATTR } from "../../src/core/entity/attribute";
 import { emptyContentDb, setContent, type ContentDb } from "../../src/core/content";
 import type {
-  AbilityDef,
-  AbilityId,
+  TalentDef,
+  TalentId,
   AttrDef,
   AttrId,
   EffectDef,
@@ -98,8 +98,8 @@ export const basicStrikeEffect: EffectDef = {
 export const burnDotEffect: EffectDef = {
   id: "effect.combat.burn" as EffectId,
   kind: "periodic",
-  durationTicks: 6,
-  periodTicks: 2,
+  durationActions: 6,
+  periodActions: 2,
   magnitudeMode: "damage",
   formula: { kind: "constant", value: 3 },
 };
@@ -107,34 +107,56 @@ export const burnDotEffect: EffectDef = {
 export const shieldBuffEffect: EffectDef = {
   id: "effect.buff.shield" as EffectId,
   kind: "duration",
-  durationTicks: 10,
+  durationActions: 10,
   modifiers: [
     { stat: ATTR.PDEF, op: "flat", value: 5, sourceId: "" },
   ],
 };
 
-// ---------- Common fixture abilities ----------
+// ---------- Common fixture talents ----------
 
-export const basicAttackAbility: AbilityDef = {
-  id: "ability.basic.attack" as AbilityId,
+export const basicAttackTalent: TalentDef = {
+  id: "talent.basic.attack" as TalentId,
   name: "Attack",
-  targetKind: "single_enemy",
+  type: "active",
+  maxLevel: 1,
+  tpCost: 0,
+  getActiveParams: () => ({
+    mpCost: 0,
+    cooldownActions: 0,
+    energyCost: 1000,
+    targetKind: "single_enemy" as const,
+  }),
   effects: [basicStrikeEffect.id],
 };
 
-export const fireballAbility: AbilityDef = {
-  id: "ability.fire.fireball" as AbilityId,
+export const fireballTalent: TalentDef = {
+  id: "talent.fire.fireball" as TalentId,
   name: "Fireball",
-  cost: { mp: 5 },
-  cooldownTicks: 20,
-  targetKind: "single_enemy",
+  type: "active",
+  maxLevel: 1,
+  tpCost: 0,
+  getActiveParams: () => ({
+    mpCost: 5,
+    cooldownActions: 3,
+    energyCost: 1000,
+    targetKind: "single_enemy" as const,
+  }),
   effects: [basicStrikeEffect.id, burnDotEffect.id],
 };
 
-export const shieldSelfAbility: AbilityDef = {
-  id: "ability.buff.shield_self" as AbilityId,
+export const shieldSelfTalent: TalentDef = {
+  id: "talent.buff.shield_self" as TalentId,
   name: "Shield",
-  targetKind: "self",
+  type: "active",
+  maxLevel: 1,
+  tpCost: 0,
+  getActiveParams: () => ({
+    mpCost: 0,
+    cooldownActions: 0,
+    energyCost: 1000,
+    targetKind: "self" as const,
+  }),
   effects: [shieldBuffEffect.id],
 };
 
@@ -150,7 +172,7 @@ export const slimeMonster: MonsterDef = {
     [ATTR.PDEF]: 1,
     [ATTR.SPEED]: 20,
   },
-  abilities: [basicAttackAbility.id],
+  talents: [basicAttackTalent.id],
   drops: [],
   xpReward: 10,
 };
@@ -165,7 +187,7 @@ export const goblinMonster: MonsterDef = {
     [ATTR.PDEF]: 0,
     [ATTR.SPEED]: 28,
   },
-  abilities: [basicAttackAbility.id],
+  talents: [basicAttackTalent.id],
   drops: [],
   xpReward: 15,
 };
@@ -320,10 +342,10 @@ export function loadFixtureContent(): ContentDb {
       [burnDotEffect.id]: burnDotEffect,
       [shieldBuffEffect.id]: shieldBuffEffect,
     },
-    abilities: {
-      [basicAttackAbility.id]: basicAttackAbility,
-      [fireballAbility.id]: fireballAbility,
-      [shieldSelfAbility.id]: shieldSelfAbility,
+    talents: {
+      [basicAttackTalent.id]: basicAttackTalent,
+      [fireballTalent.id]: fireballTalent,
+      [shieldSelfTalent.id]: shieldSelfTalent,
     },
     monsters: {
       [slimeMonster.id]: slimeMonster,
@@ -388,7 +410,7 @@ export function makeSlime(instanceId: string): Enemy {
 /** Build a PlayerCharacter for tests without going through the full skill/level path yet. */
 export function makePlayer(overrides: {
   id: string;
-  abilities: string[];
+  talents?: string[];
   hp?: number;
   mp?: number;
   /** 直接设置 PATK base（测试用，跳过 WEAPON_ATK + scaling 派生链路）。 */
@@ -415,7 +437,7 @@ export function makePlayer(overrides: {
     xpCurve: overrides.xpCurve ?? testCharXpCurve,
 
     baseAttrs: base as Record<string, number>,
-    knownAbilities: overrides.abilities as unknown as AbilityId[],
+    knownTalents: (overrides.talents ?? []) as unknown as TalentId[],
     attrDefs,
   });
   if (overrides.hp !== undefined) pc.currentHp = overrides.hp;

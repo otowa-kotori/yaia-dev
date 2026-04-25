@@ -11,7 +11,7 @@ import { computeCatchUpTicks } from "../../../src/core/infra/tick/catch-up";
 import { TICK_MS } from "../../../src/core/infra/tick";
 import { serialize } from "../../../src/core/save/serialize";
 import {
-  basicAttackAbility,
+  basicAttackTalent,
   forestCombatZone,
   forestLocation,
   loadFixtureContent,
@@ -35,7 +35,7 @@ function createSession(initialLocationId: string): GameSession {
         id: "hero.catchup",
         name: "Catch-up Hero",
         xpCurve: testXpCurve,
-        knownAbilities: [basicAttackAbility.id],
+        knownTalents: [basicAttackTalent.id],
       },
     ],
     initialLocationId: initialLocationId as never,

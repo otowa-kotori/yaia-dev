@@ -17,7 +17,7 @@ import type { ItemDef, ItemId, Modifier } from "../../../src/core/content/types"
 import type { GearInstance } from "../../../src/core/item";
 import {
   attrDefs,
-  basicAttackAbility,
+  basicAttackTalent,
   loadFixtureContent,
   slimeMonster,
   testXpCurve,
@@ -51,7 +51,7 @@ describe("actor hierarchy", () => {
     const pc = createPlayerCharacter({
       id: "p1",
       name: "Hero",
-      knownAbilities: [basicAttackAbility.id],
+      knownTalents: [basicAttackTalent.id],
       baseAttrs: { [ATTR.PATK]: 7, [ATTR.MAX_HP]: 120 },
       attrDefs,
       xpCurve: testXpCurve,
@@ -60,7 +60,7 @@ describe("actor hierarchy", () => {
     expect(pc.level).toBe(1);
     expect(pc.exp).toBe(0);
     expect(pc.currentHp).toBe(120); // starts full
-    expect(pc.abilities).toEqual([basicAttackAbility.id]);
+    expect(pc.knownTalentIds).toEqual([basicAttackTalent.id]);
     expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(7);
   });
 
@@ -73,7 +73,7 @@ describe("actor hierarchy", () => {
     expect(e.kind).toBe("enemy");
     expect(e.defId).toBe(slimeMonster.id);
     expect(e.currentHp).toBe(30);
-    expect(e.abilities).toEqual(slimeMonster.abilities);
+    expect(e.knownTalentIds).toEqual(slimeMonster.talents);
   });
 
   test("type guards distinguish actor kinds", () => {

@@ -179,6 +179,21 @@ export const T = {
   label_int: "智力",
   label_spd: "速度",
 
+  // ── Talents ──
+  tab_talents: "天赋",
+  talentTitle: "天赋加点",
+  talentHint: "每级获得 3 点天赋点，可自由分配到已解锁的天赋中。",
+  talentEmpty: "当前职业暂无可用天赋。",
+  talentTpLabel: "TP",
+  talentTpAvailable: "可用 {available} / 总计 {total}",
+  talentPrereqNotMet: "前置：{name} Lv{level}",
+  talentAllocFailed: "加点失败",
+  btn_allocateTalent: "+1",
+  talentMaxLevel: "已满级",
+  talentType_active: "主动",
+  talentType_passive: "被动",
+  talentType_sustain: "姿态",
+
   // ── Settings ──
   speed: "速度",
   pause: "暂停",

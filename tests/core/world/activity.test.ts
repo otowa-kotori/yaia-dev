@@ -21,7 +21,7 @@ import {
   forestCombatZone,
   loadFixtureContent,
   makePlayer,
-  basicAttackAbility,
+  basicAttackTalent,
   waveTrophyItem,
 } from "../../fixtures/content";
 
@@ -63,7 +63,7 @@ describe("CombatActivity + Stage integration", () => {
 
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 20,
       speed: 20,
       maxHp: 50,
@@ -113,7 +113,7 @@ describe("CombatActivity + Stage integration", () => {
     const rng = createRng(42);
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 20,
       speed: 20,
     });
@@ -160,7 +160,7 @@ describe("CombatActivity + Stage integration", () => {
 
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 0,
       def: 0,
       speed: 1,
@@ -209,7 +209,7 @@ describe("CombatActivity + Stage integration", () => {
     const rng = createRng(42);
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 999,
       def: 0,
       speed: 10,
@@ -265,7 +265,7 @@ describe("CombatActivity + Stage integration", () => {
     const rng = createRng(42);
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 999,
       def: 0,
       speed: 10,
@@ -335,7 +335,7 @@ describe("CombatActivity + Stage integration", () => {
     const rng = createRng(42);
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 20,
       speed: 20,
     });
@@ -378,7 +378,7 @@ describe("CombatActivity + Stage integration", () => {
     const rng = createRng(42);
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 999,
       speed: 999,
       maxHp: 100,

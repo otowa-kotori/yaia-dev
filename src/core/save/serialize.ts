@@ -1,7 +1,7 @@
 // Serialize / deserialize GameState.
 //
 // Key invariant: only SOURCE-of-TRUTH fields are written. Derived fields on
-// characters (attrs.modifiers, attrs.cache, runtime abilities list) are
+// characters (attrs.modifiers, attrs.cache, runtime talent list) are
 // stripped by the serializer and reconstructed by rebuildCharacterDerived
 // on load. See CLAUDE.md "persisted actor fields" for the canonical list.
 //
@@ -43,9 +43,9 @@ export function serialize(state: GameState): string {
     // active effects. Base values ARE source of truth and are kept.
     a.attrs.modifiers = [];
     a.attrs.cache = {};  // {} = all stats dirty; rebuilt by rebuildCharacterDerived on load
-    // Runtime abilities list is derived (from knownAbilities for players,
+    // Runtime talent list is derived (from knownTalents for players,
     // MonsterDef for enemies). Blanked here; rebuilt on load.
-    a.abilities = [];
+    a.knownTalentIds = [];
   }
 
   return JSON.stringify({ version: SAVE_VERSION, state: clone });
@@ -102,16 +102,16 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
   // through untouched.
   for (const a of state.actors) {
     if (isEnemy(a)) {
-      // Pull monster def abilities back in from content — ids, not the
+      // Pull monster def talents back in from content — ids, not the
       // derived runtime list. `getMonster` throws if the def has been
       // removed since the save was written, which is the correct alpha
       // behaviour (surface the broken reference rather than silently
       // producing a toothless enemy).
       const mdef = getMonster(a.defId);
-      a.abilities = mdef.abilities.slice() as typeof a.abilities;
+      a.knownTalentIds = mdef.talents.slice() as typeof a.knownTalentIds;
       rebuildCharacterDerived(a, opts.attrDefs);
     } else if (isPlayer(a)) {
-      a.abilities = a.knownAbilities.slice();
+      a.knownTalentIds = a.knownTalents.slice();
       rebuildCharacterDerived(a, opts.attrDefs, state.worldRecord);
     }
   }

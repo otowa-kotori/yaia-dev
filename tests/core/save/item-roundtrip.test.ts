@@ -47,7 +47,7 @@ describe("inventory + gear save roundtrip", () => {
 
   test("stacks and gear survive serialize/deserialize", () => {
     const state = createEmptyState(7, 1);
-    const hero = makePlayer({ id: "hero.1", abilities: [], atk: 10, maxHp: 100 });
+    const hero = makePlayer({ id: "hero.1", atk: 10, maxHp: 100 });
     state.actors.push(hero);
     state.inventories[hero.id] = createInventory(DEFAULT_CHAR_INVENTORY_CAPACITY);
 
@@ -82,7 +82,7 @@ describe("inventory + gear save roundtrip", () => {
 
   test("equipped GearInstance survives roundtrip and rebuilds attrs", () => {
     const state = createEmptyState(9, 1);
-    const hero = makePlayer({ id: "hero.1", abilities: [], atk: 10, maxHp: 100 });
+    const hero = makePlayer({ id: "hero.1", atk: 10, maxHp: 100 });
     const sword = createGearInstance(moddedSword.id, { rng: createRng(1) });
     hero.equipped = { weapon: sword };
     state.actors.push(hero);
@@ -92,7 +92,7 @@ describe("inventory + gear save roundtrip", () => {
     const loaded = restored.actors[0]!;
     if (!isPlayer(loaded)) throw new Error("expected player");
     expect(loaded.equipped.weapon?.instanceId).toBe(sword.instanceId);
-    // +5 from def.modifiers, +1 from pinned roll (min==max==1) â†?+6 over base 10.
+    // +5 from def.modifiers, +1 from pinned roll (min==max==1) ï¿½?+6 over base 10.
     expect(getAttr(loaded, ATTR.PATK, attrDefs)).toBe(16);
   });
 });

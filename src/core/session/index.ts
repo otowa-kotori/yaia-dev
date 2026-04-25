@@ -78,6 +78,7 @@ import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance, type GearInstance } from "../item";
 import { grantSkillXp } from "../growth/leveling";
 import { purchaseUpgrade as purchaseUpgradeCore } from "../growth/upgrade-manager";
+import { allocateTalentPoint } from "../growth/talent";
 import {
   enterStage as enterStageCore,
   leaveStage as leaveStageCore,
@@ -142,6 +143,7 @@ export interface CharacterController {
   /** Try to move all pending loot into inventory. Returns the count of
    *  entries that could not be picked up (still pending). */
   pickUpAllPendingLoot(): number;
+  allocateTalent(talentId: string): void;
 }
 
 export interface GameSession {
@@ -816,6 +818,18 @@ export function createGameSession(
         }
         return kept.length;
       },
+
+      allocateTalent(talentId: string): void {
+        const result = allocateTalentPoint(cc.hero, talentId as any, content);
+        if (!result.ok) {
+          throw new Error(`session.allocateTalent: ${result.reason} for talent "${talentId}"`);
+        }
+        bus.emit("talentAllocated", {
+          charId: cc.hero.id,
+          talentId,
+          newLevel: result.newLevel,
+        });
+      },
     };
 
     return cc;
@@ -1247,7 +1261,7 @@ export function createGameSession(
         name: heroCfg.name,
         heroConfigId: heroCfg.id,
         xpCurve: heroCfg.xpCurve,
-        knownAbilities: heroCfg.knownAbilities.slice(),
+        knownTalents: heroCfg.knownTalents.slice(),
         baseAttrs: heroCfg.baseAttrs as Record<string, number> | undefined,
         attrDefs,
       });

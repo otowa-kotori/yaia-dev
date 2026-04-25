@@ -1,19 +1,19 @@
-// Ability cast pipeline.
+// Talent cast pipeline (temporary shim).
 //
-// tryUseAbility(caster, abilityId, targets, ctx):
-//   1. Validate ability exists on caster.abilities.
-//   2. Validate cooldown expired.
-//   3. Validate MP cost affordable.
-//   4. Validate target list matches ability.targetKind.
-//   5. Consume MP, set cooldown.
-//   6. For each target, apply each effect in order.
+// This module replaces the old AbilityDef-based tryUseAbility with a
+// TalentDef-based tryUseTalent. The validation/dispatch flow is the same;
+// cost, cooldown, and targeting now come from TalentDef.getActiveParams.
+//
+// Phase 3 will move this into behavior/talent with full CastContext support.
+// Until then, talents that only declare `effects` (no `execute`) use the
+// same apply-each-effect loop as the old AbilityDef pipeline.
 //
 // Returns a CastResult describing what happened. Never throws on user-level
 // rule violations — returns { ok: false, reason } instead — so UI code and
 // intent code can branch on failure modes without try/catch.
 
-import type { AbilityDef, AttrDef } from "../../content/types";
-import { getAbility, getEffect } from "../../content/registry";
+import type { TalentDef, AttrDef, TargetKind } from "../../content/types";
+import { getTalent, getEffect } from "../../content/registry";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
@@ -30,7 +30,7 @@ export interface AbilityContext {
 }
 
 export type CastFailureReason =
-  | "unknown_ability"
+  | "unknown_talent"
   | "not_known"
   | "on_cooldown"
   | "insufficient_mp"
@@ -41,7 +41,7 @@ export type CastFailureReason =
 
 export interface CastSuccess {
   ok: true;
-  abilityId: string;
+  talentId: string;
   targets: Character[];
   /** Per-effect magnitudes, flattened across targets. */
   magnitudes: number[];
@@ -56,40 +56,43 @@ export interface CastFailure {
 export type CastResult = CastSuccess | CastFailure;
 
 /**
- * Attempt to cast an ability. See module doc for the full validation order.
+ * Attempt to use a talent. See module doc for the full validation order.
  */
-export function tryUseAbility(
+export function tryUseTalent(
   caster: Character,
-  abilityId: string,
+  talentId: string,
   targets: Character[],
   ctx: AbilityContext,
 ): CastResult {
   if (!isAlive(caster)) return fail("caster_dead");
 
-  if (!caster.abilities.includes(abilityId as (typeof caster.abilities)[number])) {
+  if (!caster.knownTalentIds.includes(talentId as (typeof caster.knownTalentIds)[number])) {
     return fail("not_known");
   }
 
-  const def = safeGetAbility(abilityId);
-  if (!def) return fail("unknown_ability");
+  const def = safeGetTalent(talentId);
+  if (!def) return fail("unknown_talent");
+  const activeParams = def.getActiveParams?.(1);
+  if (!activeParams) return fail("unknown_talent");
 
-  const cdUntil = caster.cooldowns[abilityId];
-  if (cdUntil !== undefined && ctx.currentTick < cdUntil) {
-    return fail("on_cooldown", `ready at tick ${cdUntil}`);
+  // Cooldown check: value > 0 means still on cooldown (remaining action count).
+  const cdRemaining = caster.cooldowns[talentId];
+  if (cdRemaining !== undefined && cdRemaining > 0) {
+    return fail("on_cooldown", `${cdRemaining} actions remaining`);
   }
 
-  const mpCost = def.cost?.mp ?? 0;
+  const mpCost = activeParams.mpCost ?? 0;
   if (mpCost > 0 && caster.currentMp < mpCost) {
     return fail("insufficient_mp");
   }
 
-  const targetCheck = validateTargets(def, caster, targets);
+  const targetCheck = validateTargets(activeParams.targetKind, caster, targets);
   if (!targetCheck.ok) return targetCheck;
 
-  // Commit: pay cost, set cooldown.
+  // Commit: pay cost, set cooldown (remaining action count).
   if (mpCost > 0) caster.currentMp -= mpCost;
-  if (def.cooldownTicks && def.cooldownTicks > 0) {
-    caster.cooldowns[abilityId] = ctx.currentTick + def.cooldownTicks;
+  if (activeParams.cooldownActions && activeParams.cooldownActions > 0) {
+    caster.cooldowns[talentId] = activeParams.cooldownActions;
   }
 
   const effectCtx: EffectContext = {
@@ -102,29 +105,29 @@ export function tryUseAbility(
 
   const magnitudes: number[] = [];
   for (const target of targets) {
-    // Skip dead targets silently — ability already "fired" by paying cost.
-    if (!isAlive(target) && def.targetKind !== "self") continue;
-    for (const effectId of def.effects) {
+    // Skip dead targets silently — talent already "fired" by paying cost.
+    if (!isAlive(target) && activeParams.targetKind !== "self") continue;
+    for (const effectId of def.effects ?? []) {
       const effect = safeGetEffect(effectId);
       if (!effect) continue;
       magnitudes.push(applyEffect(effect, caster, target, effectCtx));
     }
   }
 
-  return { ok: true, abilityId, targets, magnitudes };
+  return { ok: true, talentId, targets, magnitudes };
 }
 
 // ---------- Internal ----------
 
 function validateTargets(
-  def: AbilityDef,
+  targetKind: TargetKind,
   caster: Character,
   targets: Character[],
 ): { ok: true } | CastFailure {
-  switch (def.targetKind) {
+  switch (targetKind) {
     case "self":
       if (targets.length !== 1 || targets[0] !== caster) {
-        return fail("wrong_target_count", "self ability requires [caster] as sole target");
+        return fail("wrong_target_count", "self talent requires [caster] as sole target");
       }
       return { ok: true };
 
@@ -162,9 +165,9 @@ function fail(reason: CastFailureReason, detail?: string): CastFailure {
   return { ok: false, reason, ...(detail ? { detail } : {}) };
 }
 
-function safeGetAbility(id: string): AbilityDef | undefined {
+function safeGetTalent(id: string): TalentDef | undefined {
   try {
-    return getAbility(id);
+    return getTalent(id);
   } catch {
     return undefined;
   }

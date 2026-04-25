@@ -177,7 +177,7 @@ export const gameLogRules = {
       );
     }
 
-    const ability = abilityName(payload.abilityId);
+    const ability = talentName(payload.abilityId);
     const targets = listOrFallback(payload.targetIds.map((id) => actorName(ctx.state, id)), "目标未知");
     const magnitudes = payload.magnitudes.filter((value) => value > 0);
     const magnitudeText =
@@ -268,9 +268,13 @@ export const gameLogRules = {
     entry(
       ctx,
       "economy",
-      `购买了全局升级“${upgradeName(payload.upgradeId)}” Lv.${payload.level}，消耗 ${payload.cost} ${currencyName(payload.costCurrency)}。`,
+      `购买了全局升级\u201c${upgradeName(payload.upgradeId)}\u201d Lv.${payload.level}，消耗 ${payload.cost} ${currencyName(payload.costCurrency)}。`,
       {},
     ),
+  talentAllocated: (payload: GameEvents["talentAllocated"], ctx: GameLogRuleContext) =>
+    entry(ctx, "growth",
+      `${actorName(ctx.state, payload.charId)} 的天赋\u201c${talentName(payload.talentId)}\u201d升到了 ${payload.newLevel} 级。`,
+      { charId: payload.charId }),
   pendingLootOverflowed: (
     payload: GameEvents["pendingLootOverflowed"],
     ctx: GameLogRuleContext,
@@ -411,8 +415,8 @@ function partyLeadName(state: Readonly<GameState>, participantIds: readonly stri
   return actorName(state, participantIds[0] ?? "未知角色");
 }
 
-function abilityName(id: string): string {
-  return getContent().abilities[id]?.name ?? id;
+function talentName(id: string): string {
+  return getContent().talents[id]?.name ?? id;
 }
 
 function combatZoneName(id: string): string {
@@ -500,6 +504,7 @@ function skipReasonText(note?: string): string {
     case "caster_dead":
       return "角色已倒下";
     case "unknown_ability":
+    case "unknown_talent":
       return "技能不存在";
     default:
       return note;

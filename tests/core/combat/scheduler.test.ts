@@ -20,7 +20,7 @@ describe("ATB Scheduler", () => {
   });
 
   test("initial energy is f(SPD), capped below threshold", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const p1 = makePlayer({ id: "p1", speed: 40 });
     const sched = createAtbScheduler();
     nextActor(sched, [p1], { attrDefs });
     const expected = Math.min(
@@ -31,8 +31,8 @@ describe("ATB Scheduler", () => {
   });
 
   test("higher SPD -> higher initial energy", () => {
-    const slow = makePlayer({ id: "slow", abilities: [], speed: 20 });
-    const fast = makePlayer({ id: "fast", abilities: [], speed: 80 });
+    const slow = makePlayer({ id: "slow", speed: 20 });
+    const fast = makePlayer({ id: "fast", speed: 80 });
     const sched = createAtbScheduler();
     nextActor(sched, [slow, fast], { attrDefs });
     expect(sched.energyByActorId["fast"]!).toBeGreaterThan(
@@ -41,7 +41,7 @@ describe("ATB Scheduler", () => {
   });
 
   test("tickScheduler charges energy proportional to SPD", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 80 }); // 2x base
+    const p1 = makePlayer({ id: "p1", speed: 80 }); // 2x base
     const sched = createAtbScheduler();
     nextActor(sched, [p1], { attrDefs });
     const before = sched.energyByActorId["p1"]!;
@@ -52,14 +52,14 @@ describe("ATB Scheduler", () => {
   });
 
   test("nextActor returns null when no one above threshold", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const p1 = makePlayer({ id: "p1", speed: 40 });
     const sched = createAtbScheduler();
     expect(nextActor(sched, [p1], { attrDefs })).toBe(null);
   });
 
   test("nextActor returns the actor with highest energy above threshold", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
-    const p2 = makePlayer({ id: "p2", abilities: [], speed: 80 });
+    const p1 = makePlayer({ id: "p1", speed: 40 });
+    const p2 = makePlayer({ id: "p2", speed: 80 });
     const sched = createAtbScheduler();
     for (let i = 0; i < 30; i++) tickScheduler(sched, [p1, p2], { attrDefs });
     const actor = nextActor(sched, [p1, p2], { attrDefs });
@@ -67,7 +67,7 @@ describe("ATB Scheduler", () => {
   });
 
   test("onActionResolved drains energy by cost", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const p1 = makePlayer({ id: "p1", speed: 40 });
     const sched = createAtbScheduler();
     for (let i = 0; i < 30; i++) tickScheduler(sched, [p1], { attrDefs });
     const before = sched.energyByActorId["p1"]!;
@@ -77,8 +77,8 @@ describe("ATB Scheduler", () => {
   });
 
   test("skips dead participants", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
-    const p2 = makePlayer({ id: "p2", abilities: [], speed: 80 });
+    const p1 = makePlayer({ id: "p1", speed: 40 });
+    const p2 = makePlayer({ id: "p2", speed: 80 });
     p2.currentHp = 0;
     const sched = createAtbScheduler();
     for (let i = 0; i < 30; i++) tickScheduler(sched, [p1, p2], { attrDefs });
@@ -87,7 +87,7 @@ describe("ATB Scheduler", () => {
   });
 
   test("returns null when no one is alive", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [] });
+    const p1 = makePlayer({ id: "p1" });
     p1.currentHp = 0;
     const sched = createAtbScheduler();
     for (let i = 0; i < 30; i++) tickScheduler(sched, [p1], { attrDefs });
@@ -95,15 +95,15 @@ describe("ATB Scheduler", () => {
   });
 
   test("ties in energy break on participant-list index (stable)", () => {
-    const a = makePlayer({ id: "a", abilities: [], speed: 40 });
-    const b = makePlayer({ id: "b", abilities: [], speed: 40 });
+    const a = makePlayer({ id: "a", speed: 40 });
+    const b = makePlayer({ id: "b", speed: 40 });
     const sched = createAtbScheduler();
     for (let i = 0; i < 30; i++) tickScheduler(sched, [a, b], { attrDefs });
     expect(nextActor(sched, [a, b], { attrDefs })?.id).toBe("a");
   });
 
   test("speed buff mid-combat affects energy gain immediately", () => {
-    const p1 = makePlayer({ id: "p1", abilities: [], speed: 40 });
+    const p1 = makePlayer({ id: "p1", speed: 40 });
     const sched = createAtbScheduler();
     nextActor(sched, [p1], { attrDefs }); // init
     tickScheduler(sched, [p1], { attrDefs });

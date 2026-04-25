@@ -1,50 +1,50 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { tryUseAbility } from "../../../src/core/behavior/ability";
+import { tryUseTalent } from "../../../src/core/behavior/ability";
 import { resetContent } from "../../../src/core/content";
 import {
-  basicAttackAbility,
-  fireballAbility,
+  basicAttackTalent,
+  fireballTalent,
   makeHarness,
   makeSlime,
   makePlayer,
-  shieldSelfAbility,
+  shieldSelfTalent,
 } from "../../fixtures/content";
 
-describe("ability: tryUseAbility", () => {
+describe("talent: tryUseTalent", () => {
   beforeEach(() => resetContent());
 
-  test("unknown ability returns unknown_ability", () => {
+  test("unknown talent returns unknown_talent", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: ["ability.does.not.exist"] });
+    const caster = makePlayer({ id: "p", talents: ["ability.does.not.exist"] });
     const target = makeSlime("m");
-    const r = tryUseAbility(caster, "ability.does.not.exist", [target], { ...h });
+    const r = tryUseTalent(caster, "ability.does.not.exist", [target], { ...h });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe("unknown_ability");
+    if (!r.ok) expect(r.reason).toBe("unknown_talent");
   });
 
-  test("ability not in caster.abilities returns not_known", () => {
+  test("talent not in caster.knownTalentIds returns not_known", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: [] });
+    const caster = makePlayer({ id: "p" });
     const target = makeSlime("m");
-    const r = tryUseAbility(caster, basicAttackAbility.id, [target], { ...h });
+    const r = tryUseTalent(caster, basicAttackTalent.id, [target], { ...h });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("not_known");
   });
 
   test("dead caster cannot cast", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: [basicAttackAbility.id], hp: 0 });
+    const caster = makePlayer({ id: "p", talents: [basicAttackTalent.id], hp: 0 });
     const target = makeSlime("m");
-    const r = tryUseAbility(caster, basicAttackAbility.id, [target], { ...h });
+    const r = tryUseTalent(caster, basicAttackTalent.id, [target], { ...h });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("caster_dead");
   });
 
   test("successful basic attack deals damage", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: [basicAttackAbility.id], atk: 10 });
+    const caster = makePlayer({ id: "p", talents: [basicAttackTalent.id], atk: 10 });
     const target = makeSlime("m"); // hp 30, PDEF 1
-    const r = tryUseAbility(caster, basicAttackAbility.id, [target], { ...h });
+    const r = tryUseTalent(caster, basicAttackTalent.id, [target], { ...h });
     expect(r.ok).toBe(true);
     // phys_damage_v1: PATK=10, PDEF=1 → excess=0 → damage=10
     expect(target.currentHp).toBe(30 - 10);
@@ -52,13 +52,13 @@ describe("ability: tryUseAbility", () => {
 
   test("insufficient MP fails and does NOT consume mp or set cooldown", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: [fireballAbility.id], mp: 3 }); // fireball costs 5
+    const caster = makePlayer({ id: "p", talents: [fireballTalent.id], mp: 3 }); // fireball costs 5
     const target = makeSlime("m");
-    const r = tryUseAbility(caster, fireballAbility.id, [target], { ...h });
+    const r = tryUseTalent(caster, fireballTalent.id, [target], { ...h });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("insufficient_mp");
     expect(caster.currentMp).toBe(3);
-    expect(caster.cooldowns[fireballAbility.id]).toBeUndefined();
+    expect(caster.cooldowns[fireballTalent.id]).toBeUndefined();
   });
 
   test("successful cast deducts mp and sets cooldown", () => {
@@ -66,15 +66,16 @@ describe("ability: tryUseAbility", () => {
     h.currentTick = 100;
     const caster = makePlayer({
       id: "p",
-      abilities: [fireballAbility.id],
+      talents: [fireballTalent.id],
       mp: 10,
       atk: 12,
     });
     const target = makeSlime("m");
-    const r = tryUseAbility(caster, fireballAbility.id, [target], { ...h });
+    const r = tryUseTalent(caster, fireballTalent.id, [target], { ...h });
     expect(r.ok).toBe(true);
     expect(caster.currentMp).toBe(5);
-    expect(caster.cooldowns[fireballAbility.id]).toBe(120); // 100 + 20
+    // cooldownActions: 3 → sets remaining action count to 3
+    expect(caster.cooldowns[fireballTalent.id]).toBe(3);
   });
 
   test("on_cooldown rejects a cast while cd is active", () => {
@@ -82,44 +83,44 @@ describe("ability: tryUseAbility", () => {
     h.currentTick = 100;
     const caster = makePlayer({
       id: "p",
-      abilities: [fireballAbility.id],
+      talents: [fireballTalent.id],
       mp: 20,
     });
     const target = makeSlime("m");
 
     // First cast succeeds.
-    const r1 = tryUseAbility(caster, fireballAbility.id, [target], { ...h });
+    const r1 = tryUseTalent(caster, fireballTalent.id, [target], { ...h });
     expect(r1.ok).toBe(true);
 
     // Immediate retry at same tick — blocked.
-    const r2 = tryUseAbility(caster, fireballAbility.id, [target], { ...h });
+    const r2 = tryUseTalent(caster, fireballTalent.id, [target], { ...h });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe("on_cooldown");
 
-    // After cooldown — allowed again.
-    const h2 = { ...h, currentTick: 120 };
-    const r3 = tryUseAbility(caster, fireballAbility.id, [target], h2);
+    // After cooldown expires (manually zero it out) — allowed again.
+    caster.cooldowns[fireballTalent.id] = 0;
+    const r3 = tryUseTalent(caster, fireballTalent.id, [target], { ...h });
     expect(r3.ok).toBe(true);
   });
 
   test("single_enemy with same-side target is rejected", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: [basicAttackAbility.id] });
-    const ally = makePlayer({ id: "ally", abilities: [] });
-    const r = tryUseAbility(caster, basicAttackAbility.id, [ally], { ...h });
+    const caster = makePlayer({ id: "p", talents: [basicAttackTalent.id] });
+    const ally = makePlayer({ id: "ally" });
+    const r = tryUseTalent(caster, basicAttackTalent.id, [ally], { ...h });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("target_wrong_side");
   });
 
-  test("self-target ability requires caster as sole target", () => {
+  test("self-target talent requires caster as sole target", () => {
     const h = makeHarness();
-    const caster = makePlayer({ id: "p", abilities: [shieldSelfAbility.id] });
-    const other = makePlayer({ id: "o", abilities: [] });
+    const caster = makePlayer({ id: "p", talents: [shieldSelfTalent.id] });
+    const other = makePlayer({ id: "o" });
 
-    const r1 = tryUseAbility(caster, shieldSelfAbility.id, [caster], { ...h });
+    const r1 = tryUseTalent(caster, shieldSelfTalent.id, [caster], { ...h });
     expect(r1.ok).toBe(true);
 
-    const r2 = tryUseAbility(caster, shieldSelfAbility.id, [other], { ...h });
+    const r2 = tryUseTalent(caster, shieldSelfTalent.id, [other], { ...h });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe("wrong_target_count");
   });

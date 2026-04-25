@@ -22,10 +22,10 @@
 //   isEnemy(a)     — kind === "enemy"
 //   isResourceNode(a) — kind === "resource_node"
 
-import type { AbilityId, MonsterId } from "../../content/types";
+import type { MonsterId, TalentId } from "../../content/types";
 import type { AttrSet } from "../attribute";
 import type {
-  ActiveEffect,
+  EffectInstance,
   CharacterActivityState,
   SkillProgress,
 } from "../../infra/state/types";
@@ -57,17 +57,19 @@ export interface Character extends Actor {
   currentHp: number;
   currentMp: number;
   /** Active buffs/debuffs/DoTs. (persisted) */
-  activeEffects: ActiveEffect[];
-  /** Absolute-tick cooldown map: abilityId -> tick at which ready. (persisted) */
+  activeEffects: EffectInstance[];
+  /** Per-talent cooldown map: talentId -> remaining action counts. (persisted)
+   *  A positive value means the talent is on cooldown; decremented by 1 each
+   *  time this character resolves an action. */
   cooldowns: Record<string, number>;
   /** Attribute set.
    *  - `attrs.base` is persisted (source of truth for per-actor base stats).
    *  - `attrs.modifiers` and `attrs.cache` are DERIVED — not persisted.
    */
   attrs: AttrSet;
-  /** Runtime ability list. Derived for PlayerCharacter; part of def for Enemy.
-   *  Not persisted — rebuilt on load from known abilities + equipped gear. */
-  abilities: AbilityId[];
+  /** Runtime talent list. Derived for PlayerCharacter; part of def for Enemy.
+   *  Not persisted — rebuilt on load from known talents + equipped gear. */
+  knownTalentIds: TalentId[];
   /** Optional transient side for combat targeting. Not persisted. */
   side?: Side;
 }
@@ -92,12 +94,13 @@ export interface PlayerCharacter extends Character {
   /** Slot -> equipped GearInstance (or null for empty slot). Each instance
    *  carries its own rolledMods; see ../item/types.ts. (persisted) */
   equipped: Record<string, GearInstance | null>;
-  /** Unlocked talent ids. (persisted) */
-  talents: string[];
+  /** Per-talent level: talentId -> current level. 0 or missing = not learned.
+   *  (persisted) */
+  talentLevels: Record<string, number>;
   /** What this character is currently doing. null = idle. (persisted) */
   activity: CharacterActivityState | null;
-  /** Ability ids the player has learned (source of truth for `abilities`). */
-  knownAbilities: AbilityId[];
+  /** Talent ids the player has learned (source of truth for `knownTalentIds`). */
+  knownTalents: TalentId[];
   /** The location (map area) this character is currently in. null = nowhere.
    *  Per-character since multi-character idle allows each hero to be in a
    *  different location simultaneously. (persisted) */

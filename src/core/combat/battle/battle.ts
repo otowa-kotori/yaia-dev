@@ -8,22 +8,22 @@
 //   one remains above threshold.
 // - Battle is a Tickable. Its isDone() fires once outcome != "ongoing" so the
 //   tick engine auto-unregisters it.
-// - tickActiveEffects is run once PER ACTOR ACTION WINDOW (not per engine tick).
+// - processActionEffects is run once PER ACTOR ACTION WINDOW (not per engine tick).
 //   This intentionally preserves the current owner-turn decay model even under
 //   ATB, keeping the blast radius limited while the scheduler is replaced.
 
-import type { AttrDef, AbilityDef } from "../../content/types";
+import type { AttrDef } from "../../content/types";
 
 /** Battle mode: solo (1 player) or party (future multi-character). */
 export type BattleMode = "solo" | "party";
-import { getAbility } from "../../content/registry";
+import { getTalent } from "../../content/registry";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
 import type { Character } from "../../entity/actor";
 import { isAlive, isCharacter, isEnemy, isPlayer } from "../../entity/actor";
-import { tryUseAbility, type CastResult } from "../../behavior/ability";
-import { tickActiveEffects } from "../../behavior/effect";
+import { tryUseTalent, type CastResult } from "../../behavior/ability";
+import { processActionEffects } from "../../behavior/effect";
 import {
   createAtbScheduler,
   nextActor as schedulerNextActor,
@@ -43,7 +43,7 @@ export interface BattleLogEntry {
   kind: "action" | "death" | "start" | "end" | "skip";
   actorId?: string;
   targetIds?: string[];
-  abilityId?: string;
+  talentId?: string;
   magnitudes?: number[];
   note?: string;
 }
@@ -183,7 +183,7 @@ function runActorActionWindow(
   const defaultEnergyCost = getDefaultEnergyCost(battle.scheduler);
 
   // Active effects still decay on the owner's own action window.
-  tickActiveEffects(actor, {
+  processActionEffects(actor, {
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
@@ -195,6 +195,7 @@ function runActorActionWindow(
   // served action window so the same ready slot cannot loop forever this tick.
   if (!isAlive(actor)) {
     schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
+    decrementCooldowns(actor);
     return;
   }
 
@@ -221,15 +222,22 @@ function runActorActionWindow(
       ...battleEventScope(battle),
     });
     schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
+    decrementCooldowns(actor);
     return;
   }
 
 
-  const ability = getAbility(plan.abilityId);
-  const energyCost = resolveAbilityEnergyCost(ability, defaultEnergyCost);
+  const talent = getTalent(plan.talentId);
+  const activeParams = talent.getActiveParams?.(1);
+  const energyCost = activeParams?.energyCost ?? defaultEnergyCost;
+  if (!Number.isFinite(energyCost) || energyCost <= 0) {
+    throw new Error(
+      `battle: invalid energyCost ${energyCost} on talent ${talent.id}`,
+    );
+  }
   schedulerOnActionResolved(battle.scheduler, actor, energyCost);
 
-  const result: CastResult = tryUseAbility(actor, plan.abilityId, plan.targets, {
+  const result: CastResult = tryUseTalent(actor, plan.talentId, plan.targets, {
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
@@ -244,7 +252,7 @@ function runActorActionWindow(
       tick: ctx.currentTick,
       kind: "action",
       actorId: actor.id,
-      abilityId: result.abilityId,
+      talentId: result.talentId,
       targetIds,
       magnitudes,
     });
@@ -252,33 +260,42 @@ function runActorActionWindow(
       battleId: battle.id,
       actorId: actor.id,
       targetIds,
-      abilityId: result.abilityId,
+      abilityId: result.talentId,
       magnitudes,
       outcome: "action",
       ...battleEventScope(battle),
     });
-    return;
+  } else {
+      // Cast failed (e.g. on cooldown, insufficient mp) — the action window was
+    // already consumed above, so we only log the skip here.
+    battle.log.push({
+      tick: ctx.currentTick,
+      kind: "skip",
+      actorId: actor.id,
+      talentId: plan.talentId,
+      note: result.reason,
+    });
+    ctx.bus.emit("battleActionResolved", {
+      battleId: battle.id,
+      actorId: actor.id,
+      targetIds: plan.targets.map((target) => target.id),
+      abilityId: plan.talentId,
+      magnitudes: [],
+      outcome: "skip",
+      note: result.reason,
+      ...battleEventScope(battle),
+    });
   }
 
-  // Cast failed (e.g. on cooldown, insufficient mp) — the action window was
-  // already consumed above, so we only log the skip here.
-  battle.log.push({
-    tick: ctx.currentTick,
-    kind: "skip",
-    actorId: actor.id,
-    abilityId: plan.abilityId,
-    note: result.reason,
-  });
-  ctx.bus.emit("battleActionResolved", {
-    battleId: battle.id,
-    actorId: actor.id,
-    targetIds: plan.targets.map((target) => target.id),
-    abilityId: plan.abilityId,
-    magnitudes: [],
-    outcome: "skip",
-    note: result.reason,
-    ...battleEventScope(battle),
-  });
+  // Decrement all cooldowns by 1 after the actor's action resolves.
+  decrementCooldowns(actor);
+}
+
+/** Decrement all positive cooldowns on an actor by 1 (one action elapsed). */
+function decrementCooldowns(actor: Character): void {
+  for (const id of Object.keys(actor.cooldowns)) {
+    if (actor.cooldowns[id]! > 0) actor.cooldowns[id]!--;
+  }
 }
 
 
@@ -287,19 +304,6 @@ function getDefaultEnergyCost(state: SchedulerState): number {
     case "atb":
       return state.actionThreshold;
   }
-}
-
-function resolveAbilityEnergyCost(
-  ability: AbilityDef,
-  defaultEnergyCost: number,
-): number {
-  const energyCost = ability.energyCost ?? defaultEnergyCost;
-  if (!Number.isFinite(energyCost) || energyCost <= 0) {
-    throw new Error(
-      `battle: invalid energyCost ${energyCost} on ability ${ability.id}`,
-    );
-  }
-  return energyCost;
 }
 
 // ---------- Termination ----------
@@ -405,14 +409,14 @@ export function resolveParticipants(
   return out;
 }
 
-// Sanity check on ability references — catches typos at battle creation time
+// Sanity check on talent references — catches typos at battle creation time
 // rather than mid-combat. Optional; callers can skip.
-export function assertAbilitiesResolvable(battle: Battle, state: GameState): void {
+export function assertTalentsResolvable(battle: Battle, state: GameState): void {
   const ps = resolveParticipants(battle, state);
   for (const p of ps) {
-    for (const ab of p.abilities) {
+    for (const tid of p.knownTalentIds) {
       // Throws on unknown id.
-      getAbility(ab);
+      getTalent(tid);
     }
   }
 }

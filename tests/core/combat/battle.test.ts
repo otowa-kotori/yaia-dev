@@ -8,7 +8,7 @@ import type { GameState } from "../../../src/core/infra/state";
 import { isAlive } from "../../../src/core/entity/actor";
 import {
   attrDefs,
-  basicAttackAbility,
+  basicAttackTalent,
   loadFixtureContent,
   makePlayer,
   makeSlime,
@@ -32,7 +32,7 @@ describe("Battle: tick loop", () => {
 
     const hero: PlayerCharacter = makePlayer({
       id: "p1",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 10,
       def: 0,
       speed: 20, // acts first
@@ -66,7 +66,7 @@ describe("Battle: tick loop", () => {
       const rng = createRng(9999);
       const hero = makePlayer({
         id: "p1",
-        abilities: [basicAttackAbility.id],
+        talents: [basicAttackTalent.id],
         atk: 3,
         speed: 5, // same speed as slime -> stable tie-break on p1
         maxHp: 25,
@@ -95,7 +95,7 @@ describe("Battle: tick loop", () => {
     const rng = createRng(1);
     const hero = makePlayer({
       id: "p1",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 0, // can't hurt slime (floor = 1 though... tweak def)
       def: 0,
       speed: 1,
@@ -124,7 +124,7 @@ describe("Battle: tick loop", () => {
     const rng = createRng(1);
     const hero = makePlayer({
       id: "p1",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 100,
       speed: 20,
     });

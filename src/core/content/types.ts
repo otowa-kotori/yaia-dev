@@ -1,12 +1,13 @@
 // Static content definitions.
 //
 // All content is keyed by dot-namespaced string IDs:
-//   "ability.combat.fire.fireball"
+//   "talent.knight.power_strike"
 //   "item.ore.copper"
 //   "skill.mining"
 //
-// Definitions are plain data. They may reference other content by ID (never
-// hold direct references). This keeps the save file ID-only.
+// Most definitions are plain data. TalentDef and EffectDef may hold functions
+// (execute, grantEffects, reactions) — they live in ContentDb but are NOT
+// serialized. See docs/design/skill-system.md §2.4.
 
 import type { FormulaRef } from "../infra/formula/types";
 
@@ -16,7 +17,6 @@ import type { FormulaRef } from "../infra/formula/types";
 export type ResourceNodeId = string & { readonly __brand: "ResourceNodeId" };
 export type ItemId = string & { readonly __brand: "ItemId" };
 export type MonsterId = string & { readonly __brand: "MonsterId" };
-export type AbilityId = string & { readonly __brand: "AbilityId" };
 export type EffectId = string & { readonly __brand: "EffectId" };
 export type SkillId = string & { readonly __brand: "SkillId" };
 export type LocationId = string & { readonly __brand: "LocationId" };
@@ -141,8 +141,8 @@ export interface MonsterDef {
   level: number;
   /** Base attributes for this monster (pre-modifier). */
   baseAttrs: Partial<Record<AttrId, number>>;
-  /** Abilities this monster can use. First entry is the default attack. */
-  abilities: AbilityId[];
+  /** Talents this monster can use. First entry is the default attack. */
+  talents: TalentId[];
   /** Loot table entries. */
   drops: { itemId: ItemId; chance: number; minQty: number; maxQty: number }[];
   /** XP rewarded on kill (to the character / party). */
@@ -166,10 +166,10 @@ export interface EffectDef {
   id: EffectId;
   name?: string;
   kind: EffectKind;
-  /** For duration/periodic: total lifetime in ticks. */
-  durationTicks?: number;
-  /** For periodic: how often (in ticks) the periodic hit fires. */
-  periodTicks?: number;
+  /** For duration/periodic: total lifetime in owner action counts. */
+  durationActions?: number;
+  /** For periodic: fire every N owner actions. */
+  periodActions?: number;
   /** Modifiers applied for the lifetime of this effect. */
   modifiers?: Modifier[];
   /** Rewards granted on apply (instant) or per period (periodic). */
@@ -187,7 +187,12 @@ export interface EffectDef {
   tags?: string[];
 }
 
-// ---------- Abilities ----------
+// ---------- Talents ----------
+//
+// TalentDef replaces the old AbilityDef. It unifies active skills (execute),
+// passive buffs (grantEffects), and sustain stances under one type.
+// TalentDef may hold functions — it lives in ContentDb but is NOT serialized.
+// See docs/design/skill-system.md for the full design.
 
 export type TargetKind =
   | "self"
@@ -195,21 +200,90 @@ export type TargetKind =
   | "single_ally"
   | "all_enemies"
   | "all_allies"
-  | "none"; // non-combat abilities (e.g. a mining swing)
+  | "none";
 
-export interface AbilityDef {
-  id: AbilityId;
+/**
+ * Describes one effect application from grantEffects.
+ * effectId identifies the template; state carries instance-specific data.
+ */
+export interface EffectApplication {
+  effectId: EffectId;
+  state: Record<string, unknown>;
+}
+
+/**
+ * CastContext is the toolkit passed to TalentDef.execute(). Defined as an
+ * interface here for typing; the concrete implementation lives in
+ * src/core/behavior/talent/. Forward-declared to avoid circular imports.
+ */
+export interface CastContext {
+  dealPhysicalDamage(caster: Character, target: Character, coefficient: number): number;
+  dealMagicDamage(caster: Character, target: Character, coefficient: number): number;
+  applyEffect(effectId: EffectId, source: Character, target: Character, state: Record<string, unknown>): void;
+  aliveEnemies(): Character[];
+  aliveAllies(): Character[];
+}
+
+// Forward-declare Character to break the circular dep between content/types
+// and entity/actor/types. At runtime both live in the same TS project; the
+// branded import is purely for type-checking the execute signature.
+// Actual Character type is defined in entity/actor/types.ts.
+import type { Character } from "../entity/actor/types";
+
+export interface TalentDef {
+  id: TalentId;
   name: string;
-  /** Resource cost. */
-  cost?: { mp?: number };
-  /** Cooldown in ticks. */
-  cooldownTicks?: number;
-  /** ATB energy cost. Omitted = scheduler actionThreshold (normally 1000). */
-  energyCost?: number;
-  targetKind: TargetKind;
-  /** Effects to apply, in order, on each target. */
-  effects: EffectId[];
+  description?: string;
+  type: "active" | "passive" | "sustain";
+  /** Maximum learnable level. */
+  maxLevel: number;
+  /** TP cost per level. */
+  tpCost: number;
+  /** Prerequisite talents required to learn this one. */
+  prereqs?: { talentId: TalentId; minLevel: number }[];
   tags?: string[];
+
+  // ---- active skill fields ----
+
+  /** Returns parameters for the active skill at a given level.
+   *  Omit for non-active talents. */
+  getActiveParams?: (level: number) => {
+    mpCost: number;
+    /** Cooldown in owner action counts (0 = no cooldown). */
+    cooldownActions: number;
+    /** ATB energy cost. */
+    energyCost: number;
+    targetKind: TargetKind;
+  };
+
+  /**
+   * Active skill execution logic. The generic pipeline completes validation +
+   * resource deduction, then calls this. This IS the action — freely
+   * orchestrate multi-hit, conditional branching, effect application inside.
+   */
+  execute?: (level: number, caster: Character, targets: Character[], ctx: CastContext) => void;
+
+  /**
+   * Declarative shortcut: if no execute is provided, the pipeline applies
+   * these effects in order on each target (same semantics as old AbilityDef.effects).
+   * If both execute and effects are provided, execute takes priority.
+   */
+  effects?: EffectId[];
+
+  // ---- passive / sustain fields ----
+
+  /**
+   * Effects installed when the talent is learned (passive) or activated (sustain).
+   * Returns effect descriptions with initial state.
+   */
+  grantEffects?: (level: number, owner: Character) => EffectApplication[];
+
+  // ---- sustain-only fields ----
+
+  /** Activation cost for sustain talents. */
+  activationCost?: { mp?: number };
+  /** Mutual exclusion group. Only one sustain per group per character. */
+  exclusiveGroup?: string;
 }
 
 // ---------- Skills ----------
@@ -391,19 +465,6 @@ export interface UpgradeDef {
   costScaling: FormulaRef;
 }
 
-// ---------- Talents ----------
-
-export interface TalentDef {
-  id: TalentId;
-  name: string;
-  /** Effects applied when this talent is unlocked. */
-  effects: EffectId[];
-  /** Talent prereqs (DAG edges). MVP uses flat list; graph engine comes later. */
-  prereqs?: TalentId[];
-  /** TP cost. */
-  cost: number;
-}
-
 // ---------- New game bootstrap ----------
 //
 // Configures how a brand-new save is populated: the starting PlayerCharacters
@@ -415,7 +476,10 @@ export interface HeroConfig {
   id: string;
   name: string;
   xpCurve: FormulaRef;
-  knownAbilities: AbilityId[];
+  /** Talents the hero starts with (source of truth for runtime talent list). */
+  knownTalents: TalentId[];
+  /** Talents this hero class can learn via talent point allocation. */
+  availableTalents?: TalentId[];
   /** Per-character bag capacity. Falls back to DEFAULT_CHAR_INVENTORY_CAPACITY. */
   inventoryCapacity?: number;
   /** Items granted into the hero's personal bag on a brand-new save. */
@@ -442,7 +506,6 @@ export interface StartingConfig {
 export interface ContentDb {
   items: Readonly<Record<string, ItemDef>>;
   monsters: Readonly<Record<string, MonsterDef>>;
-  abilities: Readonly<Record<string, AbilityDef>>;
   effects: Readonly<Record<string, EffectDef>>;
   skills: Readonly<Record<string, SkillDef>>;
   locations: Readonly<Record<string, LocationDef>>;
@@ -465,7 +528,6 @@ export function emptyContentDb(): ContentDb {
   return {
     items: {},
     monsters: {},
-    abilities: {},
     effects: {},
     skills: {},
     locations: {},

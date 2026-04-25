@@ -17,7 +17,7 @@ import {
 } from "../../src/content/index";
 import {
   attrDefs,
-  basicAttackAbility,
+  basicAttackTalent,
   forestCombatZone,
   forestLocation,
   loadFixtureContent,
@@ -38,7 +38,7 @@ function createSession(initialLocationId: string): GameSession {
         id: "hero.session",
         name: "Session Hero",
         xpCurve: testXpCurve,
-        knownAbilities: [basicAttackAbility.id],
+        knownTalents: [basicAttackTalent.id],
       },
     ],
     initialLocationId: initialLocationId as never,

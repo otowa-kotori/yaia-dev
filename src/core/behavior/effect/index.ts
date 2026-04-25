@@ -2,10 +2,10 @@
 //
 // Three flavors of EffectDef.kind:
 //   instant  - resolve once on apply (damage/heal/rewards), no persistence.
-//   duration - install modifiers on the target for `durationTicks` ticks; when
-//              expired, remove them. No periodic firing.
+//   duration - install modifiers on the target for `durationActions` owner
+//              actions; when expired, remove them. No periodic firing.
 //   periodic - like duration, but also fires an instant-like pulse every
-//              `periodTicks` ticks. Useful for DoTs / regen / crop growth.
+//              `periodActions` owner actions. Useful for DoTs / regen / crop growth.
 //
 // Modifiers from duration/periodic effects are tagged with sourceId =
 // "effect:<effectId>:<sourceActorId>:<appliedAtTick>" so that on expiration we
@@ -17,7 +17,7 @@ import { evalFormula, type FormulaContext } from "../../infra/formula";
 import type { Rng } from "../../infra/rng";
 import type { CurrencyChangeSource, GameEventBus } from "../../infra/events";
 
-import type { ActiveEffect, GameState } from "../../infra/state/types";
+import type { EffectInstance, GameState } from "../../infra/state/types";
 import type { Character, PlayerCharacter } from "../../entity/actor";
 import { getAttr, isPlayer, rebuildCharacterDerived } from "../../entity/actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../../entity/attribute";
@@ -71,18 +71,21 @@ function installTimedEffect(
   target: Character,
   ctx: EffectContext,
 ): void {
-  const duration = effect.durationTicks ?? 0;
+  const duration = effect.durationActions ?? 0;
   if (duration <= 0) {
     throw new Error(
-      `effect "${effect.id}" of kind "${effect.kind}" has no durationTicks`,
+      `effect "${effect.id}" of kind "${effect.kind}" has no durationActions`,
     );
   }
   const sourceId = activeEffectSourceId(effect.id, source.id, ctx.currentTick);
 
-  const ae: ActiveEffect = {
+  const ae: EffectInstance = {
     effectId: effect.id,
     sourceId,
-    remainingTicks: duration,
+    sourceActorId: source.id,
+    remainingActions: duration,
+    stacks: 1,
+    state: {},
   };
   target.activeEffects.push(ae);
 
@@ -332,9 +335,9 @@ function buildFormulaContext(
   };
 }
 
-// ---------- Ticking active effects ----------
+// ---------- Processing action effects ----------
 
-export interface TickActiveEffectsContext {
+export interface ProcessActionEffectsContext {
   attrDefs: Readonly<Record<string, AttrDef>>;
   bus: GameEventBus;
   state: GameState;
@@ -343,17 +346,19 @@ export interface TickActiveEffectsContext {
 }
 
 /**
- * Advance all active effects on a character by 1 tick. Fires periodic pulses
+ * Advance all active effects on a character by 1 action. Fires periodic pulses
  * if due, removes expired effects (along with their modifier contributions).
+ * Effects with remainingActions === -1 are infinite and never expire or
+ * decrement.
  *
  * For simplicity (and to avoid dangling refs across a save), the periodic
  * pulse treats the character itself as its own source. Effects whose balance
  * depends on the original caster's stats should compute their magnitude at
  * install time and store it as a Modifier, not re-evaluate per pulse.
  */
-export function tickActiveEffects(
+export function processActionEffects(
   c: Character,
-  ctx: TickActiveEffectsContext,
+  ctx: ProcessActionEffectsContext,
 ): void {
   if (c.activeEffects.length === 0) return;
 
@@ -361,17 +366,20 @@ export function tickActiveEffects(
   const snapshot = [...c.activeEffects];
 
   for (const ae of snapshot) {
-    ae.remainingTicks -= 1;
+    // Infinite effects never decrement.
+    if (ae.remainingActions !== -1) {
+      ae.remainingActions -= 1;
+    }
 
     const def = safeGetEffect(ae.effectId);
     if (!def) continue;
 
     if (def.kind === "periodic") {
-      const period = def.periodTicks ?? 0;
+      const period = def.periodActions ?? 0;
       if (period > 0) {
         // Fire a pulse whenever the remaining duration aligns with a period.
         // (So an effect with duration 6, period 2 fires at remaining 4, 2, 0.)
-        const sinceInstall = (def.durationTicks ?? 0) - ae.remainingTicks;
+        const sinceInstall = (def.durationActions ?? 0) - ae.remainingActions;
         if (sinceInstall > 0 && sinceInstall % period === 0) {
           applyInstantPulse(def, c, c, {
             state: ctx.state,
@@ -385,13 +393,13 @@ export function tickActiveEffects(
     }
   }
 
-  // Remove expired.
-  const expired = c.activeEffects.filter((ae) => ae.remainingTicks <= 0);
+  // Remove expired (skip infinite effects with remainingActions === -1).
+  const expired = c.activeEffects.filter((ae) => ae.remainingActions !== -1 && ae.remainingActions <= 0);
   if (expired.length > 0) {
     for (const ae of expired) {
       removeModifiersBySource(c.attrs, ae.sourceId);
     }
-    c.activeEffects = c.activeEffects.filter((ae) => ae.remainingTicks > 0);
+    c.activeEffects = c.activeEffects.filter((ae) => ae.remainingActions === -1 || ae.remainingActions > 0);
   }
 }
 

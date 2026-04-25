@@ -20,13 +20,17 @@ import {
 } from "../../inventory";
 import type { GameLogEntry } from "../game-log";
 
-// ---------- Active effects ----------
+// ---------- Effect instances ----------
 
-export interface ActiveEffect {
-  effectId: string;          // content ID
-  sourceId: string;          // opaque — unique per instance so modifiers can be revoked cleanly
-  remainingTicks: number;    // duration; omit / negative => permanent (avoid)
-  stacks?: number;           // if the effect supports stacking
+export interface EffectInstance {
+  effectId: string;            // content ID
+  sourceId: string;            // opaque — unique per instance so modifiers can be revoked cleanly
+  sourceActorId: string;       // who applied this effect
+  sourceTalentId?: string;     // which talent installed this (for passive/sustain refresh)
+  remainingActions: number;    // duration in owner action counts; -1 = infinite
+  stacks: number;              // for stackable mode; default 1
+  /** Instance-specific data. JSON-safe. EffectDef functions read/write this. */
+  state: Record<string, unknown>;
 }
 
 // ---------- Inventory ----------

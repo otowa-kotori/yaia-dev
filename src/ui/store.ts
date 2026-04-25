@@ -165,6 +165,10 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     notify();
     persistSoon();
   });
+  bus.on("talentAllocated", () => {
+    notify();
+    persistSoon();
+  });
 
   // ---------- Catch-up (offline / background tab) ----------
 

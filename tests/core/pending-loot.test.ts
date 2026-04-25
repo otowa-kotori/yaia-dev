@@ -18,7 +18,7 @@ import {
   makePlayer,
   testOreItem,
   waveTrophyItem,
-  basicAttackAbility,
+  basicAttackTalent,
   type TestHarness,
 } from "../fixtures/content";
 import type { PlayerCharacter } from "../../src/core/entity/actor";
@@ -33,7 +33,7 @@ function setupHeroInStage(h: TestHarness): {
 } {
   const hero = makePlayer({
     id: "hero",
-    abilities: [basicAttackAbility.id],
+    talents: [basicAttackTalent.id],
     atk: 10,
     maxHp: 100,
   });
@@ -219,7 +219,7 @@ describe("pending loot", () => {
     const h = makeHarness();
     const hero = makePlayer({
       id: "hero",
-      abilities: [basicAttackAbility.id],
+      talents: [basicAttackTalent.id],
       atk: 10,
       maxHp: 100,
     });

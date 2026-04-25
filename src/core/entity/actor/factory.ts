@@ -3,21 +3,21 @@
 // Rules:
 // - Factories produce a fully-populated Actor including derived fields.
 // - rebuildCharacterDerived(c) clears and re-derives attrs.modifiers /
-//   attrs.dynamicProviders / attrs.depGraph / attrs.cache / abilities from
-//   the character's persisted SoT (equipped gear, activeEffects, knownAbilities).
+//   attrs.dynamicProviders / attrs.depGraph / attrs.cache / knownTalentIds from
+//   the character's persisted SoT (equipped gear, activeEffects, knownTalents).
 //   Call this:
 //     * after loading a save
 //     * after equipping/unequipping gear
 //     * after an effect is applied/removed (effect pipeline does this)
 // - attrs.base is PERSISTED. Modifiers/dynamicProviders/depGraph/cache/
-//   derived ability list are NOT.
+//   derived talent list are NOT.
 //
 // physScaling / magScaling DynamicModifierProviders:
 //   PlayerCharacter: read from HeroConfig via pc.heroConfigId at rebuild time.
 //   Enemy:           read from MonsterDef at rebuild time (default [{STR, 1.0}] / [{INT, 1.0}]).
 //   These configs live in content and are never duplicated on the actor.
 
-import type { AbilityId, AttrDef, AttrId, MonsterDef } from "../../content/types";
+import type { AttrDef, AttrId, MonsterDef, TalentId } from "../../content/types";
 import { getContent, getEffect, getItem } from "../../content/registry";
 import type { FormulaRef } from "../../infra/formula/types";
 import {
@@ -55,11 +55,11 @@ export interface CreatePlayerOptions {
   xpCurve: FormulaRef;
   maxLevel?: number;
   baseAttrs?: AttrSet["base"];
-  /** Abilities the player has learned. First entry becomes default attack. */
-  knownAbilities?: AbilityId[];
+  /** Talents the player has learned. First entry becomes default attack. */
+  knownTalents?: TalentId[];
   skills?: PlayerCharacter["skills"];
   equipped?: PlayerCharacter["equipped"];
-  talents?: string[];
+  talentLevels?: Record<string, number>;
   inventoryStackLimit?: number;
   attrDefs: Readonly<Record<string, AttrDef>>;
 }
@@ -86,15 +86,15 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     maxLevel: opts.maxLevel ?? 99,
     skills: opts.skills ?? ({} as PlayerCharacter["skills"]),
     equipped: opts.equipped ?? {},
-    talents: opts.talents ?? [],
+    talentLevels: opts.talentLevels ?? {},
     activity: null,
-    knownAbilities: opts.knownAbilities ?? [],
+    knownTalents: opts.knownTalents ?? [],
     currentHp: 0, // set below after attrs computed
     currentMp: 0,
     activeEffects: [],
     cooldowns: {},
     attrs: createAttrSet(baseAttrs),
-    abilities: [],
+    knownTalentIds: [],
     side: "player",
     locationId: null,
     stageId: null,
@@ -131,7 +131,7 @@ export function createEnemy(opts: CreateEnemyOptions): Enemy {
     activeEffects: [],
     cooldowns: {},
     attrs: createAttrSet(base),
-    abilities: opts.def.abilities.slice(),
+    knownTalentIds: opts.def.talents.slice(),
     side: opts.side ?? "enemy",
   };
   rebuildCharacterDerived(e, opts.attrDefs);
@@ -163,8 +163,8 @@ export function createResourceNode(
 
 /**
  * Rebuild derived fields on a Character (modifier stack + attrs cache +
- * runtime ability list). Persisted fields (attrs.base, currentHp/Mp,
- * activeEffects, cooldowns, equipped, knownAbilities) are the only inputs.
+ * runtime talent list). Persisted fields (attrs.base, currentHp/Mp,
+ * activeEffects, cooldowns, equipped, knownTalents) are the only inputs.
  *
  * Safe to call repeatedly. Clamps currentHp/Mp against the freshly computed
  * maxHp/maxMp (guards against max being lowered between saves).
@@ -280,13 +280,13 @@ export function rebuildCharacterDerived(
     }
   }
 
-  // 5) Runtime ability list.
+  // 5) Runtime talent list.
   if (c.kind === "player") {
-    c.abilities = (c as PlayerCharacter).knownAbilities.slice();
+    c.knownTalentIds = (c as PlayerCharacter).knownTalents.slice();
   } else if (c.kind === "enemy") {
-    // Enemy abilities already populated at create time from def; leave as-is
+    // Enemy talents already populated at create time from def; leave as-is
     // unless the caller cleared them. This keeps post-load enemies working.
-    if (!c.abilities || c.abilities.length === 0) {
+    if (!c.knownTalentIds || c.knownTalentIds.length === 0) {
       // Caller should have set from MonsterDef. Nothing we can do here without
       // def lookup; stays empty, which is a visible failure.
     }

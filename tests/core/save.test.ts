@@ -58,7 +58,6 @@ describe("save / serialize+deserialize", () => {
     const state = createEmptyState(42, 1);
     const hero = makePlayer({
       id: "hero.1",
-      abilities: [],
       maxHp: 120,
       inventoryStackLimit: 12,
     });
@@ -79,7 +78,7 @@ describe("save / serialize+deserialize", () => {
 
   test("strips derived attr modifiers — rebuilt from SoT on load", () => {
     const state = createEmptyState(0, 1);
-    const hero = makePlayer({ id: "hero.1", abilities: [], maxHp: 100 });
+    const hero = makePlayer({ id: "hero.1", maxHp: 100 });
     // Simulate a stale modifier stack that wasn't rebuilt yet. These should
     // be discarded by serialize.
     hero.attrs.modifiers = [
@@ -101,7 +100,7 @@ describe("save / serialize+deserialize", () => {
 
   test("clamps currentHp if maxHp has been lowered between saves", () => {
     const state = createEmptyState(0, 1);
-    const hero = makePlayer({ id: "hero.1", abilities: [], maxHp: 200 });
+    const hero = makePlayer({ id: "hero.1", maxHp: 200 });
     hero.currentHp = 180;
     state.actors.push(hero);
     // Mimic a retroactive content nerf: the serialized base is now 80.
@@ -116,7 +115,7 @@ describe("save / serialize+deserialize", () => {
 
   test("round-trips a Battle + Enemy instance", () => {
     const state = createEmptyState(7, 1);
-    const hero = makePlayer({ id: "hero.1", abilities: [] });
+    const hero = makePlayer({ id: "hero.1" });
     const slime = makeSlime("enemy.slime.w1.0");
     slime.currentHp = 17;
     state.actors.push(hero, slime);
@@ -143,10 +142,10 @@ describe("save / serialize+deserialize", () => {
     expect(b.scheduler.kind).toBe("atb");
     expect(b.intents[hero.id]).toBe(INTENT.RANDOM_ATTACK);
 
-    // Enemy was restored with abilities re-populated from its MonsterDef.
+    // Enemy was restored with knownTalentIds re-populated from its MonsterDef.
     const restoredSlime = restored.actors.find((a) => a.id === slime.id)!;
     if (!isEnemy(restoredSlime)) throw new Error("expected enemy");
-    expect(restoredSlime.abilities.length).toBeGreaterThan(0);
+    expect(restoredSlime.knownTalentIds.length).toBeGreaterThan(0);
     expect(restoredSlime.currentHp).toBe(17);
   });
 

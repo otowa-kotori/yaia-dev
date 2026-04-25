@@ -113,19 +113,19 @@ describe("computeWorldModifiers", () => {
 // ---------- upgradeCost ----------
 
 describe("upgradeCost", () => {
-  test("level 0â†? costs base", () => {
+  test("level 0ï¿½? costs base", () => {
     // exp_curve_v1: cost(nextLevel) = base * growth^(nextLevel-1)
-    // nextLevel = 1, growth^0 = 1 â†?cost = 100
+    // nextLevel = 1, growth^0 = 1 ï¿½?cost = 100
     expect(upgradeCost(atkUpgradeDef, 0)).toBe(100);
   });
 
-  test("level 1â†? costs base * growth", () => {
-    // nextLevel = 2, growth^1 = 2 â†?cost = 200
+  test("level 1ï¿½? costs base * growth", () => {
+    // nextLevel = 2, growth^1 = 2 ï¿½?cost = 200
     expect(upgradeCost(atkUpgradeDef, 1)).toBe(200);
   });
 
-  test("level 2â†? compounds", () => {
-    // nextLevel = 3, growth^2 = 4 â†?cost = 400
+  test("level 2ï¿½? compounds", () => {
+    // nextLevel = 3, growth^2 = 4 ï¿½?cost = 400
     expect(upgradeCost(atkUpgradeDef, 2)).toBe(400);
   });
 
@@ -150,7 +150,7 @@ describe("rebuildCharacterDerived + worldRecord", () => {
   });
 
   test("injects world ATK modifiers for player", () => {
-    const pc = makePlayer({ id: "p1", abilities: [], atk: 10 });
+    const pc = makePlayer({ id: "p1", atk: 10 });
     const record: WorldRecord = { upgrades: { [atkUpgradeDef.id]: 2 } };
 
     rebuildCharacterDerived(pc, attrDefs, record);
@@ -160,15 +160,15 @@ describe("rebuildCharacterDerived + worldRecord", () => {
   });
 
   test("no world modifiers when worldRecord omitted (enemy path)", () => {
-    const pc = makePlayer({ id: "p1", abilities: [], atk: 10 });
+    const pc = makePlayer({ id: "p1", atk: 10 });
     rebuildCharacterDerived(pc, attrDefs); // no worldRecord
 
     expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(10);
   });
 
-  test("rebuild is idempotent â€?double call gives same result", () => {
+  test("rebuild is idempotent ï¿½?double call gives same result", () => {
     const record: WorldRecord = { upgrades: { [atkUpgradeDef.id]: 1 } };
-    const pc = makePlayer({ id: "p1", abilities: [], atk: 10 });
+    const pc = makePlayer({ id: "p1", atk: 10 });
 
     rebuildCharacterDerived(pc, attrDefs, record);
     const first = getAttr(pc, ATTR.PATK, attrDefs);
@@ -185,7 +185,7 @@ describe("rebuildCharacterDerived + worldRecord", () => {
 describe("applyRewards: currencies", () => {
   test("currencies are written to state.currencies", () => {
     const h = makeHarness();
-    const pc = makePlayer({ id: "hero.1", abilities: [] });
+    const pc = makePlayer({ id: "hero.1" });
     h.state.actors.push(pc);
     h.state.inventories[pc.id] = { capacity: 20, slots: Array(20).fill(null) };
 
@@ -209,7 +209,7 @@ describe("applyRewards: currencies", () => {
 
   test("multiple reward calls accumulate", () => {
     const h = makeHarness();
-    const pc = makePlayer({ id: "hero.1", abilities: [] });
+    const pc = makePlayer({ id: "hero.1" });
     h.state.actors.push(pc);
     h.state.inventories[pc.id] = { capacity: 20, slots: Array(20).fill(null) };
 

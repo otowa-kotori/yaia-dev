@@ -32,20 +32,20 @@ describe("progression / XP", () => {
   });
 
   test("grantCharacterXp awards one level when exactly enough", () => {
-    const pc = makePlayer({ id: "p", abilities: [] });
+    const pc = makePlayer({ id: "p" });
     const bus = createGameEventBus();
-    const evs: { charId: string; level: number }[] = [];
-    bus.on("levelup", (p) => evs.push(p));
+    const evs: { kind: string; charId: string; level: number }[] = [];
+    bus.on("levelup", (p) => evs.push(p as any));
 
     const gained = grantCharacterXp(pc, 34, { bus });
     expect(gained).toBe(1);
     expect(pc.level).toBe(2);
     expect(pc.exp).toBe(0);
-    expect(evs).toEqual([{ charId: "p", level: 2 }]);
+    expect(evs).toEqual([{ kind: "character", charId: "p", level: 2 }]);
   });
 
   test("grantCharacterXp cascades multiple level-ups on one call", () => {
-    const pc = makePlayer({ id: "p", abilities: [] });
+    const pc = makePlayer({ id: "p" });
     const bus = createGameEventBus();
     const evs: number[] = [];
     bus.on("levelup", (p) => evs.push(p.level));
@@ -60,7 +60,7 @@ describe("progression / XP", () => {
   });
 
   test("grantCharacterXp stops at maxLevel", () => {
-    const pc = makePlayer({ id: "p", abilities: [] });
+    const pc = makePlayer({ id: "p" });
     pc.maxLevel = 2;
     const bus = createGameEventBus();
     const gained = grantCharacterXp(pc, 9999, { bus });
@@ -71,7 +71,7 @@ describe("progression / XP", () => {
   });
 
   test("grantSkillXp lazily creates the skill entry", () => {
-    const pc = makePlayer({ id: "p", abilities: [] });
+    const pc = makePlayer({ id: "p" });
     const bus = createGameEventBus();
     expect(pc.skills[miningSkill.id]).toBeUndefined();
 
@@ -82,18 +82,18 @@ describe("progression / XP", () => {
   });
 
   test("grantSkillXp level-up emits a namespaced levelup event", () => {
-    const pc = makePlayer({ id: "hero", abilities: [] });
+    const pc = makePlayer({ id: "hero" });
     const bus = createGameEventBus();
     const evs: string[] = [];
     bus.on("levelup", (p) => evs.push(p.charId));
 
     expect(miningSkill.xpCurve).toEqual(testSkillXpCurve);
     grantSkillXp(pc, miningSkill, 34, { bus });
-    expect(evs).toEqual(["hero:skill.mining"]);
+    expect(evs).toEqual(["hero"]);
   });
 
   test("xpProgressToNextLevel returns pct and cost", () => {
-    const pc = makePlayer({ id: "p", abilities: [] });
+    const pc = makePlayer({ id: "p" });
     pc.exp = 17;
     const p = xpProgressToNextLevel(pc.level, pc.exp, pc.xpCurve);
     expect(p.cost).toBe(34);

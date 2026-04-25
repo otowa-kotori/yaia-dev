@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resetContent } from "../../../src/core/content";
 import { createGameSession, type GameSession } from "../../../src/core/session";
 import {
-  basicAttackAbility,
+  basicAttackTalent,
   forestLocation,
   loadFixtureContent,
   testDungeon,
@@ -21,13 +21,13 @@ function createSession(): GameSession {
         id: "hero.1",
         name: "Fighter",
         xpCurve: testXpCurve,
-        knownAbilities: [basicAttackAbility.id],
+        knownTalents: [basicAttackTalent.id],
       },
       {
         id: "hero.2",
         name: "Mage",
         xpCurve: testXpCurve,
-        knownAbilities: [basicAttackAbility.id],
+        knownTalents: [basicAttackTalent.id],
       },
     ],
     initialLocationId: forestLocation.id as never,

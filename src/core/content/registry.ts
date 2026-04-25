@@ -19,7 +19,6 @@ export function patchContent(partial: Partial<ContentDb>): void {
   current = {
     items: { ...current.items, ...(partial.items ?? {}) },
     monsters: { ...current.monsters, ...(partial.monsters ?? {}) },
-    abilities: { ...current.abilities, ...(partial.abilities ?? {}) },
     effects: { ...current.effects, ...(partial.effects ?? {}) },
     skills: { ...current.skills, ...(partial.skills ?? {}) },
     locations: { ...current.locations, ...(partial.locations ?? {}) },
@@ -52,11 +51,6 @@ export function getItem(id: string) {
 export function getMonster(id: string) {
   const v = current.monsters[id];
   if (!v) throw new Error(`content: no monster "${id}"`);
-  return v;
-}
-export function getAbility(id: string) {
-  const v = current.abilities[id];
-  if (!v) throw new Error(`content: no ability "${id}"`);
   return v;
 }
 export function getEffect(id: string) {

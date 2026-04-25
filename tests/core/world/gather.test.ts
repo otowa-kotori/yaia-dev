@@ -34,7 +34,7 @@ function setup() {
   const rng = createRng(42);
   const engine = createTickEngine();
 
-  const hero = makePlayer({ id: "hero", abilities: [] });
+  const hero = makePlayer({ id: "hero" });
   hero.locationId = mineLocation.id;
   hero.stageId = STAGE_ID;
   state.actors.push(hero);

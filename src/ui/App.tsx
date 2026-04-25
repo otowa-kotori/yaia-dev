@@ -23,6 +23,7 @@ import { InventoryView } from "./InventoryView";
 import { CraftingView } from "./CraftingView";
 import { XpOverview } from "./XpOverview";
 import { UpgradesView } from "./UpgradesView";
+import { TalentsView } from "./TalentsView";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import { useStore } from "./useStore";
 import { T, fmt } from "./text";
@@ -47,7 +48,7 @@ const containerStyle: React.CSSProperties = {
 
 // ---------- Tab definitions ----------
 
-type TabId = "map" | "log" | "inventory" | "crafting" | "xp" | "upgrades" | "settings";
+type TabId = "map" | "log" | "inventory" | "crafting" | "xp" | "talents" | "upgrades" | "settings";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "map",       label: T.tab_map },
@@ -55,6 +56,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "inventory", label: T.tab_inventory },
   { id: "crafting",  label: T.tab_crafting },
   { id: "xp",        label: T.tab_xp },
+  { id: "talents",   label: T.tab_talents },
   { id: "upgrades",  label: T.tab_upgrades },
   { id: "settings",  label: T.tab_settings },
 ];
@@ -257,6 +259,10 @@ function TabPanel({
       return <CraftingView store={store} />;
     case "xp":
       return <XpOverview store={store} />;
+    case "talents":
+      return <TalentsView store={store} />;
+    case "talents":
+      return <TalentsView store={store} />;
     case "upgrades":
       return <UpgradesView store={store} />;
     case "settings":

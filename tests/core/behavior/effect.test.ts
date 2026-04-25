@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { applyEffect, tickActiveEffects } from "../../../src/core/behavior/effect";
+import { applyEffect, processActionEffects } from "../../../src/core/behavior/effect";
 import { resetContent } from "../../../src/core/content";
 import {
   basicStrikeEffect,
@@ -19,7 +19,6 @@ describe("effect: instant", () => {
     const h = makeHarness();
     const attacker = makePlayer({
       id: "p1",
-      abilities: [],
       atk: 15,
     });
     const defender = makeSlime("slime#1"); // PDEF=1, PATK=4, hp=30
@@ -40,7 +39,7 @@ describe("effect: instant", () => {
 
   test("emits 'damage' event", () => {
     const h = makeHarness();
-    const a = makePlayer({ id: "a", abilities: [], atk: 12 });
+    const a = makePlayer({ id: "a", atk: 12 });
     const b = makeSlime("b");
     const received: { attackerId: string; targetId: string; amount: number }[] = [];
     h.bus.on("damage", (p) => received.push(p));
@@ -54,7 +53,7 @@ describe("effect: instant", () => {
 
   test("currentHp is clamped to 0 on lethal damage", () => {
     const h = makeHarness();
-    const a = makePlayer({ id: "a", abilities: [], atk: 9999 });
+    const a = makePlayer({ id: "a", atk: 9999 });
     const b = makeSlime("b");
     applyEffect(basicStrikeEffect, a, b, { ...h });
     expect(b.currentHp).toBe(0);
@@ -66,7 +65,7 @@ describe("effect: duration", () => {
 
   test("installing a duration effect adds modifiers and an activeEffect entry", () => {
     const h = makeHarness();
-    const c = makePlayer({ id: "u", abilities: [] });
+    const c = makePlayer({ id: "u" });
 
     const defBefore = getAttr(c, ATTR.PDEF, h.attrDefs);
     applyEffect(shieldBuffEffect, c, c, { ...h });
@@ -76,10 +75,10 @@ describe("effect: duration", () => {
     expect(defAfter - defBefore).toBe(5);
   });
 
-  test("tickActiveEffects removes the effect when its remaining ticks hit 0", () => {
+  test("processActionEffects removes the effect when its remaining actions hit 0", () => {
     const h = makeHarness();
-    const c = makePlayer({ id: "u", abilities: [] });
-    applyEffect(shieldBuffEffect, c, c, { ...h }); // durationTicks: 10
+    const c = makePlayer({ id: "u" });
+    applyEffect(shieldBuffEffect, c, c, { ...h }); // durationActions: 10
 
     const ctx = {
       state: h.state,
@@ -88,11 +87,11 @@ describe("effect: duration", () => {
       attrDefs: h.attrDefs,
       currentTick: h.currentTick,
     };
-    for (let i = 0; i < 9; i++) tickActiveEffects(c, ctx);
+    for (let i = 0; i < 9; i++) processActionEffects(c, ctx);
     expect(c.activeEffects.length).toBe(1);
     expect(getAttr(c, ATTR.PDEF, h.attrDefs)).toBe(5); // still buffed
 
-    tickActiveEffects(c, ctx); // tick #10 expires it
+    processActionEffects(c, ctx); // tick #10 expires it
     expect(c.activeEffects.length).toBe(0);
     expect(getAttr(c, ATTR.PDEF, h.attrDefs)).toBe(0);
   });
@@ -103,7 +102,7 @@ describe("effect: periodic", () => {
 
   test("periodic pulses fire on period boundaries", () => {
     const h = makeHarness();
-    const c = makePlayer({ id: "u", abilities: [], hp: 100, maxHp: 100 });
+    const c = makePlayer({ id: "u", hp: 100, maxHp: 100 });
     applyEffect(burnDotEffect, c, c, { ...h }); // duration 6, period 2, const damage 3
 
     const ctx = {
@@ -115,22 +114,22 @@ describe("effect: periodic", () => {
     };
 
     // tick 1: remaining 5 (sinceInstall=1, not divisible by 2) — no pulse
-    tickActiveEffects(c, ctx);
+    processActionEffects(c, ctx);
     expect(c.currentHp).toBe(100);
     // tick 2: remaining 4 (sinceInstall=2, %2==0) — pulse for 3
-    tickActiveEffects(c, ctx);
+    processActionEffects(c, ctx);
     expect(c.currentHp).toBe(97);
     // tick 3: no pulse
-    tickActiveEffects(c, ctx);
+    processActionEffects(c, ctx);
     expect(c.currentHp).toBe(97);
     // tick 4: pulse
-    tickActiveEffects(c, ctx);
+    processActionEffects(c, ctx);
     expect(c.currentHp).toBe(94);
     // tick 5: no pulse
-    tickActiveEffects(c, ctx);
+    processActionEffects(c, ctx);
     expect(c.currentHp).toBe(94);
     // tick 6: final pulse + expires
-    tickActiveEffects(c, ctx);
+    processActionEffects(c, ctx);
     expect(c.currentHp).toBe(91);
     expect(c.activeEffects.length).toBe(0);
   });
