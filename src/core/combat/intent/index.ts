@@ -25,12 +25,15 @@
 import type { Character } from "../../entity/actor";
 import { isAlive } from "../../entity/actor";
 import type { Rng } from "../../infra/rng";
+import type { AttrDef } from "../../content/types";
 
 export interface IntentContext {
   /** All participants in the current battle. */
   participants: readonly Character[];
   /** Shared combat RNG (used for pick()-style decisions). */
   rng: Rng;
+  /** Attribute definitions — needed for AGGRO_WEIGHT weighted targeting. */
+  attrDefs?: Readonly<Record<string, AttrDef>>;
 }
 
 /**
@@ -50,6 +53,14 @@ export const INTENT = {
   /** RandomAttackIntent — default auto-attack. */
   RANDOM_ATTACK: "intent.random_attack",
 } as const;
+
+// Re-export PriorityList types and factory.
+export {
+  createPriorityListIntent,
+  type PriorityRule,
+  type TargetPolicy,
+  type UseCondition,
+} from "./priority";
 
 // ---------- Registry ----------
 //
@@ -109,16 +120,16 @@ export function alliesOf(
 
 // ---------- RandomAttackIntent ----------
 //
-// MVP default: pick a random alive enemy, use the actor's first known talent
-// (conventionally a single_enemy basic attack). Returns null if there are no
-// valid targets or the actor has no talents.
+// MVP default: pick a random alive enemy weighted by AGGRO_WEIGHT, use the
+// actor's first known talent (conventionally a single_enemy basic attack).
+// Returns null if there are no valid targets or the actor has no talents.
 
 export const RandomAttackIntent: Intent = (actor, ctx) => {
   if (actor.knownTalentIds.length === 0) return null;
   const talentId = actor.knownTalentIds[0]!;
   const enemies = enemiesOf(actor, ctx.participants);
   if (enemies.length === 0) return null;
-  const target = ctx.rng.pick(enemies);
+  const target = pickWeightedTarget(enemies, ctx);
   return { talentId, targets: [target] };
 };
 
@@ -128,4 +139,79 @@ export const RandomAttackIntent: Intent = (actor, ctx) => {
  *  than once (idempotent overwrite). */
 export function registerBuiltinIntents(): void {
   registerIntent(INTENT.RANDOM_ATTACK, RandomAttackIntent);
+}
+
+// ---------- Weighted target selection ----------
+
+import { ATTR, getAttr as getAttrFromSet } from "../../entity/attribute";
+
+/**
+ * Pick a target from `candidates` weighted by AGGRO_WEIGHT. Falls back to
+ * uniform random if attrDefs is not provided or all weights are equal.
+ */
+export function pickWeightedTarget(
+  candidates: Character[],
+  ctx: IntentContext,
+): Character {
+  if (candidates.length === 1) return candidates[0]!;
+  if (!ctx.attrDefs) return ctx.rng.pick(candidates);
+
+  const weights = candidates.map(c => {
+    const w = getAttrFromSet(c.attrs, ATTR.AGGRO_WEIGHT, ctx.attrDefs!);
+    return Math.max(0.1, w); // clamp same as AttrDef.clampMin
+  });
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  if (totalWeight <= 0) return ctx.rng.pick(candidates);
+
+  let roll = ctx.rng.next() * totalWeight;
+  for (let i = 0; i < candidates.length; i++) {
+    roll -= weights[i]!;
+    if (roll <= 0) return candidates[i]!;
+  }
+  return candidates[candidates.length - 1]!;
+}
+
+// ---------- Battle intent builder ----------
+
+import { getContent } from "../../content/registry";
+import { isPlayer, isEnemy } from "../../entity/actor";
+import type { PlayerCharacter, Enemy } from "../../entity/actor";
+import { createPriorityListIntent } from "./priority";
+
+/**
+ * Build a per-actor intent map for a new battle. Reads intentConfig from
+ * content (HeroConfig for players, MonsterDef for enemies). Each unique
+ * config is registered as a separate intent in the registry (idempotent).
+ *
+ * Returns Record<actorId, intentId> suitable for CreateBattleOptions.intents.
+ */
+export function buildBattleIntents(
+  participants: readonly Character[],
+): Record<string, string> {
+  const content = getContent();
+  const intents: Record<string, string> = {};
+
+  for (const actor of participants) {
+    if (isPlayer(actor)) {
+      const pc = actor as PlayerCharacter;
+      const heroCfg = content.starting?.heroes.find(h => h.id === pc.heroConfigId);
+      const rules = heroCfg?.intentConfig ?? [];
+      const intentId = `intent.hero.${pc.heroConfigId}`;
+      if (!hasIntent(intentId)) {
+        registerIntent(intentId, createPriorityListIntent(rules));
+      }
+      intents[actor.id] = intentId;
+    } else if (isEnemy(actor)) {
+      const e = actor as Enemy;
+      const mdef = content.monsters[e.defId as string];
+      const rules = mdef?.intentConfig ?? [];
+      const intentId = `intent.monster.${e.defId}`;
+      if (!hasIntent(intentId)) {
+        registerIntent(intentId, createPriorityListIntent(rules));
+      }
+      intents[actor.id] = intentId;
+    }
+  }
+
+  return intents;
 }

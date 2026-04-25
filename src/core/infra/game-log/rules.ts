@@ -179,13 +179,30 @@ export const gameLogRules = {
 
     const ability = talentName(payload.abilityId);
     const targets = listOrFallback(payload.targetIds.map((id) => actorName(ctx.state, id)), "目标未知");
-    const magnitudes = payload.magnitudes.filter((value) => value > 0);
-    const magnitudeText =
-      magnitudes.length > 0 ? `（数值 ${magnitudes.join(" / ")}）` : "";
     return entry(
       ctx,
       "battle",
-      `${actor} 使用了 ${ability}，目标：${targets}${magnitudeText}。`,
+      `${actor} 使用了 ${ability}，目标：${targets}。`,
+      scope,
+    );
+  },
+  damage: (
+    payload: GameEvents["damage"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const attacker = actorName(ctx.state, payload.attackerId);
+    const target = actorName(ctx.state, payload.targetId);
+    // Find the active battle containing this attacker to inherit its scope.
+    const battle = ctx.state.battles.find(
+      b => b.outcome === "ongoing" && b.participantIds.includes(payload.attackerId),
+    );
+    const scope: GameLogScope = battle
+      ? { battleId: battle.id, stageId: battle.metadata?.stageId, locationId: battle.metadata?.locationId, dungeonSessionId: battle.metadata?.dungeonSessionId }
+      : {};
+    return entry(
+      ctx,
+      "battle",
+      `${attacker} 对 ${target} 造成了 ${payload.amount} 点伤害。`,
       scope,
     );
   },

@@ -43,23 +43,27 @@ export interface EffectContext {
 /**
  * Apply an effect from `source` onto `target`. Returns the resulting magnitude
  * (damage dealt / hp healed / 0 for non-magnitude effects).
+ *
+ * `initialState` is optional instance-specific data for the EffectInstance.
+ * Used by talent execute() to pass level info so computeModifiers can scale.
  */
 export function applyEffect(
   effect: EffectDef,
   source: Character,
   target: Character,
   ctx: EffectContext,
+  initialState?: Record<string, unknown>,
 ): number {
   switch (effect.kind) {
     case "instant":
       return applyInstantPulse(effect, source, target, ctx);
 
     case "duration":
-      installTimedEffect(effect, source, target, ctx);
+      installTimedEffect(effect, source, target, ctx, initialState);
       return 0;
 
     case "periodic":
-      installTimedEffect(effect, source, target, ctx);
+      installTimedEffect(effect, source, target, ctx, initialState);
       return 0;
   }
 }
@@ -70,6 +74,7 @@ function installTimedEffect(
   source: Character,
   target: Character,
   ctx: EffectContext,
+  initialState?: Record<string, unknown>,
 ): void {
   const duration = effect.durationActions ?? 0;
   if (duration <= 0) {
@@ -78,6 +83,7 @@ function installTimedEffect(
     );
   }
   const sourceId = activeEffectSourceId(effect.id, source.id, ctx.currentTick);
+  const state = initialState ?? {};
 
   const ae: EffectInstance = {
     effectId: effect.id,
@@ -85,15 +91,18 @@ function installTimedEffect(
     sourceActorId: source.id,
     remainingActions: duration,
     stacks: 1,
-    state: {},
+    state,
   };
   target.activeEffects.push(ae);
 
-  if (effect.modifiers && effect.modifiers.length > 0) {
-    // Tag modifiers with the per-instance sourceId so expiry can remove them cleanly.
+  // Resolve modifiers: computeModifiers(state) takes priority over static modifiers.
+  const mods = effect.computeModifiers
+    ? effect.computeModifiers(state)
+    : (effect.modifiers ?? []);
+  if (mods.length > 0) {
     addModifiers(
       target.attrs,
-      effect.modifiers.map((m) => ({ ...m, sourceId })),
+      mods.map((m) => ({ ...m, sourceId })),
     );
   }
 }

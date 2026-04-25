@@ -3,9 +3,18 @@
 // TP (Talent Points) are derived from character level: totalTp = (level - 1) * 3.
 // Players allocate TP into talents to raise their level. Each talent level costs
 // tpCost TP. Prerequisites (talent X at level Y) must be met before allocation.
+//
+// Passive talents: when a passive talent is first learned (0→1) or upgraded,
+// the system calls grantEffects(level, owner) to install infinite-duration
+// EffectInstances. On upgrade (e.g. 1→2), old instances tagged with the
+// talent's sourceTalentId are removed and replaced with new ones. This keeps
+// the modifier stack in sync with the talent level.
 
-import type { PlayerCharacter } from "../entity/actor/types";
-import type { ContentDb, TalentId, TalentDef } from "../content/types";
+import type { PlayerCharacter, Character } from "../entity/actor/types";
+import type { ContentDb, TalentId, TalentDef, EffectId, AttrDef } from "../content/types";
+import type { EffectInstance } from "../infra/state/types";
+import { addModifiers, removeModifiersBySource } from "../entity/attribute";
+import { getEffect } from "../content/registry";
 
 export function computeTotalTp(level: number): number {
   return (level - 1) * 3;
@@ -44,7 +53,8 @@ export type AllocateResult =
 
 /**
  * Try to allocate one talent point into the given talent.
- * Mutates pc.talentLevels on success.
+ * Mutates pc.talentLevels on success. For passive talents, also installs
+ * grantEffects as infinite-duration EffectInstances.
  */
 export function allocateTalentPoint(
   pc: PlayerCharacter,
@@ -91,5 +101,149 @@ export function allocateTalentPoint(
     }
   }
 
+  // Passive / sustain talent effect installation.
+  // When grantEffects is defined, call it to produce EffectApplications and
+  // install them as infinite EffectInstances on the character.
+  if (def.grantEffects && (def.type === "passive" || def.type === "sustain")) {
+    // Sustain: handle exclusiveGroup — deactivate the old sustain in the same
+    // group before installing the new one.
+    if (def.type === "sustain" && def.exclusiveGroup) {
+      const group = def.exclusiveGroup;
+      const oldTalentId = pc.activeSustains[group];
+      if (oldTalentId && oldTalentId !== (talentId as string)) {
+        removePassiveEffectsForTalent(pc, oldTalentId);
+      }
+      pc.activeSustains[group] = talentId as string;
+    }
+    installPassiveEffects(pc, def, newLevel, content.attributes);
+  }
+
   return { ok: true, newLevel };
+}
+
+// ---------- Passive effect installation ----------
+
+/**
+ * Install (or re-install on upgrade) passive effects from a talent's
+ * grantEffects. All installed EffectInstances carry `sourceTalentId` so they
+ * can be identified and replaced on level-up.
+ *
+ * Each EffectApplication produces exactly one EffectInstance. Modifiers are
+ * resolved via EffectDef.computeModifiers(state) if present, otherwise
+ * EffectDef.modifiers (static). grantEffects returns one application per
+ * effect — level scaling is handled inside computeModifiers, not by copy count.
+ */
+function installPassiveEffects(
+  pc: PlayerCharacter,
+  def: TalentDef,
+  level: number,
+  attrDefs: Readonly<Record<string, AttrDef>>,
+): void {
+  if (!def.grantEffects) return;
+
+  const talentId = def.id as string;
+
+  // Remove old instances from this talent (upgrade path: level N → N+1).
+  removePassiveEffectsForTalent(pc, talentId);
+
+  // Call grantEffects to get the new set of EffectApplications.
+  const applications = def.grantEffects(level, pc as Character);
+
+  for (let i = 0; i < applications.length; i++) {
+    const app = applications[i]!;
+    const sourceId = `talent:${talentId}:${app.effectId}:${i}`;
+    const state = app.state ?? {};
+    const inst: EffectInstance = {
+      effectId: app.effectId as string,
+      sourceId,
+      sourceActorId: pc.id,
+      sourceTalentId: talentId,
+      remainingActions: -1, // infinite
+      stacks: 1,
+      state,
+    };
+    pc.activeEffects.push(inst);
+
+    // Resolve modifiers: computeModifiers(state) takes priority over static modifiers.
+    const effDef = safeGetEffect(app.effectId as string);
+    if (effDef) {
+      const mods = effDef.computeModifiers
+        ? effDef.computeModifiers(state)
+        : (effDef.modifiers ?? []);
+      if (mods.length > 0) {
+        addModifiers(pc.attrs, mods.map(m => ({ ...m, sourceId })));
+      }
+    }
+  }
+}
+
+/**
+ * Remove all passive EffectInstances that were installed by a specific talent.
+ * Also removes their modifier contributions from the attr stack.
+ */
+function removePassiveEffectsForTalent(
+  pc: PlayerCharacter,
+  talentId: string,
+): void {
+  const toRemove = pc.activeEffects.filter(ae => ae.sourceTalentId === talentId);
+  if (toRemove.length === 0) return;
+
+  for (const ae of toRemove) {
+    removeModifiersBySource(pc.attrs, ae.sourceId);
+  }
+  pc.activeEffects = pc.activeEffects.filter(ae => ae.sourceTalentId !== talentId);
+}
+
+function safeGetEffect(id: string) {
+  try {
+    return getEffect(id);
+  } catch {
+    return undefined;
+  }
+}
+
+// ---------- Sustain toggle ----------
+
+export type ToggleSustainResult =
+  | { ok: true; activated: boolean }
+  | { ok: false; reason: "unknown_talent" | "not_sustain" | "not_learned" };
+
+/**
+ * Toggle a sustain talent on or off. If activating, deactivates any other
+ * sustain in the same exclusiveGroup first. If deactivating, removes the
+ * talent's passive effects.
+ */
+export function toggleSustain(
+  pc: PlayerCharacter,
+  talentId: TalentId,
+  content: ContentDb,
+): ToggleSustainResult {
+  const def = content.talents[talentId as string];
+  if (!def) return { ok: false, reason: "unknown_talent" };
+  if (def.type !== "sustain") return { ok: false, reason: "not_sustain" };
+
+  const level = pc.talentLevels[talentId as string] ?? 0;
+  if (level === 0) return { ok: false, reason: "not_learned" };
+
+  const group = def.exclusiveGroup ?? talentId;
+  const isCurrentlyActive = pc.activeSustains[group] === (talentId as string);
+
+  if (isCurrentlyActive) {
+    // Deactivate.
+    removePassiveEffectsForTalent(pc, talentId as string);
+    delete pc.activeSustains[group];
+    return { ok: true, activated: false };
+  }
+
+  // Activate: remove old sustain in same group first.
+  const oldTalentId = pc.activeSustains[group];
+  if (oldTalentId) {
+    removePassiveEffectsForTalent(pc, oldTalentId);
+  }
+  pc.activeSustains[group] = talentId as string;
+
+  if (def.grantEffects) {
+    installPassiveEffects(pc, def, level, content.attributes);
+  }
+  return { ok: true, activated: true };
 }

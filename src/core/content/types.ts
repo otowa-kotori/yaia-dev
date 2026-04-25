@@ -10,6 +10,8 @@
 // serialized. See docs/design/skill-system.md §2.4.
 
 import type { FormulaRef } from "../infra/formula/types";
+import type { ReactionHooks } from "../combat/reaction/types";
+import type { PriorityRule } from "../combat/intent/priority";
 
 // ---------- Branded ID types ----------
 // Brands are compile-time only; at runtime they're plain strings.
@@ -156,11 +158,17 @@ export interface MonsterDef {
   /** Which primary attributes contribute to MAG_POTENCY (→ MATK).
    *  Default: [{attr: ATTR.INT, ratio: 1.0}]. */
   magScaling?: { attr: AttrId; ratio: number }[];
+  /** Priority-list AI rules for combat. If omitted, uses basic attack on
+   *  a random enemy. */
+  intentConfig?: PriorityRule[];
 }
 
 // ---------- Effects ----------
 
 export type EffectKind = "instant" | "duration" | "periodic";
+
+/** Minimal context for effect lifecycle hooks. Full type in behavior/effect. */
+export type EffectLifecycleCtx = Record<string, unknown>;
 
 export interface EffectDef {
   id: EffectId;
@@ -170,8 +178,13 @@ export interface EffectDef {
   durationActions?: number;
   /** For periodic: fire every N owner actions. */
   periodActions?: number;
-  /** Modifiers applied for the lifetime of this effect. */
+  /** Static modifiers applied for the lifetime of this effect. Ignored when
+   *  computeModifiers is provided. */
   modifiers?: Modifier[];
+  /** Dynamic modifier computation. When present, called at install time with
+   *  the EffectInstance's state to produce the modifier list. Replaces static
+   *  `modifiers`. Use for level-scaled passives, stance buffs, etc. */
+  computeModifiers?: (state: Record<string, unknown>) => Modifier[];
   /** Rewards granted on apply (instant) or per period (periodic). */
   rewards?: {
     items?: { itemId: ItemId; qty: number }[];
@@ -185,6 +198,21 @@ export interface EffectDef {
   /** Whether magnitude is damage (subtract HP) or heal (add HP). */
   magnitudeMode?: "damage" | "heal";
   tags?: string[];
+
+  /** Reaction dispatch priority. Lower = earlier. Default 0. */
+  reactionPriority?: number;
+  /** How multiple applications of the same effect interact. */
+  stackMode?: "separate" | "refresh" | "stackable";
+  /** Max stacks for stackable mode. */
+  maxStacks?: number;
+  /** Called when the effect is first applied. Can snapshot data into state. */
+  onApply?: (source: Character, target: Character, state: Record<string, unknown>, ctx: EffectLifecycleCtx) => void;
+  /** Called each owner action for periodic effects. */
+  onTick?: (owner: Character, state: Record<string, unknown>, ctx: EffectLifecycleCtx) => void;
+  /** Called when the effect is removed. */
+  onRemove?: (owner: Character, state: Record<string, unknown>, ctx: EffectLifecycleCtx) => void;
+  /** Combat reaction hooks. Dispatched while effect is active. */
+  reactions?: ReactionHooks;
 }
 
 // ---------- Talents ----------
@@ -242,6 +270,14 @@ export interface TalentDef {
   /** Prerequisite talents required to learn this one. */
   prereqs?: { talentId: TalentId; minLevel: number }[];
   tags?: string[];
+  /**
+   * Returns a human-readable description of what this talent does at the given
+   * level. Shown in the talent allocation UI so the player can see what each
+   * level provides. Level 0 describes the talent before any points are spent
+   * (i.e. "next level preview"). Omit for talents whose description field
+   * suffices (e.g. basic attack with no scaling).
+   */
+  describeLevel?: (level: number) => string;
 
   // ---- active skill fields ----
 
@@ -494,6 +530,9 @@ export interface HeroConfig {
   physScaling?: { attr: AttrId; ratio: number }[];
   /** Which primary attributes contribute to MAG_POTENCY (→ MATK). */
   magScaling?: { attr: AttrId; ratio: number }[];
+  /** Priority-list AI rules for combat. If omitted, the hero uses basic
+   *  attack on a random enemy (empty rules = PriorityListIntent fallback). */
+  intentConfig?: PriorityRule[];
 }
 
 export interface StartingConfig {

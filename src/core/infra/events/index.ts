@@ -140,7 +140,6 @@ export type GameEvents = {
     actorId: string;
     targetIds: string[];
     abilityId: string;
-    magnitudes: number[];
     outcome: "action" | "skip";
     note?: string;
     stageId?: string;

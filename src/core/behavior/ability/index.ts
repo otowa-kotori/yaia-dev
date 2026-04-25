@@ -12,13 +12,17 @@
 // rule violations — returns { ok: false, reason } instead — so UI code and
 // intent code can branch on failure modes without try/catch.
 
-import type { TalentDef, AttrDef, TargetKind } from "../../content/types";
+import type { TalentDef, AttrDef, TargetKind, CastContext, EffectId } from "../../content/types";
 import { getTalent, getEffect } from "../../content/registry";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
-import type { Character } from "../../entity/actor";
-import { isAlive } from "../../entity/actor";
+import type { Character, PlayerCharacter } from "../../entity/actor";
+import { isAlive, isPlayer, getAttr } from "../../entity/actor";
+import { ATTR } from "../../entity/attribute";
+import { evalFormula, type FormulaContext } from "../../infra/formula";
+import { dispatchReaction, type ReactionContext, type DamageType } from "../../combat/reaction";
+import type { Battle } from "../../combat/battle/battle";
 import { applyEffect, type EffectContext } from "../effect";
 
 export interface AbilityContext {
@@ -27,6 +31,8 @@ export interface AbilityContext {
   rng: Rng;
   attrDefs: Readonly<Record<string, AttrDef>>;
   currentTick: number;
+  /** Battle participants — needed for CastContext.aliveEnemies/aliveAllies. */
+  participants?: readonly Character[];
 }
 
 export type CastFailureReason =
@@ -43,8 +49,6 @@ export interface CastSuccess {
   ok: true;
   talentId: string;
   targets: Character[];
-  /** Per-effect magnitudes, flattened across targets. */
-  magnitudes: number[];
 }
 
 export interface CastFailure {
@@ -95,6 +99,25 @@ export function tryUseTalent(
     caster.cooldowns[talentId] = activeParams.cooldownActions;
   }
 
+  // Determine talent level.
+  const level = isPlayer(caster)
+    ? ((caster as PlayerCharacter).talentLevels[talentId] ?? 1)
+    : 1;
+
+  if (def.execute) {
+    // Build CastContext and call execute.
+    const participants = ctx.participants ?? [];
+    const reactionCtx = createReactionContext(ctx, participants);
+    const castCtx = buildCastContext(caster, participants, ctx, reactionCtx);
+    def.execute(level, caster, targets, castCtx);
+    return { ok: true, talentId, targets};
+  }
+
+  // Fallback: apply effects[] declaratively.
+  // Also constructs a ReactionContext so damage effects trigger reactions
+  // (e.g. after_damage_taken for Retaliation).
+  const participants = ctx.participants ?? [];
+  const reactionCtx = createReactionContext(ctx, participants);
   const effectCtx: EffectContext = {
     state: ctx.state,
     bus: ctx.bus,
@@ -103,18 +126,63 @@ export function tryUseTalent(
     currentTick: ctx.currentTick,
   };
 
-  const magnitudes: number[] = [];
   for (const target of targets) {
     // Skip dead targets silently — talent already "fired" by paying cost.
     if (!isAlive(target) && activeParams.targetKind !== "self") continue;
     for (const effectId of def.effects ?? []) {
       const effect = safeGetEffect(effectId);
       if (!effect) continue;
-      magnitudes.push(applyEffect(effect, caster, target, effectCtx));
+
+      // Dispatch before_damage_taken so reactions can modify damage.
+      if (effect.magnitudeMode === "damage" && effect.formula) {
+        const fctx = buildFormulaContext(caster, target, ctx.attrDefs);
+        const rawDamage = Math.max(0, Math.floor(evalFormula(effect.formula, fctx)));
+        const result = { finalDamage: rawDamage };
+        const damageType: DamageType = effect.formula.kind === "magic_damage_v1" ? "magical" : "physical";
+
+        dispatchReaction(target, {
+          kind: "before_damage_taken",
+          attacker: caster,
+          rawDamage,
+          damageType,
+          result,
+        }, reactionCtx);
+
+        const finalDamage = Math.max(0, result.finalDamage);
+        if (finalDamage > 0) {
+          target.currentHp = Math.max(0, target.currentHp - finalDamage);
+          ctx.bus.emit("damage", {
+            attackerId: caster.id,
+            targetId: target.id,
+            amount: finalDamage,
+          });
+        }
+
+        dispatchReaction(target, {
+          kind: "after_damage_taken",
+          attacker: caster,
+          damage: finalDamage,
+          damageType,
+        }, reactionCtx);
+
+        dispatchReaction(caster, {
+          kind: "after_damage_dealt",
+          target,
+          damage: finalDamage,
+          damageType,
+        }, reactionCtx);
+
+        if (!isAlive(target)) {
+          dispatchReaction(caster, { kind: "on_kill", victim: target }, reactionCtx);
+        }
+      } else {
+        // Non-damage effects (buffs, heals, rewards) — apply as before.
+        applyEffect(effect, caster, target, effectCtx);
+      }
     }
   }
 
-  return { ok: true, talentId, targets, magnitudes };
+  return { ok: true, talentId, targets };
 }
 
 // ---------- Internal ----------
@@ -179,4 +247,151 @@ function safeGetEffect(id: string) {
   } catch {
     return undefined;
   }
+}
+
+// ---------- CastContext + damage pipeline ----------
+
+function buildFormulaContext(
+  source: Character,
+  target: Character,
+  attrDefs: Readonly<Record<string, AttrDef>>,
+): FormulaContext {
+  return {
+    vars: {
+      patk: getAttr(source, ATTR.PATK, attrDefs),
+      pdef: getAttr(target, ATTR.PDEF, attrDefs),
+      matk: getAttr(source, ATTR.MATK, attrDefs),
+      mres: getAttr(target, ATTR.MRES, attrDefs),
+      source_str: getAttr(source, ATTR.STR, attrDefs),
+      source_dex: getAttr(source, ATTR.DEX, attrDefs),
+      source_int: getAttr(source, ATTR.INT, attrDefs),
+      source_max_hp: getAttr(source, ATTR.MAX_HP, attrDefs),
+      source_current_hp: source.currentHp,
+      target_max_hp: getAttr(target, ATTR.MAX_HP, attrDefs),
+      target_current_hp: target.currentHp,
+    },
+  };
+}
+
+function dealDamageWithReactions(
+  caster: Character,
+  target: Character,
+  coefficient: number,
+  damageType: DamageType,
+  ctx: AbilityContext,
+  reactionCtx: ReactionContext,
+): number {
+  // 1. Calculate raw damage via formula.
+  const formulaKind = damageType === "physical" ? "phys_damage_v1" : "magic_damage_v1";
+  const fctx = buildFormulaContext(caster, target, ctx.attrDefs);
+  const rawDamage = Math.max(0, Math.floor(evalFormula({ kind: formulaKind, skillMul: coefficient }, fctx)));
+
+  // 2. before_damage_taken reaction (can modify finalDamage).
+  const result = { finalDamage: rawDamage };
+  dispatchReaction(target, {
+    kind: "before_damage_taken",
+    attacker: caster,
+    rawDamage,
+    damageType,
+    result,
+  }, reactionCtx);
+
+  // 3. Apply damage.
+  const finalDamage = Math.max(0, result.finalDamage);
+  if (finalDamage > 0) {
+    target.currentHp = Math.max(0, target.currentHp - finalDamage);
+    ctx.bus.emit("damage", {
+      attackerId: caster.id,
+      targetId: target.id,
+      amount: finalDamage,
+    });
+  }
+
+  // 4. after_damage_taken + after_damage_dealt reactions.
+  dispatchReaction(target, {
+    kind: "after_damage_taken",
+    attacker: caster,
+    damage: finalDamage,
+    damageType,
+  }, reactionCtx);
+
+  dispatchReaction(caster, {
+    kind: "after_damage_dealt",
+    target,
+    damage: finalDamage,
+    damageType,
+  }, reactionCtx);
+
+  // 5. on_kill if target died.
+  if (!isAlive(target)) {
+    dispatchReaction(caster, {
+      kind: "on_kill",
+      victim: target,
+    }, reactionCtx);
+  }
+
+  return finalDamage;
+}
+
+function buildCastContext(
+  caster: Character,
+  participants: readonly Character[],
+  ctx: AbilityContext,
+  reactionCtx: ReactionContext,
+): CastContext {
+  return {
+    dealPhysicalDamage(c, target, coefficient) {
+      return dealDamageWithReactions(c, target, coefficient, "physical", ctx, reactionCtx);
+    },
+    dealMagicDamage(c, target, coefficient) {
+      return dealDamageWithReactions(c, target, coefficient, "magical", ctx, reactionCtx);
+    },
+    applyEffect(effectId, source, target, state) {
+      const eff = getEffect(effectId as string);
+      applyEffect(eff, source, target, { ...ctx, currentTick: ctx.currentTick }, state);
+    },
+    aliveEnemies() {
+      return participants.filter(p => p.side !== caster.side && isAlive(p)) as Character[];
+    },
+    aliveAllies() {
+      return participants.filter(p => p.side === caster.side && p !== caster && isAlive(p)) as Character[];
+    },
+  };
+}
+
+function createReactionContext(
+  ctx: AbilityContext,
+  participants: readonly Character[],
+  battle?: Battle,
+): ReactionContext {
+  return {
+    dealDamage(source, target, amount, _damageType) {
+      // Flat damage — no formula, no reactions (avoid infinite loops)
+      const dmg = Math.max(0, Math.floor(amount));
+      if (dmg > 0) {
+        target.currentHp = Math.max(0, target.currentHp - dmg);
+        ctx.bus.emit("damage", { attackerId: source.id, targetId: target.id, amount: dmg });
+      }
+    },
+    healTarget(target, amount) {
+      const maxHp = getAttr(target, ATTR.MAX_HP, ctx.attrDefs);
+      target.currentHp = Math.min(maxHp, target.currentHp + Math.max(0, Math.floor(amount)));
+    },
+    applyEffect(effectId, source, target, _state) {
+      // Simplified: just apply via the effect pipeline
+      const eff = safeGetEffect(effectId as string);
+      if (eff) applyEffect(eff, source, target, { ...ctx, currentTick: ctx.currentTick });
+    },
+    removeEffect(_owner, _state) {
+      // TODO: implement effect removal by state reference
+    },
+    activeReactionKeys: new Set(),
+    reactionDepth: 0,
+    rng: ctx.rng,
+    attrDefs: ctx.attrDefs,
+    bus: ctx.bus,
+    state: ctx.state,
+    battle: battle as unknown as Battle,  // may be undefined in non-battle context
+    participants,
+  };
 }

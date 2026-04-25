@@ -99,6 +99,7 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     locationId: null,
     stageId: null,
     dungeonSessionId: null,
+    activeSustains: {},
   };
   rebuildCharacterDerived(pc, opts.attrDefs);
   pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, opts.attrDefs);
@@ -217,12 +218,18 @@ export function rebuildCharacterDerived(
   }
 
   // 3) Active-effect modifiers.
+  //    computeModifiers(state) takes priority over static modifiers — this
+  //    supports level-scaled passives whose modifier values depend on state.
   for (const ae of c.activeEffects) {
     const eff = safeGetEffect(ae.effectId);
-    if (!eff?.modifiers?.length) continue;
+    if (!eff) continue;
+    const mods = eff.computeModifiers
+      ? eff.computeModifiers(ae.state)
+      : (eff.modifiers ?? []);
+    if (mods.length === 0) continue;
     addModifiers(
       c.attrs,
-      eff.modifiers.map((m) => ({ ...m, sourceId: ae.sourceId })),
+      mods.map((m) => ({ ...m, sourceId: ae.sourceId })),
     );
   }
 

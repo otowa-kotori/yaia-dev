@@ -112,6 +112,10 @@ export interface PlayerCharacter extends Character {
   /** Key into GameState.dungeons for the active dungeon run this character is
    *  participating in. null = not in a dungeon. (persisted) */
   dungeonSessionId: string | null;
+  /** Active sustain talent per exclusiveGroup. key = group, value = talentId.
+   *  When a sustain is toggled on, its group is recorded here; toggling another
+   *  sustain in the same group replaces the old one. (persisted) */
+  activeSustains: Record<string, string>;
 }
 
 // ---------- Enemy ----------

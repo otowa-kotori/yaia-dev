@@ -469,6 +469,80 @@ function SettingsTab({ store }: { store: GameStore }) {
   );
 }
 
+// ---------- Debug: active effects on any actor ----------
+
+import { isCharacter } from "../core/entity/actor/types";
+import type { Character } from "../core/entity/actor/types";
+
+function DebugActiveEffects({ store }: { store: GameStore }) {
+  const { store: s } = useStore(store);
+  const [selectedId, setSelectedId] = useState<string>("");
+
+  const state = s.state;
+  const characters = state.actors.filter(isCharacter) as Character[];
+  if (characters.length === 0) return null;
+
+  // Default to focused hero if nothing selected.
+  const focusedId = s.getFocusedCharacter()?.hero?.id ?? "";
+  const actorId = selectedId || focusedId || characters[0]?.id || "";
+  const actor = characters.find(c => c.id === actorId);
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      {/* Actor selector */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 11, opacity: 0.5 }}>ActiveEffects</span>
+        <select
+          value={actorId}
+          onChange={e => setSelectedId(e.target.value)}
+          style={{
+            fontSize: 10, background: "#111", color: "#ccc", border: "1px solid #444",
+            borderRadius: 3, padding: "1px 4px", fontFamily: "inherit",
+          }}
+        >
+          {characters.map(c => (
+            <option key={c.id} value={c.id}>
+              {c.name} ({c.id}) HP:{c.currentHp}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!actor ? (
+        <div style={{ fontSize: 10, opacity: 0.3 }}>No actor selected</div>
+      ) : actor.activeEffects.length === 0 ? (
+        <div style={{ fontSize: 10, opacity: 0.3 }}>(none)</div>
+      ) : (
+        <div style={{ fontSize: 10, opacity: 0.7, display: "flex", flexDirection: "column", gap: 3 }}>
+          {actor.activeEffects.map((ae, i) => (
+            <div key={i} style={{ background: "#181828", borderRadius: 3, padding: "3px 6px" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ color: ae.remainingActions === -1 ? "#9b9" : "#cc9", fontWeight: 600 }}>
+                  {ae.effectId}
+                </span>
+                <span style={{ opacity: 0.4 }}>
+                  {ae.remainingActions === -1 ? "∞" : `${ae.remainingActions}act`}
+                </span>
+                {ae.sourceTalentId && (
+                  <span style={{ opacity: 0.3 }}>← {ae.sourceTalentId}</span>
+                )}
+                {ae.stacks > 1 && (
+                  <span style={{ opacity: 0.4 }}>×{ae.stacks}</span>
+                )}
+              </div>
+              {Object.keys(ae.state).length > 0 && (
+                <pre style={{ margin: "2px 0 0", fontSize: 9, opacity: 0.4, whiteSpace: "pre-wrap" }}>
+                  {JSON.stringify(ae.state)}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Debug panel ----------
 
 function DebugPanel({ store }: { store: GameStore }) {
@@ -500,6 +574,9 @@ function DebugPanel({ store }: { store: GameStore }) {
         <span>{T.debugSpeed}</span>
         <span>{s.getSpeedMultiplier()}x</span>
       </div>
+
+      {/* Active effects on focused hero */}
+      <DebugActiveEffects store={store} />
 
       {/* Catch-up simulator — triggers the same pipeline as real catch-up */}
       <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>

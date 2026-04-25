@@ -32,8 +32,8 @@ import { emptyContentDb } from "../core/content";
 import type { FormulaRef } from "../core/infra/formula";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
 import { monsterBasicAttack, monsterMagicAttack } from "./behaviors/talents/monster";
-import { knightPowerStrike } from "./behaviors/talents/knight";
-
+import { knightPowerStrike, knightFortitude, knightRetaliation, knightRage, knightGuard, knightWarcry } from "./behaviors/talents/knight";
+import { knightFortitudeEffect, knightRetaliationEffect, knightRageEffect, knightGuardEffect, knightWarcryEffect } from "./behaviors/effects/knight";
 // ---------- Currency IDs ----------
 
 /** Gold — primary combat currency, earned by killing monsters. */
@@ -164,6 +164,12 @@ const attrDefs: Record<string, AttrDef> = {
     integer: true,
     clampMin: 1,
   },
+  [ATTR.AGGRO_WEIGHT]: {
+    id: ATTR.AGGRO_WEIGHT,
+    name: "仇恨权重",
+    defaultBase: 1.0,
+    clampMin: 0.1,
+  },
 };
 
 // ---------- Formulas ----------
@@ -289,6 +295,24 @@ export const caveBat: MonsterDef = {
   drops: [],
   xpReward: 12,
   currencyReward: { [CURRENCY_GOLD]: 6 },
+};
+
+/** 训练木人 — 极高血量、极低攻击力，用于测试技能效果。 */
+export const trainingDummy: MonsterDef = {
+  id: "monster.training_dummy" as MonsterId,
+  name: "训练木人",
+  level: 1,
+  physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
+  baseAttrs: {
+    [ATTR.MAX_HP]: 99999,
+    [ATTR.WEAPON_ATK]: 1,
+    [ATTR.PDEF]: 0,
+    [ATTR.SPEED]: 30,
+  },
+  talents: [basicAttackTalent.id],
+  drops: [],
+  xpReward: 1,
+  currencyReward: { [CURRENCY_GOLD]: 0 },
 };
 
 // ---------- Items ----------
@@ -514,6 +538,22 @@ export const copperMineCombat: CombatZoneDef = {
   ],
 };
 
+/** 训练场 — 单个训练木人，用于测试技能效果和数值验证。 */
+export const trainingGroundCombat: CombatZoneDef = {
+  id: "combatzone.training.dummy" as CombatZoneId,
+  name: "训练场",
+  waveSelection: "random",
+  waveSearchTicks: 5,
+  recoverBelowHpFactor: 0.3,
+  waves: [
+    {
+      id: "wave.training.dummy",
+      name: "训练木人",
+      monsters: [trainingDummy.id],
+    },
+  ],
+};
+
 // ---------- Dungeons ----------
 
 /** 史莱姆洞窟——三波固定顺序副本，适合两人组队。
@@ -589,6 +629,15 @@ export const copperMineLocation: LocationDef = {
   ],
 };
 
+/** 训练场 — 玩家可在此测试技能效果。 */
+export const trainingGroundLocation: LocationDef = {
+  id: "location.training" as LocationId,
+  name: "训练场",
+  entries: [
+    { kind: "combat", combatZoneId: trainingGroundCombat.id, label: "训练木人" },
+  ],
+};
+
 // ---------- Global Upgrades ----------
 //
 // Purchased via WorldRecord. Cost scales using exp_curve_v1 so the same
@@ -639,6 +688,11 @@ export function buildDefaultContent(): ContentDb {
     effects: {
       [strikeEffect.id]: strikeEffect,
       [magicStrikeEffect.id]: magicStrikeEffect,
+      [knightFortitudeEffect.id]: knightFortitudeEffect,
+      [knightRetaliationEffect.id]: knightRetaliationEffect,
+      [knightRageEffect.id]: knightRageEffect,
+      [knightGuardEffect.id]: knightGuardEffect,
+      [knightWarcryEffect.id]: knightWarcryEffect,
     },
     talents: {
       [basicAttackTalent.id]: basicAttackTalent,
@@ -646,20 +700,28 @@ export function buildDefaultContent(): ContentDb {
       [monsterBasicAttack.id]: monsterBasicAttack,
       [monsterMagicAttack.id]: monsterMagicAttack,
       [knightPowerStrike.id]: knightPowerStrike,
+      [knightFortitude.id]: knightFortitude,
+      [knightRetaliation.id]: knightRetaliation,
+      [knightRage.id]: knightRage,
+      [knightGuard.id]: knightGuard,
+      [knightWarcry.id]: knightWarcry,
     },
     monsters: {
       [slime.id]: slime,
       [goblin.id]: goblin,
       [caveBat.id]: caveBat,
+      [trainingDummy.id]: trainingDummy,
     },
     locations: {
       [forestLocation.id]: forestLocation,
       [copperMineLocation.id]: copperMineLocation,
+      [trainingGroundLocation.id]: trainingGroundLocation,
     },
     combatZones: {
       [slimeNormal.id]: slimeNormal,
       [slimeHard.id]: slimeHard,
       [copperMineCombat.id]: copperMineCombat,
+      [trainingGroundCombat.id]: trainingGroundCombat,
     },
     dungeons: {
       [slimeCaveDungeon.id]: slimeCaveDungeon,
@@ -693,7 +755,7 @@ export function buildDefaultContent(): ContentDb {
           name: "骑士",
           xpCurve: defaultCharXpCurve,
           knownTalents: [basicAttackTalent.id],
-          availableTalents: [knightPowerStrike.id],
+          availableTalents: [knightPowerStrike.id, knightFortitude.id, knightRetaliation.id, knightRage.id, knightGuard.id, knightWarcry.id],
           startingItems: [{ itemId: trainingSword.id, qty: 1 }],
           baseAttrs: {
             [ATTR.MAX_HP]: 180,
@@ -711,6 +773,10 @@ export function buildDefaultContent(): ContentDb {
           },
           physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
           magScaling:  [{ attr: ATTR.INT, ratio: 1.0 }],
+          intentConfig: [
+            { talentId: knightWarcry.id as string, targetPolicy: "self", conditions: ["off_cooldown", "has_mp"] },
+            { talentId: knightPowerStrike.id as string, conditions: ["off_cooldown", "has_mp"] },
+          ],
         },
         // ── 游侠 ──────────────────────────────────────────
         {

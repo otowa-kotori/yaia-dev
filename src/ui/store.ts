@@ -89,17 +89,21 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSaveAt = 0;
+  /** True until tryLoad resolves. While true, persistNow is a no-op to prevent
+   *  the fresh resetToFresh state from overwriting an existing save. */
+  let loadInProgress = true;
 
   function persistNow(): void {
+    if (loadInProgress) return;
     try {
-      // Stamp wall clock before serializing so the save carries the latest
-      // real-world timestamp for offline catch-up.
       session.state.lastWallClockMs = now();
       const payload = serialize(session.state);
-      void adapter.save(SAVE_KEY, payload);
+      adapter.save(SAVE_KEY, payload);
       lastSaveAt = now();
+      console.debug("[save] persisted at tick", session.state.tick, "size", payload.length);
     } catch (e) {
-      console.error("save failed:", e);
+      console.error("[save] persistNow failed:", e);
+      throw e;
     }
   }
 
@@ -305,8 +309,14 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       notify();
       return true;
     } catch (e) {
-      console.error("load failed; continuing with a fresh state:", e);
+      // Alpha: never silently discard a save. Surface the error so developers
+      // can see exactly what broke deserialization / load.
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("load failed:", e);
+      alert(`存档加载失败，请清除存档后重试。\n\n错误: ${msg}`);
       return false;
+    } finally {
+      loadInProgress = false;
     }
   }
 
@@ -383,6 +393,8 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   if (opts.autoLoad !== false) {
     void tryLoad();
+  } else {
+    loadInProgress = false;
   }
 
   return store;

@@ -45,7 +45,7 @@ import {
   type TickBattleContext,
 } from "../../combat/battle";
 import { createEnemy } from "../../entity/actor";
-import { INTENT } from "../../combat/intent";
+import { buildBattleIntents } from "../../combat/intent";
 import { applyEffect, type EffectContext } from "../../behavior/effect";
 import { mintBattleId, mintMonsterInstanceId } from "../../runtime-ids";
 import { stageEnemies } from "../stage";
@@ -449,9 +449,8 @@ function openPartyBattle(
     return;
   }
 
-  const intents: Record<string, string> = {};
-  for (const h of heroes) intents[h.id] = INTENT.RANDOM_ATTACK;
-  for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
+  const allParticipants = [...heroes, ...enemies];
+  const intents = buildBattleIntents(allParticipants);
 
   if (!session.currentWave) {
     throw new Error(`dungeon.openPartyBattle: stage "${ds.stageId}" has enemies but no active wave`);

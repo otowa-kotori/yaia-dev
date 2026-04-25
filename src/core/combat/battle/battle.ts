@@ -32,7 +32,7 @@ import {
   type SchedulerContext,
   type SchedulerState,
 } from "./scheduler";
-import { INTENT, resolveIntent } from "../intent";
+import { resolveIntent } from "../intent";
 
 // ---------- Types ----------
 
@@ -40,11 +40,11 @@ export type BattleOutcome = "ongoing" | "players_won" | "enemies_won" | "draw";
 
 export interface BattleLogEntry {
   tick: number;
-  kind: "action" | "death" | "start" | "end" | "skip";
+  kind: "action" | "damage" | "death" | "start" | "end" | "skip";
   actorId?: string;
   targetIds?: string[];
   talentId?: string;
-  magnitudes?: number[];
+  amount?: number;
   note?: string;
 }
 
@@ -200,9 +200,12 @@ function runActorActionWindow(
   }
 
   // Decide intent → validate + dispatch.
-  const intentId = battle.intents[actor.id] ?? INTENT.RANDOM_ATTACK;
+  const intentId = battle.intents[actor.id];
+  if (!intentId) {
+    throw new Error(`battle: no intent registered for actor "${actor.id}"`);
+  }
   const intent = resolveIntent(intentId);
-  const plan = intent(actor, { participants, rng: ctx.rng });
+  const plan = intent(actor, { ...ctx, participants });
 
   if (!plan) {
     battle.log.push({
@@ -216,7 +219,6 @@ function runActorActionWindow(
       actorId: actor.id,
       targetIds: [],
       abilityId: "",
-      magnitudes: [],
       outcome: "skip",
       note: "no valid plan",
       ...battleEventScope(battle),
@@ -237,31 +239,43 @@ function runActorActionWindow(
   }
   schedulerOnActionResolved(battle.scheduler, actor, energyCost);
 
+  // Subscribe to damage events so every hit (including multi-hit, AoE,
+  // reaction counter-attacks) gets its own log entry.
+  const damageUnsub = ctx.bus.on("damage", (ev) => {
+    battle.log.push({
+      tick: ctx.currentTick,
+      kind: "damage",
+      actorId: ev.attackerId,
+      targetIds: [ev.targetId],
+      amount: ev.amount,
+    });
+  });
+
   const result: CastResult = tryUseTalent(actor, plan.talentId, plan.targets, {
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
     attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
+    participants,
   });
+
+  damageUnsub();
 
   if (result.ok) {
     const targetIds = result.targets.map((t) => t.id);
-    const magnitudes = result.magnitudes.slice();
     battle.log.push({
       tick: ctx.currentTick,
       kind: "action",
       actorId: actor.id,
       talentId: result.talentId,
       targetIds,
-      magnitudes,
     });
     ctx.bus.emit("battleActionResolved", {
       battleId: battle.id,
       actorId: actor.id,
       targetIds,
       abilityId: result.talentId,
-      magnitudes,
       outcome: "action",
       ...battleEventScope(battle),
     });
@@ -280,7 +294,6 @@ function runActorActionWindow(
       actorId: actor.id,
       targetIds: plan.targets.map((target) => target.id),
       abilityId: plan.talentId,
-      magnitudes: [],
       outcome: "skip",
       note: result.reason,
       ...battleEventScope(battle),

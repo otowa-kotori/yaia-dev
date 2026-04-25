@@ -6,7 +6,7 @@
 //
 //   final = (base + Σflat) * (1 + Σpct_add) * Π(1 + pct_mult)
 //   then clamp to [clampMin, clampMax] (from AttrDef)
-//   then floor to int if AttrDef.integer
+//   then round to int if AttrDef.integer
 //
 // Two reactive capabilities extend the original static model:
 //
@@ -168,7 +168,7 @@ function recomputeStat(
     if (def) {
       if (def.clampMin !== undefined && v < def.clampMin) v = def.clampMin;
       if (def.clampMax !== undefined && v > def.clampMax) v = def.clampMax;
-      if (def.integer) v = Math.floor(v);
+      if (def.integer) v = Math.round(v);
     }
     set.cache[attrId] = v;
   } finally {
@@ -334,4 +334,8 @@ export const ATTR = {
   CRIT_RATE:  "attr.crit_rate"  as AttrId,
   CRIT_MULT:  "attr.crit_mult"  as AttrId,
   INVENTORY_STACK_LIMIT: "attr.inventory_stack_limit" as AttrId,
+
+  // 仇恨权重 — 被选为攻击目标的相对概率，默认 1.0。
+  // 战吼 buff 临时提升该值，Intent 按此加权随机 pick 目标。
+  AGGRO_WEIGHT: "attr.aggro_weight" as AttrId,
 } as const;

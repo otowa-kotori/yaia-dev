@@ -14,9 +14,17 @@ import {
   makeSlime,
 } from "../../fixtures/content";
 import type { PlayerCharacter, Enemy } from "../../../src/core/entity/actor";
+import { INTENT } from "../../../src/core/combat/intent";
 
 function freshState(): GameState {
   return createEmptyState(42, 1);
+}
+
+/** Build a simple intents map using RANDOM_ATTACK for all participant IDs. */
+function testIntents(...ids: string[]): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const id of ids) m[id] = INTENT.RANDOM_ATTACK;
+  return m;
 }
 
 describe("Battle: tick loop", () => {
@@ -46,6 +54,7 @@ describe("Battle: tick loop", () => {
       mode: "solo",
       participantIds: [hero.id, slime.id],
       startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
     });
 
     let tick = 0;
@@ -78,13 +87,14 @@ describe("Battle: tick loop", () => {
         mode: "solo",
         participantIds: [hero.id, slime.id],
         startedAtTick: 0,
+        intents: testIntents(hero.id, slime.id),
       });
       let t = 0;
       while (b.outcome === "ongoing" && t < 500) {
         t += 1;
         tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
       }
-      return b.log.map((e) => `${e.tick}:${e.kind}:${e.actorId ?? ""}:${e.magnitudes?.join(",") ?? ""}`);
+      return b.log.map((e) => `${e.tick}:${e.kind}:${e.actorId ?? ""}:${e.amount ?? ""}`);
     }
     expect(runOnce()).toEqual(runOnce());
   });
@@ -108,6 +118,7 @@ describe("Battle: tick loop", () => {
       mode: "solo",
       participantIds: [hero.id, slime.id],
       startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
     });
     let t = 0;
     while (battle.outcome === "ongoing" && t < 200) {
@@ -135,6 +146,7 @@ describe("Battle: tick loop", () => {
       mode: "solo",
       participantIds: [hero.id, slime.id],
       startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
     });
     // Pump enough ticks for ATB energy to trigger the one-shot action.
     for (let t = 1; t <= 50; t++) {

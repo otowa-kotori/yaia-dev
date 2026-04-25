@@ -198,6 +198,20 @@ function TalentCard({
         <div style={{ fontSize: 12, opacity: 0.7 }}>{def.description}</div>
       )}
 
+      {/* Level-specific description from describeLevel */}
+      {def.describeLevel && (
+        <div style={{ fontSize: 11, opacity: 0.55, marginTop: -2 }}>
+          {currentLevel > 0 && (
+            <div>Lv{currentLevel}: {def.describeLevel(currentLevel)}</div>
+          )}
+          {!maxed && (
+            <div style={{ color: "#9bd" }}>
+              {currentLevel > 0 ? "→ " : ""}Lv{currentLevel + 1}: {def.describeLevel(currentLevel + 1)}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Prereq hint */}
       {prereqHint && (
         <div style={{ fontSize: 11, color: "#f88", opacity: 0.8 }}>

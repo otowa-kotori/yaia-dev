@@ -53,7 +53,7 @@ import {
   type Battle,
   type TickBattleContext,
 } from "../../combat/battle";
-import { INTENT } from "../../combat/intent";
+import { buildBattleIntents } from "../../combat/intent";
 import { applyEffect, type EffectContext } from "../../behavior/effect";
 import {
   beginCombatWaveSearch,
@@ -129,7 +129,12 @@ export function createCombatActivity(
       for (const hero of getPartyHeroes(activity, ctx.state)) {
         hero.currentHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
         hero.currentMp = getAttr(hero, ATTR.MAX_MP, ctx.attrDefs);
-        hero.activeEffects = [];
+        // Clear temporary effects (finite-duration combat buffs/debuffs) but
+        // keep permanent effects (remainingActions === -1): passive talents,
+        // sustain stances, global upgrades, etc.
+        hero.activeEffects = hero.activeEffects.filter(
+          ae => ae.remainingActions === -1,
+        );
         hero.cooldowns = {};
       }
       syncCombatToHeroes(activity, ctx.state);
@@ -327,9 +332,8 @@ function openBattle(
     throw new Error(`combat.openBattle: stage "${activity.stageId}" has enemies but no active wave`);
   }
 
-  const intents: Record<string, string> = {};
-  for (const h of heroes) intents[h.id] = INTENT.RANDOM_ATTACK;
-  for (const e of enemies) intents[e.id] = INTENT.RANDOM_ATTACK;
+  const allParticipants = [...heroes, ...enemies];
+  const intents = buildBattleIntents(allParticipants);
 
   const battleId = mintBattleId(ctx.state);
   const battle = createBattle({
