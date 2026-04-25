@@ -88,18 +88,18 @@ MATK 同理，读 WEAPON_MATK 和 MAG_POTENCY。
 `PlayerCharacter` 新增字段（持久化）：
 
 ```ts
-growth: Partial<Record<AttrId, number>>;        // 每级属性增长量
-physScaling: { attr: AttrId; ratio: number }[];  // 哪些一级属性贡献 PHYS_POTENCY
-magScaling:  { attr: AttrId; ratio: number }[];  // 哪些一级属性贡献 MAG_POTENCY
+/** HeroConfig 的 id，用于在运行时查表获取 growth / physScaling / magScaling。
+ *  这三个字段属于内容层职责，不持久化到 PC 实例上。 */
+heroConfigId: string;
 ```
 
 `HeroConfig`（ContentDb.starting）新增：
 
 ```ts
 baseAttrs?: Partial<Record<AttrId, number>>;    // 覆盖 AttrDef.defaultBase
-growth: Partial<Record<AttrId, number>>;
-physScaling: { attr: AttrId; ratio: number }[];
-magScaling:  { attr: AttrId; ratio: number }[];
+growth?: Partial<Record<AttrId, number>>;       // 每级增量，float 合法
+physScaling?: { attr: AttrId; ratio: number }[]; // 贡献 PHYS_POTENCY
+magScaling?:  { attr: AttrId; ratio: number }[]; // 贡献 MAG_POTENCY
 ```
 
 `MonsterDef` 新增：
@@ -115,10 +115,10 @@ magScaling?:  { attr: AttrId; ratio: number }[];  // 默认 [{INT, 1.0}]
 |------|-------------|------------|
 | 骑士 | `[{STR, 1.0}]` | `[{INT, 1.0}]` |
 | 游侠 | `[{DEX, 1.0}]` | `[{INT, 1.0}]` |
-| 法师 | `[{INT, 1.0}]` | `[{INT, 1.0}]` |
-| 圣女 | `[{INT, 1.0}]` | `[{INT, 1.0}]` |
+| 法师 | `[{STR, 1.0}]` | `[{INT, 1.0}]` |
+| 圣女 | `[{STR, 1.0}]` | `[{INT, 1.0}]` |
 
-法师和圣女的 physScaling 用 INT，因为她们无论如何不会走物理输出路线，但赤手时 PATK 仍有值。
+法师和圣女的 physScaling 用 **STR**（而非 INT）：因为她们 STR 基础值低（3）且无成长，赤手 PATK 约 1.5，接近于零，不会让魔法职业有异常高的物攻。若改用 INT，法师 Lv25 INT≈72 时 PATK 会高于骑士，明显不合理。
 
 ### DynamicModifierProvider 安装
 
@@ -195,13 +195,13 @@ if (pc.growth) {
 ### 两个新 FormulaRef kind
 
 ```ts
-/** 物理伤害 = PATK × skillMul × armorCoeff */
+/** 物理伤害：有效攻击 × 破甲系数，破甲系数由 PDEF/有效攻击 比例决定 */
 interface PhysDamageV1Formula {
   kind: "phys_damage_v1";
-  skillMul?: number;    // 技能系数，default 1.0
+  skillMul?: number;    // 技能（段）系数，default 1.0；每段独立代入破甲公式
   K?: number;           // ratio-power 宽松度，default 0.8
   p?: number;           // ratio-power 急转指数，default 1.5
-  floor?: number;       // 保底倍率，default 0.1
+  floor?: number;       // 保底倍率，default 0.1（有效攻击的 10%）
 }
 
 /** 魔法伤害 = MATK × skillMul × (1 - MRES) */
@@ -215,6 +215,11 @@ interface MagicDamageV1Formula {
 
 ```ts
 case "phys_damage_v1": {
+  // 两步计算：
+  //   有效攻击 = PATK × skillMul
+  //   excess   = max(0, PDEF / 有效攻击 - 1)
+  //   破甲系数 = max(floor, K / (K + excess^p))
+  //   最终伤害 = ⌊有效攻击 × 破甲系数⌋
   const patk     = varOrZero(vars, "patk");
   const pdef     = varOrZero(vars, "pdef");
   const skillMul = ref.skillMul ?? 1;
@@ -364,9 +369,13 @@ vs PDEF=20 的怪:
 
 ### 新增持久化字段
 
-- `PlayerCharacter.growth`
-- `PlayerCharacter.physScaling`
-- `PlayerCharacter.magScaling`
+- `PlayerCharacter.heroConfigId`：字符串，指向 HeroConfig.id，用于运行时查 growth/physScaling/magScaling
+
+### 不持久化（运行时重建）的字段
+
+以下三项从内容层读取，**不写入存档**：
+- `growth`（在 HeroConfig）
+- `physScaling` / `magScaling`（在 HeroConfig / MonsterDef）
 
 ### 继续排除的派生字段
 
@@ -407,6 +416,6 @@ vs PDEF=20 的怪:
 - 怪物数值联调（K/p 参数微调）——需要完整怪物梯度，留给 monsters.md 联调
 - 魔法伤害的默认攻击 effect（法师/圣女低系数魔法射线）——技能系统 PR 处理
 - 护甲装备（PDEF 来源）——equipment.md 联调
-- MRES 具体来源——后续设计
+- MRES 具体来源——后续设计，目前写死在角色配置里，英雄MRES初始值为20，怪物为0。
 - 暴击系统——combat-formula.md 开放问题
 - 技能系统重构（AbilityDef → TalentDef）——skill-system.md 独立 PR

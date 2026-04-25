@@ -5,6 +5,13 @@
 // may use different formula kinds; this module stays curve-agnostic and only
 // asks evalFormula() for the next-level cost. No fallbacks — missing data
 // throws loudly (alpha-stage discipline).
+//
+// 属性成长：
+//   升级时从 HeroConfig.growth 读取每级增量，直接追加到 pc.attrs.base。
+//   小数成长合法（integer: true 的属性在 getAttr 时 floor），由 content 层配置。
+//   invalidateAttrs 在成长应用后由调用方（session / rebuildCharacterDerived）统一处理；
+//   这里只改 base 值，不主动刷缓存，避免在一次 grantCharacterXp 里连续升多级时
+//   重复计算。调用方在完整升级流程结束后做一次 rebuildCharacterDerived 即可。
 
 
 import { evalFormula } from "../../infra/formula/eval";
@@ -13,6 +20,7 @@ import type { SkillDef, SkillId } from "../../content/types";
 import type { GameEventBus } from "../../infra/events";
 import type { PlayerCharacter } from "../../entity/actor";
 import type { SkillProgress } from "../../infra/state/types";
+import { getContent } from "../../content/registry";
 
 export interface GrantXpContext {
   bus: GameEventBus;
@@ -22,6 +30,10 @@ export interface GrantXpContext {
  * Grant character XP, advancing `level` / `exp` in place. Cascades multiple
  * level-ups in one call. Emits 'levelup' once per level gained. Returns
  * the number of levels gained.
+ *
+ * 每次升级会从 HeroConfig.growth 中读取增量，写入 pc.attrs.base。
+ * 完整升级流程结束后，调用方（session）负责调用 rebuildCharacterDerived
+ * 刷新派生属性缓存。
  */
 export function grantCharacterXp(
   pc: PlayerCharacter,
@@ -31,6 +43,10 @@ export function grantCharacterXp(
   if (amount <= 0) return 0;
   pc.exp += amount;
 
+  // 查一次 HeroConfig 的 growth 表，避免在多级循环里重复查找。
+  const heroCfg = getContent().starting?.heroes.find((h) => h.id === pc.heroConfigId);
+  const growth = heroCfg?.growth ?? {};
+
   let gained = 0;
   while (pc.level < pc.maxLevel) {
     const cost = xpCostToReach(pc.level + 1, pc.xpCurve);
@@ -38,6 +54,15 @@ export function grantCharacterXp(
     pc.exp -= cost;
     pc.level += 1;
     gained += 1;
+
+    // 应用属性成长：直接追加到 base，等价于"这一级赚到的属性点"。
+    // invalidateAttrs 由调用方在全部升级完成后统一执行。
+    for (const [attrId, delta] of Object.entries(growth)) {
+      if (typeof delta === "number" && delta !== 0) {
+        pc.attrs.base[attrId] = (pc.attrs.base[attrId] ?? 0) + delta;
+      }
+    }
+
     ctx.bus.emit("levelup", { charId: pc.id, level: pc.level });
   }
   return gained;

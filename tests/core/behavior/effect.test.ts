@@ -15,14 +15,14 @@ import { getAttr } from "../../../src/core/entity/actor";
 describe("effect: instant", () => {
   beforeEach(() => resetContent());
 
-  test("damage reduces currentHp by atk - def (clamped at 1)", () => {
+  test("damage reduces currentHp (phys_damage_v1: PATK=15 vs PDEF=1)", () => {
     const h = makeHarness();
     const attacker = makePlayer({
       id: "p1",
       abilities: [],
       atk: 15,
     });
-    const defender = makeSlime("slime#1"); // def=1, hp=30
+    const defender = makeSlime("slime#1"); // PDEF=1, PATK=4, hp=30
 
     const damage = applyEffect(basicStrikeEffect, attacker, defender, {
       state: h.state,
@@ -32,9 +32,10 @@ describe("effect: instant", () => {
       currentTick: h.currentTick,
     });
 
-    // atk 15 - def 1 = 14
-    expect(damage).toBe(14);
-    expect(defender.currentHp).toBe(30 - 14);
+    // PATK=15, PDEF=1 → excess = max(0, 1/15 - 1) = 0 → 破甲 → armorCoeff ≈ 1
+    // 伤害 = floor(15 × 1.0) = 15
+    expect(damage).toBe(15);
+    expect(defender.currentHp).toBe(30 - 15);
   });
 
   test("emits 'damage' event", () => {
@@ -47,7 +48,8 @@ describe("effect: instant", () => {
     expect(received.length).toBe(1);
     expect(received[0]!.attackerId).toBe("a");
     expect(received[0]!.targetId).toBe("b");
-    expect(received[0]!.amount).toBe(11);
+    // PATK=12, PDEF=1 → excess=0 → damage=12
+    expect(received[0]!.amount).toBe(12);
   });
 
   test("currentHp is clamped to 0 on lethal damage", () => {
@@ -66,9 +68,9 @@ describe("effect: duration", () => {
     const h = makeHarness();
     const c = makePlayer({ id: "u", abilities: [] });
 
-    const defBefore = getAttr(c, ATTR.DEF, h.attrDefs);
+    const defBefore = getAttr(c, ATTR.PDEF, h.attrDefs);
     applyEffect(shieldBuffEffect, c, c, { ...h });
-    const defAfter = getAttr(c, ATTR.DEF, h.attrDefs);
+    const defAfter = getAttr(c, ATTR.PDEF, h.attrDefs);
 
     expect(c.activeEffects.length).toBe(1);
     expect(defAfter - defBefore).toBe(5);
@@ -88,11 +90,11 @@ describe("effect: duration", () => {
     };
     for (let i = 0; i < 9; i++) tickActiveEffects(c, ctx);
     expect(c.activeEffects.length).toBe(1);
-    expect(getAttr(c, ATTR.DEF, h.attrDefs)).toBe(5); // still buffed
+    expect(getAttr(c, ATTR.PDEF, h.attrDefs)).toBe(5); // still buffed
 
     tickActiveEffects(c, ctx); // tick #10 expires it
     expect(c.activeEffects.length).toBe(0);
-    expect(getAttr(c, ATTR.DEF, h.attrDefs)).toBe(0);
+    expect(getAttr(c, ATTR.PDEF, h.attrDefs)).toBe(0);
   });
 });
 

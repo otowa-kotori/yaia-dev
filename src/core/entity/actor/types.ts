@@ -83,6 +83,11 @@ export interface PlayerCharacter extends Character {
   xpCurve: FormulaRef;
   /** Hard level cap for this character. */
   maxLevel: number;
+  /** ID of the HeroConfig this character was created from.
+   *  Used at runtime to look up class-specific data (growth, physScaling,
+   *  magScaling) that lives in content and must NOT be duplicated here.
+   *  (persisted) */
+  heroConfigId: string;
   skills: Record<SkillId, SkillProgress>;
   /** Slot -> equipped GearInstance (or null for empty slot). Each instance
    *  carries its own rolledMods; see ../item/types.ts. (persisted) */

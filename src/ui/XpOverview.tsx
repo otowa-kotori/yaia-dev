@@ -2,7 +2,7 @@
 //
 // Shows:
 //   - Hero card with level + XP progress bar
-//   - Core attribute block (ATK / DEF / STR / DEX / INT / WIS / SPD)
+//   - Core attribute block (PATK / PDEF / STR / DEX / INT / SPD)
 //   - Per-skill progress bars for every skill the hero has earned XP in
 
 import { getAttr } from "../core/entity/actor";
@@ -18,13 +18,14 @@ const ATTR_DEFS = buildDefaultContent().attributes;
 
 /** Attribute ids we want to display, in order. */
 const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [
-  { id: ATTR.MAX_HP, label: T.label_maxHp },
-  { id: ATTR.ATK,    label: T.label_atk },
-  { id: ATTR.DEF,    label: T.label_def },
+  { id: ATTR.MAX_HP,  label: T.label_maxHp },
+  { id: ATTR.PATK,   label: T.label_patk },
+  { id: ATTR.MATK,   label: T.label_matk },
+  { id: ATTR.PDEF,   label: T.label_pdef },
+  { id: ATTR.MRES,   label: T.label_mres },
   { id: ATTR.STR,    label: T.label_str },
   { id: ATTR.DEX,    label: T.label_dex },
   { id: ATTR.INT,    label: T.label_int },
-  { id: ATTR.WIS,    label: T.label_wis },
   { id: ATTR.SPEED,  label: T.label_spd },
 ];
 

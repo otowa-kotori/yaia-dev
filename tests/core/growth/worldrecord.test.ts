@@ -23,11 +23,11 @@ import {
 
 const atkUpgradeDef: UpgradeDef = {
   id: "upgrade.test.atk",
-  name: "Test ATK",
+  name: "Test PATK",
   description: "test",
   maxLevel: 5,
   modifierPerLevel: [
-    { stat: ATTR.ATK, op: "flat", value: 3, sourceId: "ignored" },
+    { stat: ATTR.PATK, op: "flat", value: 3, sourceId: "ignored" },
   ],
   costCurrency: "currency.gold",
   costScaling: { kind: "exp_curve_v1", base: 100, growth: 2.0 },
@@ -39,8 +39,8 @@ const multiStatUpgradeDef: UpgradeDef = {
   description: "test",
   maxLevel: 3,
   modifierPerLevel: [
-    { stat: ATTR.ATK, op: "flat", value: 2, sourceId: "ignored" },
-    { stat: ATTR.DEF, op: "flat", value: 1, sourceId: "ignored" },
+    { stat: ATTR.PATK, op: "flat", value: 2, sourceId: "ignored" },
+    { stat: ATTR.PDEF, op: "flat", value: 1, sourceId: "ignored" },
   ],
   costCurrency: "currency.gold",
   costScaling: { kind: "exp_curve_v1", base: 50, growth: 1.5 },
@@ -72,7 +72,7 @@ describe("computeWorldModifiers", () => {
     const content = makeContentWithUpgrades();
     const mods = computeWorldModifiers(record, content);
     expect(mods).toHaveLength(1);
-    expect(mods[0]!.stat).toBe(ATTR.ATK);
+    expect(mods[0]!.stat).toBe(ATTR.PATK);
     expect(mods[0]!.value).toBe(3);
     expect(mods[0]!.sourceId).toBe(`world.${atkUpgradeDef.id}`);
   });
@@ -113,19 +113,19 @@ describe("computeWorldModifiers", () => {
 // ---------- upgradeCost ----------
 
 describe("upgradeCost", () => {
-  test("level 0â†’1 costs base", () => {
+  test("level 0â†? costs base", () => {
     // exp_curve_v1: cost(nextLevel) = base * growth^(nextLevel-1)
-    // nextLevel = 1, growth^0 = 1 â†’ cost = 100
+    // nextLevel = 1, growth^0 = 1 â†?cost = 100
     expect(upgradeCost(atkUpgradeDef, 0)).toBe(100);
   });
 
-  test("level 1â†’2 costs base * growth", () => {
-    // nextLevel = 2, growth^1 = 2 â†’ cost = 200
+  test("level 1â†? costs base * growth", () => {
+    // nextLevel = 2, growth^1 = 2 â†?cost = 200
     expect(upgradeCost(atkUpgradeDef, 1)).toBe(200);
   });
 
-  test("level 2â†’3 compounds", () => {
-    // nextLevel = 3, growth^2 = 4 â†’ cost = 400
+  test("level 2â†? compounds", () => {
+    // nextLevel = 3, growth^2 = 4 â†?cost = 400
     expect(upgradeCost(atkUpgradeDef, 2)).toBe(400);
   });
 
@@ -156,24 +156,24 @@ describe("rebuildCharacterDerived + worldRecord", () => {
     rebuildCharacterDerived(pc, attrDefs, record);
 
     // base ATK 10 + 3Ã—2 = 16
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(16);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(16);
   });
 
   test("no world modifiers when worldRecord omitted (enemy path)", () => {
     const pc = makePlayer({ id: "p1", abilities: [], atk: 10 });
     rebuildCharacterDerived(pc, attrDefs); // no worldRecord
 
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(10);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(10);
   });
 
-  test("rebuild is idempotent â€” double call gives same result", () => {
+  test("rebuild is idempotent â€?double call gives same result", () => {
     const record: WorldRecord = { upgrades: { [atkUpgradeDef.id]: 1 } };
     const pc = makePlayer({ id: "p1", abilities: [], atk: 10 });
 
     rebuildCharacterDerived(pc, attrDefs, record);
-    const first = getAttr(pc, ATTR.ATK, attrDefs);
+    const first = getAttr(pc, ATTR.PATK, attrDefs);
     rebuildCharacterDerived(pc, attrDefs, record);
-    const second = getAttr(pc, ATTR.ATK, attrDefs);
+    const second = getAttr(pc, ATTR.PATK, attrDefs);
 
     expect(first).toBe(second);
     expect(first).toBe(13); // 10 + 3

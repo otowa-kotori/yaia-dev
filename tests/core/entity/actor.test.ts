@@ -29,7 +29,7 @@ const copperSword: ItemDef = {
   stackable: false,
   slot: "weapon",
   modifiers: [
-    { stat: ATTR.ATK, op: "flat", value: 5, sourceId: "" },
+    { stat: ATTR.PATK, op: "flat", value: 5, sourceId: "" },
   ],
 };
 
@@ -52,7 +52,7 @@ describe("actor hierarchy", () => {
       id: "p1",
       name: "Hero",
       knownAbilities: [basicAttackAbility.id],
-      baseAttrs: { [ATTR.ATK]: 7, [ATTR.MAX_HP]: 120 },
+      baseAttrs: { [ATTR.PATK]: 7, [ATTR.MAX_HP]: 120 },
       attrDefs,
       xpCurve: testXpCurve,
     });
@@ -61,7 +61,7 @@ describe("actor hierarchy", () => {
     expect(pc.exp).toBe(0);
     expect(pc.currentHp).toBe(120); // starts full
     expect(pc.abilities).toEqual([basicAttackAbility.id]);
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(7);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(7);
   });
 
   test("createEnemy produces a full Enemy from MonsterDef", () => {
@@ -103,31 +103,31 @@ describe("actor hierarchy", () => {
     const pc = createPlayerCharacter({
       id: "p",
       name: "p",
-      baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
+      baseAttrs: { [ATTR.PATK]: 10, [ATTR.MAX_HP]: 100 },
       attrDefs,
       xpCurve: testXpCurve,
     });
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(10);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(10);
 
     pc.equipped = { weapon: makeSwordInstance() };
     rebuildCharacterDerived(pc, attrDefs);
 
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(15);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(15);
   });
 
   test("rebuildCharacterDerived is idempotent", () => {
     const pc = createPlayerCharacter({
       id: "p",
       name: "p",
-      baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
+      baseAttrs: { [ATTR.PATK]: 10, [ATTR.MAX_HP]: 100 },
       equipped: { weapon: makeSwordInstance() },
       attrDefs,
       xpCurve: testXpCurve,
     });
-    const after1 = getAttr(pc, ATTR.ATK, attrDefs);
+    const after1 = getAttr(pc, ATTR.PATK, attrDefs);
     rebuildCharacterDerived(pc, attrDefs);
     rebuildCharacterDerived(pc, attrDefs);
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(after1);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(after1);
     // Modifier stack should not duplicate on repeated rebuild.
     expect(pc.attrs.modifiers.length).toBe(1);
   });
@@ -152,17 +152,17 @@ describe("actor hierarchy", () => {
     const pc = createPlayerCharacter({
       id: "p",
       name: "p",
-      baseAttrs: { [ATTR.ATK]: 10, [ATTR.MAX_HP]: 100 },
+      baseAttrs: { [ATTR.PATK]: 10, [ATTR.MAX_HP]: 100 },
       attrDefs,
       xpCurve: testXpCurve,
     });
     // def.modifiers grants +5 ATK; rolledMods piles on an additional +3.
     pc.equipped = {
       weapon: makeSwordInstance("gear.test.rolled", [
-        { stat: ATTR.ATK, op: "flat", value: 3, sourceId: "gear.roll" },
+        { stat: ATTR.PATK, op: "flat", value: 3, sourceId: "gear.roll" },
       ]),
     };
     rebuildCharacterDerived(pc, attrDefs);
-    expect(getAttr(pc, ATTR.ATK, attrDefs)).toBe(18);
+    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(18);
   });
 });

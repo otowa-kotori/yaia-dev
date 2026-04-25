@@ -14,10 +14,10 @@ const rolledSword: ItemDef = {
   name: "Rolled Sword",
   stackable: false,
   slot: "weapon",
-  modifiers: [{ stat: ATTR.ATK, op: "flat", value: 5, sourceId: "" }],
+  modifiers: [{ stat: ATTR.PATK, op: "flat", value: 5, sourceId: "" }],
   roll: {
     mods: [
-      { stat: ATTR.ATK, op: "flat", min: 1, max: 10 },
+      { stat: ATTR.PATK, op: "flat", min: 1, max: 10 },
       { stat: ATTR.STR, op: "flat", min: 0, max: 3 },
     ],
   },
@@ -28,8 +28,8 @@ const plainHelmet: ItemDef = {
   name: "Plain Helmet",
   stackable: false,
   slot: "head",
-  modifiers: [{ stat: ATTR.DEF, op: "flat", value: 2, sourceId: "" }],
-  // no roll â€” rolledMods should come back empty.
+  modifiers: [{ stat: ATTR.PDEF, op: "flat", value: 2, sourceId: "" }],
+  // no roll â€?rolledMods should come back empty.
 };
 
 const oreStackable: ItemDef = {
@@ -56,7 +56,7 @@ describe("createGearInstance", () => {
     const gear = createGearInstance(rolledSword.id, { rng });
     expect(gear.itemId).toBe(rolledSword.id);
     expect(gear.rolledMods.length).toBe(2);
-    const atk = gear.rolledMods.find((m) => m.stat === ATTR.ATK)!;
+    const atk = gear.rolledMods.find((m) => m.stat === ATTR.PATK)!;
     const str = gear.rolledMods.find((m) => m.stat === ATTR.STR)!;
     expect(atk.value).toBeGreaterThanOrEqual(1);
     expect(atk.value).toBeLessThanOrEqual(10);

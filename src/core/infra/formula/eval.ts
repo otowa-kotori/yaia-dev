@@ -39,12 +39,31 @@ export function evalFormula(ref: FormulaRef, ctx: FormulaContext): number {
       return evalSoftXpCurve(ref, vars);
     }
 
-    case "atk_vs_def": {
-      const atk = varOrZero(vars, "atk");
-      const def = varOrZero(vars, "def");
-      const raw = atk * ref.atkMul - def * ref.defMul;
-      const floor = ref.minDamage ?? 1;
-      return Math.max(floor, Math.floor(raw));
+    case "phys_damage_v1": {
+      // 两步计算：
+      //   有效攻击 = PATK × skillMul
+      //   excess   = max(0, PDEF / 有效攻击 − 1)
+      //   破甲系数 = max(floor, K / (K + excess^p))
+      //   最终伤害 = ⌊有效攻击 × 破甲系数⌋
+      const patk     = varOrZero(vars, "patk");
+      const pdef     = varOrZero(vars, "pdef");
+      const skillMul = ref.skillMul ?? 1;
+      const K        = ref.K ?? 0.8;
+      const p        = ref.p ?? 1.5;
+      const fl       = ref.floor ?? 0.1;
+      const effectiveAtk = patk * skillMul;
+      if (effectiveAtk <= 0) return 0;
+      const excess = Math.max(0, pdef / effectiveAtk - 1);
+      const armorCoeff = Math.max(fl, K / (K + Math.pow(excess, p)));
+      return Math.floor(effectiveAtk * armorCoeff);
+    }
+
+    case "magic_damage_v1": {
+      // 最终伤害 = ⌊MATK × skillMul × (1 − MRES)⌋
+      const matk     = varOrZero(vars, "matk");
+      const mres     = varOrZero(vars, "mres");
+      const skillMul = ref.skillMul ?? 1;
+      return Math.floor(matk * skillMul * (1 - mres));
     }
   }
 }

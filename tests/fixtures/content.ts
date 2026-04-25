@@ -38,6 +38,8 @@ import { registerBuiltinIntents } from "../../src/core/combat/intent";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../../src/core/inventory";
 
 // ---------- Shared attribute definitions ----------
+// 测试 fixture 只注册测试用到的属性；完整属性链（PATK/MATK 等）
+// 在需要战斗伤害的测试里再 patchContent 补入。
 
 export const attrDefs: Record<string, AttrDef> = {
   [ATTR.MAX_HP]: {
@@ -54,16 +56,16 @@ export const attrDefs: Record<string, AttrDef> = {
     integer: true,
     clampMin: 0,
   },
-  [ATTR.ATK]: {
-    id: ATTR.ATK,
-    name: "Atk",
+  [ATTR.PATK]: {
+    id: ATTR.PATK,
+    name: "PATK",
     defaultBase: 10,
     integer: true,
     clampMin: 0,
   },
-  [ATTR.DEF]: {
-    id: ATTR.DEF,
-    name: "Def",
+  [ATTR.PDEF]: {
+    id: ATTR.PDEF,
+    name: "PDEF",
     defaultBase: 0,
     integer: true,
     clampMin: 0,
@@ -90,7 +92,7 @@ export const basicStrikeEffect: EffectDef = {
   id: "effect.combat.strike" as EffectId,
   kind: "instant",
   magnitudeMode: "damage",
-  formula: { kind: "atk_vs_def", atkMul: 1, defMul: 1 },
+  formula: { kind: "phys_damage_v1" },
 };
 
 export const burnDotEffect: EffectDef = {
@@ -107,7 +109,7 @@ export const shieldBuffEffect: EffectDef = {
   kind: "duration",
   durationTicks: 10,
   modifiers: [
-    { stat: ATTR.DEF, op: "flat", value: 5, sourceId: "" },
+    { stat: ATTR.PDEF, op: "flat", value: 5, sourceId: "" },
   ],
 };
 
@@ -144,8 +146,8 @@ export const slimeMonster: MonsterDef = {
   level: 1,
   baseAttrs: {
     [ATTR.MAX_HP]: 30,
-    [ATTR.ATK]: 4,
-    [ATTR.DEF]: 1,
+    [ATTR.PATK]: 4,   // 测试 fixture 直接设 PATK，跳过 WEAPON_ATK + scaling 链路
+    [ATTR.PDEF]: 1,
     [ATTR.SPEED]: 20,
   },
   abilities: [basicAttackAbility.id],
@@ -159,8 +161,8 @@ export const goblinMonster: MonsterDef = {
   level: 1,
   baseAttrs: {
     [ATTR.MAX_HP]: 22,
-    [ATTR.ATK]: 6,
-    [ATTR.DEF]: 0,
+    [ATTR.PATK]: 6,
+    [ATTR.PDEF]: 0,
     [ATTR.SPEED]: 28,
   },
   abilities: [basicAttackAbility.id],
@@ -389,7 +391,9 @@ export function makePlayer(overrides: {
   abilities: string[];
   hp?: number;
   mp?: number;
+  /** 直接设置 PATK base（测试用，跳过 WEAPON_ATK + scaling 派生链路）。 */
   atk?: number;
+  /** 直接设置 PDEF base。 */
   def?: number;
   speed?: number;
   maxHp?: number;
@@ -400,8 +404,8 @@ export function makePlayer(overrides: {
   const base: Partial<Record<AttrId, number>> = {
     [ATTR.MAX_HP]: overrides.maxHp ?? 100,
     [ATTR.MAX_MP]: overrides.maxMp ?? 20,
-    [ATTR.ATK]: overrides.atk ?? 10,
-    [ATTR.DEF]: overrides.def ?? 0,
+    [ATTR.PATK]: overrides.atk ?? 10,
+    [ATTR.PDEF]: overrides.def ?? 0,
     [ATTR.SPEED]: overrides.speed ?? 10,
     [ATTR.INVENTORY_STACK_LIMIT]: overrides.inventoryStackLimit ?? DEFAULT_CHAR_STACK_LIMIT,
   };

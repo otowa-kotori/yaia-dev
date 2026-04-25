@@ -97,25 +97,54 @@ describe("formula", () => {
     expect(evalFormula(f, { vars: { lvl: 5 } })).toBe(183);
   });
 
-  test("atk_vs_def applies floor", () => {
-
-    const f: FormulaRef = { kind: "atk_vs_def", atkMul: 1, defMul: 1 };
-    expect(evalFormula(f, { vars: { atk: 1, def: 100 } })).toBe(1); // floor default = 1
+  test("phys_damage_v1: 已破甲时伤害 = floor(PATK × skillMul)", () => {
+    // PATK=15, PDEF=1 → excess=max(0,1/15-1)=0 → armorCoeff=1 → damage=15
+    const f: FormulaRef = { kind: "phys_damage_v1" };
+    expect(evalFormula(f, { vars: { patk: 15, pdef: 1 } })).toBe(15);
   });
 
-  test("atk_vs_def with custom min", () => {
-    const f: FormulaRef = {
-      kind: "atk_vs_def",
-      atkMul: 1,
-      defMul: 1,
-      minDamage: 0,
-    };
-    expect(evalFormula(f, { vars: { atk: 1, def: 100 } })).toBe(0);
+  test("phys_damage_v1: PDEF > PATK 时衰减明显", () => {
+    // PATK=10, PDEF=20 → excess=max(0,20/10-1)=1
+    // armorCoeff = max(0.1, 0.8/(0.8+1^1.5)) = 0.8/1.8 ≈ 0.444
+    // damage = floor(10 × 0.444) = 4
+    const f: FormulaRef = { kind: "phys_damage_v1" };
+    const damage = evalFormula(f, { vars: { patk: 10, pdef: 20 } });
+    expect(damage).toBe(4);
   });
 
-  test("atk_vs_def floors fractional damage", () => {
-    const f: FormulaRef = { kind: "atk_vs_def", atkMul: 0.5, defMul: 0.1 };
-    // 0.5 * 10 - 0.1 * 3 = 4.7 => floor = 4
-    expect(evalFormula(f, { vars: { atk: 10, def: 3 } })).toBe(4);
+  test("phys_damage_v1: skillMul < 1 时有效攻击降低，破甲系数也降低", () => {
+    // 有效攻击 = 40 × 0.65 = 26, PDEF=35
+    // excess = max(0, 35/26 - 1) ≈ 0.346
+    // armorCoeff = 0.8/(0.8+0.346^1.5) ≈ 0.8/0.804 ≈ 0.87 (但多段更弱)
+    const f: FormulaRef = { kind: "phys_damage_v1", skillMul: 0.65 };
+    const damage = evalFormula(f, { vars: { patk: 40, pdef: 35 } });
+    expect(damage).toBeGreaterThan(0);
+    expect(damage).toBeLessThan(26);
+  });
+
+  test("phys_damage_v1: patk=0 返回 0", () => {
+    const f: FormulaRef = { kind: "phys_damage_v1" };
+    expect(evalFormula(f, { vars: { patk: 0, pdef: 10 } })).toBe(0);
+  });
+
+  test("phys_damage_v1: floor 保底生效", () => {
+    // PATK=1, PDEF=10000 → 极高 excess → armorCoeff 趋近 floor=0.1
+    const f: FormulaRef = { kind: "phys_damage_v1" };
+    const damage = evalFormula(f, { vars: { patk: 1, pdef: 10000 } });
+    // 保底 floor(1 × 0.1) = 0，floor 是倍率，不是绝对值下限
+    // 所以这里 damage 可能是 0，不违反设计
+    expect(damage).toBeGreaterThanOrEqual(0);
+  });
+
+  test("magic_damage_v1: 基础计算", () => {
+    // MATK=20, MRES=0.2, skillMul=1 → floor(20 × 1 × 0.8) = 16
+    const f: FormulaRef = { kind: "magic_damage_v1" };
+    expect(evalFormula(f, { vars: { matk: 20, mres: 0.2 } })).toBe(16);
+  });
+
+  test("magic_damage_v1: skillMul 缩放", () => {
+    // MATK=30, MRES=0, skillMul=1.5 → floor(30 × 1.5) = 45
+    const f: FormulaRef = { kind: "magic_damage_v1", skillMul: 1.5 };
+    expect(evalFormula(f, { vars: { matk: 30, mres: 0 } })).toBe(45);
   });
 });

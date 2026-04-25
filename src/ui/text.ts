@@ -157,12 +157,13 @@ export const T = {
   noHeroYet: "尚无英雄。",
   noSkillsYet: "尚未习得技能。试试去采集！",
   label_maxHp: "生命上限",
-  label_atk: "攻击",
-  label_def: "防御",
+  label_patk: "物攻",
+  label_matk: "法攻",
+  label_pdef: "物防",
+  label_mres: "魔抗",
   label_str: "力量",
   label_dex: "敏捷",
   label_int: "智力",
-  label_wis: "感知",
   label_spd: "速度",
 
   // ── Settings ──

@@ -296,18 +296,42 @@ export function removeDynamicProvider(
 // AttrId at the type level so computed-property keys on Record<AttrId, _>
 // keep their brand at call sites. Content registry is still the source of
 // truth for AttrDef — this is just naming.
+//
+// 属性分层：
+//   一级属性层: STR / DEX / INT
+//   聚合层:     PHYS_POTENCY / MAG_POTENCY（由 DynamicModifierProvider 汇聚一级属性）
+//   面板层:     PATK / MATK（由 computeBase 读取武器 + 聚合层计算）
+//   防御层:     PDEF（装备 flat）/ MRES（百分比，上限 0.8）
+//   武器层:     WEAPON_ATK / WEAPON_MATK（装备 flat，赤手默认值 1 / 0）
+//
+// ATK 和 DEF 已退役，由 PATK/MATK/PDEF/MRES 取代。
+// WIS 已退役，牧师/圣女共用 INT。
 
 export const ATTR = {
-  MAX_HP: "attr.max_hp" as AttrId,
-  MAX_MP: "attr.max_mp" as AttrId,
-  ATK: "attr.atk" as AttrId,
-  DEF: "attr.def" as AttrId,
-  STR: "attr.str" as AttrId,
-  DEX: "attr.dex" as AttrId,
-  INT: "attr.int" as AttrId,
-  WIS: "attr.wis" as AttrId,
-  CRIT_RATE: "attr.crit_rate" as AttrId,
-  CRIT_MULT: "attr.crit_mult" as AttrId,
-  SPEED: "attr.speed" as AttrId,
+  MAX_HP:  "attr.max_hp"  as AttrId,
+  MAX_MP:  "attr.max_mp"  as AttrId,
+  STR:     "attr.str"     as AttrId,
+  DEX:     "attr.dex"     as AttrId,
+  INT:     "attr.int"     as AttrId,
+  SPEED:   "attr.speed"   as AttrId,
+
+  // 武器基础值
+  WEAPON_ATK:  "attr.weapon_atk"  as AttrId,
+  WEAPON_MATK: "attr.weapon_matk" as AttrId,
+
+  // 聚合层（由 DynamicModifierProvider 驱动，defaultBase = 0）
+  PHYS_POTENCY: "attr.phys_potency" as AttrId,
+  MAG_POTENCY:  "attr.mag_potency"  as AttrId,
+
+  // 面板攻击力（computeBase 派生）
+  PATK: "attr.patk" as AttrId,
+  MATK: "attr.matk" as AttrId,
+
+  // 防御
+  PDEF: "attr.pdef" as AttrId,
+  MRES: "attr.mres" as AttrId,  // 百分比减伤，0.0–0.8
+
+  CRIT_RATE:  "attr.crit_rate"  as AttrId,
+  CRIT_MULT:  "attr.crit_mult"  as AttrId,
   INVENTORY_STACK_LIMIT: "attr.inventory_stack_limit" as AttrId,
 } as const;

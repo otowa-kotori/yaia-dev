@@ -38,6 +38,18 @@ import { DEFAULT_CHAR_STACK_LIMIT } from "../core/inventory";
 export const CURRENCY_GOLD = "currency.gold";
 
 // ---------- Attributes ----------
+//
+// 属性分层（完整说明见 docs/design/plan-combat-damage-and-growth.md §1）：
+//   一级属性: STR / DEX / INT
+//   聚合层:   PHYS_POTENCY / MAG_POTENCY（DynamicModifierProvider 汇聚一级属性）
+//   面板层:   PATK / MATK（computeBase 派生，依赖武器值 + 聚合层）
+//   防御层:   PDEF（装备 flat）/ MRES（百分比减伤 0–0.8）
+//   武器层:   WEAPON_ATK / WEAPON_MATK（装备 flat，赤手默认 1 / 0）
+//
+// k=0.3 是 sqrt 缩放系数，决定主属性对面板攻击力的放大幅度。
+// 全部设计验证见 docs/design/combat-formula.md。
+
+const K_SCALING = 0.3;
 
 const attrDefs: Record<string, AttrDef> = {
   [ATTR.MAX_HP]: {
@@ -54,24 +66,82 @@ const attrDefs: Record<string, AttrDef> = {
     integer: true,
     clampMin: 0,
   },
-  [ATTR.ATK]: {
-    id: ATTR.ATK,
-    name: "攻击",
-    defaultBase: 8,
+  [ATTR.STR]: { id: ATTR.STR, name: "力量", defaultBase: 5, integer: true },
+  [ATTR.DEX]: { id: ATTR.DEX, name: "敏捷", defaultBase: 5, integer: true },
+  [ATTR.INT]: { id: ATTR.INT, name: "智力", defaultBase: 5, integer: true },
+  [ATTR.SPEED]: {
+    id: ATTR.SPEED,
+    name: "速度",
+    defaultBase: 40,
+    integer: true,
+    clampMin: 1,
+  },
+  // 武器基础值（装备 flat 叠加）
+  [ATTR.WEAPON_ATK]: {
+    id: ATTR.WEAPON_ATK,
+    name: "武器攻击",
+    defaultBase: 4,   // 赤手 = 4（空拳基础力道）
     integer: true,
     clampMin: 0,
   },
-  [ATTR.DEF]: {
-    id: ATTR.DEF,
-    name: "防御",
+  [ATTR.WEAPON_MATK]: {
+    id: ATTR.WEAPON_MATK,
+    name: "武器法攻",
+    defaultBase: 0,   // 赤手无法攻 = 0；法师/圣女在 HeroConfig.baseAttrs 里置 1
+    integer: true,
+    clampMin: 0,
+  },
+  // 聚合层：由 DynamicModifierProvider 汇聚一级属性，defaultBase = 0
+  [ATTR.PHYS_POTENCY]: {
+    id: ATTR.PHYS_POTENCY,
+    name: "物理潜力",
+    defaultBase: 0,
+    clampMin: 0,
+  },
+  [ATTR.MAG_POTENCY]: {
+    id: ATTR.MAG_POTENCY,
+    name: "魔法潜力",
+    defaultBase: 0,
+    clampMin: 0,
+  },
+  // 面板攻击力（computeBase 派生）
+  // PATK = WEAPON_ATK × (1 + K × √PHYS_POTENCY)
+  [ATTR.PATK]: {
+    id: ATTR.PATK,
+    name: "物理攻击力",
+    defaultBase: 0,
+    integer: true,
+    clampMin: 0,
+    computeBase: (get) =>
+      get(ATTR.WEAPON_ATK) * (1 + K_SCALING * Math.sqrt(get(ATTR.PHYS_POTENCY))),
+    dependsOn: [ATTR.WEAPON_ATK, ATTR.PHYS_POTENCY],
+  },
+  // MATK = WEAPON_MATK × (1 + K × √MAG_POTENCY)
+  [ATTR.MATK]: {
+    id: ATTR.MATK,
+    name: "魔法攻击力",
+    defaultBase: 0,
+    integer: true,
+    clampMin: 0,
+    computeBase: (get) =>
+      get(ATTR.WEAPON_MATK) * (1 + K_SCALING * Math.sqrt(get(ATTR.MAG_POTENCY))),
+    dependsOn: [ATTR.WEAPON_MATK, ATTR.MAG_POTENCY],
+  },
+  // 防御
+  [ATTR.PDEF]: {
+    id: ATTR.PDEF,
+    name: "物理防御",
     defaultBase: 0,
     integer: true,
     clampMin: 0,
   },
-  [ATTR.STR]: { id: ATTR.STR, name: "力量", defaultBase: 5, integer: true },
-  [ATTR.DEX]: { id: ATTR.DEX, name: "敏捷", defaultBase: 5, integer: true },
-  [ATTR.INT]: { id: ATTR.INT, name: "智力", defaultBase: 5, integer: true },
-  [ATTR.WIS]: { id: ATTR.WIS, name: "感知", defaultBase: 5, integer: true },
+  [ATTR.MRES]: {
+    id: ATTR.MRES,
+    name: "魔法抗性",
+    defaultBase: 0,
+    clampMin: 0,
+    clampMax: 0.8,  // 百分比减伤上限 80%
+  },
   [ATTR.CRIT_RATE]: {
     id: ATTR.CRIT_RATE,
     name: "暴击率",
@@ -83,13 +153,6 @@ const attrDefs: Record<string, AttrDef> = {
     id: ATTR.CRIT_MULT,
     name: "暴击倍率",
     defaultBase: 1.5,
-    clampMin: 1,
-  },
-  [ATTR.SPEED]: {
-    id: ATTR.SPEED,
-    name: "速度",
-    defaultBase: 40,
-    integer: true,
     clampMin: 1,
   },
   [ATTR.INVENTORY_STACK_LIMIT]: {
@@ -127,7 +190,16 @@ export const strikeEffect: EffectDef = {
   id: "effect.combat.strike" as EffectId,
   kind: "instant",
   magnitudeMode: "damage",
-  formula: { kind: "atk_vs_def", atkMul: 1, defMul: 1 },
+  // ratio-power 破甲方案，详见 docs/design/combat-formula.md §2
+  formula: { kind: "phys_damage_v1" },
+};
+
+/** 魔法基础攻击——法师/圣女平A使用。读 MATK，绕过 PDEF。 */
+export const magicStrikeEffect: EffectDef = {
+  id: "effect.combat.magic_strike" as EffectId,
+  kind: "instant",
+  magnitudeMode: "damage",
+  formula: { kind: "magic_damage_v1" },
 };
 
 // ---------- Abilities ----------
@@ -139,17 +211,26 @@ export const basicAttack: AbilityDef = {
   effects: [strikeEffect.id],
 };
 
+/** 魔法基础攻击——法师/圣女专用。 */
+export const magicBasicAttack: AbilityDef = {
+  id: "ability.basic.magic_attack" as AbilityId,
+  name: "魔法攻击",
+  targetKind: "single_enemy",
+  effects: [magicStrikeEffect.id],
+};
+
 // ---------- Monsters ----------
 
 export const slime: MonsterDef = {
   id: "monster.slime" as MonsterId,
   name: "史莱姆",
   level: 1,
+  physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
   baseAttrs: {
     [ATTR.MAX_HP]: 30,
-    [ATTR.ATK]: 4,
-    [ATTR.DEF]: 1,
-    [ATTR.SPEED]: 12, // very slow — acts roughly every 84 ticks (8.4 s)
+    [ATTR.WEAPON_ATK]: 4,  // 原 ATK
+    [ATTR.PDEF]: 1,         // 原 DEF
+    [ATTR.SPEED]: 12,       // very slow — acts roughly every 84 ticks (8.4 s)
   },
   abilities: [basicAttack.id],
   drops: [],
@@ -161,11 +242,12 @@ export const goblin: MonsterDef = {
   id: "monster.goblin" as MonsterId,
   name: "哥布林",
   level: 1,
+  physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
   baseAttrs: {
     [ATTR.MAX_HP]: 24,
-    [ATTR.ATK]: 6,
-    [ATTR.DEF]: 0,
-    [ATTR.SPEED]: 32, // medium — acts roughly every 32 ticks (3.2 s)
+    [ATTR.WEAPON_ATK]: 6,  // 原 ATK
+    [ATTR.PDEF]: 0,
+    [ATTR.SPEED]: 32,       // medium — acts roughly every 32 ticks (3.2 s)
   },
   abilities: [basicAttack.id],
   drops: [],
@@ -178,11 +260,12 @@ export const caveBat: MonsterDef = {
   id: "monster.cave_bat" as MonsterId,
   name: "洞穴蝙蝠",
   level: 2,
+  physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
   baseAttrs: {
     [ATTR.MAX_HP]: 16,
-    [ATTR.ATK]: 5,
-    [ATTR.DEF]: 0,
-    [ATTR.SPEED]: 72, // nearly 2x player speed — acts roughly every 14 ticks (1.4 s)
+    [ATTR.WEAPON_ATK]: 5,  // 原 ATK
+    [ATTR.PDEF]: 0,
+    [ATTR.SPEED]: 72,       // nearly 2x player speed — acts roughly every 14 ticks (1.4 s)
   },
   abilities: [basicAttack.id],
   drops: [],
@@ -216,7 +299,44 @@ export const trainingSword: ItemDef = {
   stackable: false,
   slot: "weapon",
   modifiers: [
-    { stat: ATTR.ATK, op: "flat", value: 2, sourceId: "item.weapon.training_sword" },
+    { stat: ATTR.WEAPON_ATK, op: "flat", value: 2, sourceId: "item.weapon.training_sword" },
+  ],
+  tags: ["weapon", "starter"],
+};
+
+export const trainingBow: ItemDef = {
+  id: "item.weapon.training_bow" as ItemId,
+  name: "训练短弓",
+  description: "简陋的练习短弓，轻巧但威力有限，游侠的入门装备。",
+  stackable: false,
+  slot: "weapon",
+  modifiers: [
+    { stat: ATTR.WEAPON_ATK, op: "flat", value: 2, sourceId: "item.weapon.training_bow" },
+  ],
+  tags: ["weapon", "starter"],
+};
+
+export const trainingStaff: ItemDef = {
+  id: "item.weapon.training_staff" as ItemId,
+  name: "训练法杖",
+  description: "新手魔法师的启蒙法杖，导魔效率低，但聊胜于无。",
+  stackable: false,
+  slot: "weapon",
+  modifiers: [
+    { stat: ATTR.WEAPON_MATK, op: "flat", value: 2, sourceId: "item.weapon.training_staff" },
+  ],
+  tags: ["weapon", "starter"],
+};
+
+export const trainingScepter: ItemDef = {
+  id: "item.weapon.training_scepter" as ItemId,
+  name: "见习权杖",
+  description: "圣女见习时持用的权杖，附有轻微的神圣回路加持。",
+  stackable: false,
+  slot: "weapon",
+  modifiers: [
+    { stat: ATTR.WEAPON_MATK, op: "flat", value: 2,  sourceId: "item.weapon.training_scepter" },
+    { stat: ATTR.MAX_MP,      op: "flat", value: 10, sourceId: "item.weapon.training_scepter" },
   ],
   tags: ["weapon", "starter"],
 };
@@ -228,7 +348,7 @@ export const copperSword: ItemDef = {
   stackable: false,
   slot: "weapon",
   modifiers: [
-    { stat: ATTR.ATK, op: "flat", value: 5, sourceId: "item.weapon.copper_sword" },
+    { stat: ATTR.WEAPON_ATK, op: "flat", value: 8, sourceId: "item.weapon.copper_sword" },
   ],
   tags: ["weapon", "crafted"],
 };
@@ -456,18 +576,18 @@ export const copperMineLocation: LocationDef = {
 // Purchased via WorldRecord. Cost scales using exp_curve_v1 so the same
 // formula evaluator handles both character XP and upgrade pricing.
 //
-// ATK upgrade: +2 ATK per level, 10 levels max.
+// 战士训练: WEAPON_ATK flat +2，10 级上限
 //   Cost: 50 / 80 / 128 / 205 / 328 / 524 / 839 / 1342 / 2147 / 3436
-// DEF upgrade: +1 DEF per level, 10 levels max.
+// 护甲强化: PDEF flat +1，10 级上限
 //   Cost: 40 / 60 / 90 / 135 / 202 / 304 / 455 / 683 / 1024 / 1536
 
 export const atkUpgrade: UpgradeDef = {
   id: "upgrade.combat.atk",
   name: "战士训练",
-  description: "永久提升所有角色攻击力 +2",
+  description: "永久提升所有角色武器攻击力 +2",
   maxLevel: 10,
   modifierPerLevel: [
-    { stat: ATTR.ATK, op: "flat", value: 2, sourceId: "world.upgrade.combat.atk" },
+    { stat: ATTR.WEAPON_ATK, op: "flat", value: 2, sourceId: "world.upgrade.combat.atk" },
   ],
   costCurrency: CURRENCY_GOLD,
   costScaling: { kind: "exp_curve_v1", base: 50, growth: 1.6 },
@@ -476,10 +596,10 @@ export const atkUpgrade: UpgradeDef = {
 export const defUpgrade: UpgradeDef = {
   id: "upgrade.combat.def",
   name: "护甲强化",
-  description: "永久提升所有角色防御力 +1",
+  description: "永久提升所有角色物理防御 +1",
   maxLevel: 10,
   modifierPerLevel: [
-    { stat: ATTR.DEF, op: "flat", value: 1, sourceId: "world.upgrade.combat.def" },
+    { stat: ATTR.PDEF, op: "flat", value: 1, sourceId: "world.upgrade.combat.def" },
   ],
   costCurrency: CURRENCY_GOLD,
   costScaling: { kind: "exp_curve_v1", base: 40, growth: 1.5 },
@@ -487,12 +607,25 @@ export const defUpgrade: UpgradeDef = {
 
 // ---------- Default DB ----------
 
+// 四职业初始属性与成长配置（详见 docs/design/plan-combat-damage-and-growth.md §3-4）
+//
+// physScaling: 决定哪个一级属性驱动 PHYS_POTENCY → PATK
+//   骑士/游侠用各自主属性；法师/圣女 physScaling = STR（低值）→ 赤手 PATK 极低但非零
+// growth: 每级增量（float 合法，integer: true AttrDef 会在 getAttr 时 floor）
+// baseAttrs: Lv1 初始属性，覆盖 AttrDef.defaultBase
+
 export function buildDefaultContent(): ContentDb {
   return {
     ...emptyContentDb(),
     attributes: attrDefs,
-    effects: { [strikeEffect.id]: strikeEffect },
-    abilities: { [basicAttack.id]: basicAttack },
+    effects: {
+      [strikeEffect.id]: strikeEffect,
+      [magicStrikeEffect.id]: magicStrikeEffect,
+    },
+    abilities: {
+      [basicAttack.id]: basicAttack,
+      [magicBasicAttack.id]: magicBasicAttack,
+    },
     monsters: {
       [slime.id]: slime,
       [goblin.id]: goblin,
@@ -514,6 +647,9 @@ export function buildDefaultContent(): ContentDb {
       [copperOre.id]: copperOre,
       [slimeGel.id]: slimeGel,
       [trainingSword.id]: trainingSword,
+      [trainingBow.id]: trainingBow,
+      [trainingStaff.id]: trainingStaff,
+      [trainingScepter.id]: trainingScepter,
       [copperSword.id]: copperSword,
     },
     skills: {
@@ -524,25 +660,113 @@ export function buildDefaultContent(): ContentDb {
       [copperSwordRecipe.id]: copperSwordRecipe,
     },
     resourceNodes: { [copperVein.id]: copperVein },
-
     upgrades: {
       [atkUpgrade.id]: atkUpgrade,
       [defUpgrade.id]: defUpgrade,
     },
     starting: {
       heroes: [
+        // ── 骑士 ──────────────────────────────────────────
         {
-          id: "hero.1",
-          name: "勇者",
+          id: "hero.knight",
+          name: "骑士",
           xpCurve: defaultCharXpCurve,
           knownAbilities: [basicAttack.id],
           startingItems: [{ itemId: trainingSword.id, qty: 1 }],
+          baseAttrs: {
+            [ATTR.MAX_HP]: 180,
+            [ATTR.MAX_MP]: 30,
+            [ATTR.STR]: 10,
+            [ATTR.DEX]: 5,
+            [ATTR.INT]: 3,
+            [ATTR.SPEED]: 40,
+          },
+          growth: {
+            [ATTR.MAX_HP]: 20,
+            [ATTR.MAX_MP]: 2,
+            [ATTR.STR]: 2.5,
+            [ATTR.DEX]: 1,
+          },
+          physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
+          magScaling:  [{ attr: ATTR.INT, ratio: 1.0 }],
         },
+        // ── 游侠 ──────────────────────────────────────────
         {
-          id: "hero.2",
-          name: "学徒",
+          id: "hero.ranger",
+          name: "游侠",
           xpCurve: defaultCharXpCurve,
           knownAbilities: [basicAttack.id],
+          startingItems: [{ itemId: trainingBow.id, qty: 1 }],
+          baseAttrs: {
+            [ATTR.MAX_HP]: 120,
+            [ATTR.MAX_MP]: 40,
+            [ATTR.STR]: 6,
+            [ATTR.DEX]: 10,
+            [ATTR.INT]: 3,
+            [ATTR.SPEED]: 50,
+          },
+          growth: {
+            [ATTR.MAX_HP]: 14,
+            [ATTR.MAX_MP]: 3,
+            [ATTR.STR]: 1,
+            [ATTR.DEX]: 2.5,
+            [ATTR.INT]: 0,
+          },
+          physScaling: [{ attr: ATTR.DEX, ratio: 1.0 }],
+          magScaling:  [{ attr: ATTR.INT, ratio: 1.0 }],
+        },
+        // ── 法师 ──────────────────────────────────────────
+        {
+          id: "hero.mage",
+          name: "法师",
+          xpCurve: defaultCharXpCurve,
+          knownAbilities: [magicBasicAttack.id],
+          startingItems: [{ itemId: trainingStaff.id, qty: 1 }],
+          baseAttrs: {
+            [ATTR.MAX_HP]: 90,
+            [ATTR.MAX_MP]: 80,
+            [ATTR.STR]: 3,
+            [ATTR.DEX]: 4,
+            [ATTR.INT]: 10,
+            [ATTR.SPEED]: 40,
+            [ATTR.WEAPON_MATK]: 1,  // 赤手有基础法攻
+          },
+          growth: {
+            [ATTR.MAX_HP]: 10,
+            [ATTR.MAX_MP]: 8,
+            [ATTR.DEX]: 0.5,
+            [ATTR.INT]: 2.5,
+          },
+          // physScaling = STR：法师 STR 低且无成长 → PATK 极低（赤手约 1.5）
+          physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
+          magScaling:  [{ attr: ATTR.INT, ratio: 1.0 }],
+        },
+        // ── 圣女 ──────────────────────────────────────────
+        {
+          id: "hero.cleric",
+          name: "圣女",
+          xpCurve: defaultCharXpCurve,
+          knownAbilities: [magicBasicAttack.id],
+          startingItems: [{ itemId: trainingScepter.id, qty: 1 }],
+          baseAttrs: {
+            [ATTR.MAX_HP]: 110,
+            [ATTR.MAX_MP]: 60,
+            [ATTR.STR]: 3,
+            [ATTR.DEX]: 4,
+            [ATTR.INT]: 8,
+            [ATTR.SPEED]: 40,
+            [ATTR.WEAPON_MATK]: 1,  // 赤手有基础法攻
+            [ATTR.MRES]: 0.20,      // 初始 20% 魔法抗性
+          },
+          growth: {
+            [ATTR.MAX_HP]: 12,
+            [ATTR.MAX_MP]: 6,
+            [ATTR.DEX]: 0.5,
+            [ATTR.INT]: 2,
+          },
+          // physScaling = STR：同法师，PATK 极低
+          physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
+          magScaling:  [{ attr: ATTR.INT, ratio: 1.0 }],
         },
       ],
 

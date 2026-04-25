@@ -18,7 +18,7 @@ import type { Rng } from "../../infra/rng";
 import type { GameEventBus } from "../../infra/events";
 import type { ActiveEffect, GameState } from "../../infra/state/types";
 import type { Character, PlayerCharacter } from "../../entity/actor";
-import { getAttr, isPlayer } from "../../entity/actor";
+import { getAttr, isPlayer, rebuildCharacterDerived } from "../../entity/actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../../entity/attribute";
 import { grantCharacterXp, grantSkillXp } from "../../growth/leveling";
 import { addStack, addGear, type AddStackResult, type AddGearResult } from "../../inventory";
@@ -148,7 +148,11 @@ function applyRewards(
   }
 
   if (rewards.charXp) {
-    grantCharacterXp(pc, rewards.charXp, { bus: ctx.bus });
+    const levelsGained = grantCharacterXp(pc, rewards.charXp, { bus: ctx.bus });
+    // 如果升了级，重建派生属性（base 已被 grantCharacterXp 修改）。
+    if (levelsGained > 0) {
+      rebuildCharacterDerived(pc, ctx.attrDefs, ctx.state.worldRecord);
+    }
   }
 
   // Currency rewards are written directly to state.currencies.
@@ -247,23 +251,27 @@ function buildFormulaContext(
   // Variables available to formulas. Names here are part of the FORMULA
   // DATA CONTRACT — designers reference them by string in content JSON
   // (e.g. `{ kind: "linear", xVar: "target_def" }`). Treat these names as
-  // stable; renaming is a content migration, not a refactor. Source-side
-  // attrs are raw names ("atk", "def"); target-side are prefixed with
-  // "target_" so authors can read both.
+  // stable; renaming is a content migration, not a refactor.
+  //
+  // 伤害公式变量约定：
+  //   面板攻击力 / 防御来自 source/target 的导出属性；
+  //   一级属性仍暴露（供非伤害公式使用，如治疗 / 采集效率）。
   return {
     vars: {
-      atk: getAttr(source, ATTR.ATK, attrDefs),
-      def: getAttr(target, ATTR.DEF, attrDefs),
-      source_atk: getAttr(source, ATTR.ATK, attrDefs),
-      source_int: getAttr(source, ATTR.INT, attrDefs),
-      source_str: getAttr(source, ATTR.STR, attrDefs),
-      source_dex: getAttr(source, ATTR.DEX, attrDefs),
-      source_wis: getAttr(source, ATTR.WIS, attrDefs),
-      source_max_hp: getAttr(source, ATTR.MAX_HP, attrDefs),
+      // 物理伤害公式所需
+      patk: getAttr(source, ATTR.PATK, attrDefs),
+      pdef: getAttr(target, ATTR.PDEF, attrDefs),
+      // 魔法伤害公式所需
+      matk: getAttr(source, ATTR.MATK, attrDefs),
+      mres: getAttr(target, ATTR.MRES, attrDefs),
+      // 一级属性（供其他公式类型使用）
+      source_str:        getAttr(source, ATTR.STR, attrDefs),
+      source_dex:        getAttr(source, ATTR.DEX, attrDefs),
+      source_int:        getAttr(source, ATTR.INT, attrDefs),
+      source_max_hp:     getAttr(source, ATTR.MAX_HP, attrDefs),
       source_current_hp: source.currentHp,
-      target_max_hp: getAttr(target, ATTR.MAX_HP, attrDefs),
+      target_max_hp:     getAttr(target, ATTR.MAX_HP, attrDefs),
       target_current_hp: target.currentHp,
-      target_def: getAttr(target, ATTR.DEF, attrDefs),
     },
   };
 }

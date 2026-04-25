@@ -67,17 +67,39 @@ export interface ConstantFormula {
 }
 
 /**
- * Attack vs defense damage baseline. MVP formula:
- *   damage = max(1, floor(atk * atkMul - def * defMul))
- * with atk = vars["atk"], def = vars["def"].
- * Configurable coefficients so numerical balance is data-driven.
+ * 物理伤害公式（ratio-power 破甲方案）。
+ *
+ * 两步计算：
+ *   有效攻击 = PATK × skillMul
+ *   excess   = max(0, PDEF / 有效攻击 − 1)
+ *   破甲系数 = max(floor, K / (K + excess^p))
+ *   最终伤害 = ⌊有效攻击 × 破甲系数⌋
+ *
+ * 设计说明见 docs/design/combat-formula.md §2。
  */
-export interface AtkVsDefFormula {
-  kind: "atk_vs_def";
-  atkMul: number;
-  defMul: number;
-  /** Minimum damage floor (default 1). */
-  minDamage?: number;
+export interface PhysDamageV1Formula {
+  kind: "phys_damage_v1";
+  /** 技能（段）系数，default 1.0。每段独立代入破甲公式。 */
+  skillMul?: number;
+  /** ratio-power 宽松度，default 0.8。 */
+  K?: number;
+  /** ratio-power 急转指数，default 1.5。 */
+  p?: number;
+  /** 保底伤害倍率，default 0.1（即有效攻击的 10%）。 */
+  floor?: number;
+}
+
+/**
+ * 魔法伤害公式。
+ *
+ *   最终伤害 = ⌊MATK × skillMul × (1 − MRES)⌋
+ *
+ * MRES 是百分比减伤（0.0–0.8），天然无零伤害。
+ */
+export interface MagicDamageV1Formula {
+  kind: "magic_damage_v1";
+  /** 技能系数，default 1.0。 */
+  skillMul?: number;
 }
 
 export type FormulaRef =
@@ -87,4 +109,5 @@ export type FormulaRef =
   | LinearFormula
   | PowerFormula
   | ConstantFormula
-  | AtkVsDefFormula;
+  | PhysDamageV1Formula
+  | MagicDamageV1Formula;

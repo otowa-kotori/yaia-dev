@@ -172,38 +172,41 @@ describe("GameSession location flow", () => {
     }
   });
 
-  test("fresh hero gets a starter weapon that can be equipped and unequipped", () => {
+  test("fresh hero starts with starter weapon auto-equipped and can unequip/re-equip it", () => {
     const { session, content } = createDefaultSession();
-    // Focus on the first hero (勇者) which gets the starter weapon.
-    const cc = session.getCharacter("hero.1");
+    // 骑士开局自动装备训练木剑
+    const cc = session.getCharacter("hero.knight");
     const hero = cc.hero;
-
     const inventory = session.state.inventories[hero.id]!;
-    const starterSlot = inventory.slots.findIndex(
-      (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
-    );
-    expect(starterSlot).toBeGreaterThanOrEqual(0);
 
-    const atkBefore = getAttr(hero, ATTR.ATK, content.attributes);
-    cc.equipItem(starterSlot);
-
+    // 开局应已装备，背包里没有
     expect(hero.equipped.weapon?.itemId).toBe(trainingSword.id);
-    expect(getAttr(hero, ATTR.ATK, content.attributes)).toBe(atkBefore + 2);
-
-    cc.unequipItem("weapon");
-
-    expect(hero.equipped.weapon ?? null).toBeNull();
-    expect(getAttr(hero, ATTR.ATK, content.attributes)).toBe(atkBefore);
     expect(
       inventory.slots.some(
         (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
       ),
-    ).toBe(true);
+    ).toBe(false);
+
+    const weaponAtkEquipped = getAttr(hero, ATTR.WEAPON_ATK, content.attributes);
+
+    // 卸下武器后 WEAPON_ATK 应回落到 defaultBase，剑回到背包
+    cc.unequipItem("weapon");
+    expect(hero.equipped.weapon ?? null).toBeNull();
+    expect(getAttr(hero, ATTR.WEAPON_ATK, content.attributes)).toBeLessThan(weaponAtkEquipped);
+    const backpackSlot = inventory.slots.findIndex(
+      (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
+    );
+    expect(backpackSlot).toBeGreaterThanOrEqual(0);
+
+    // 重新装备后恢复原值
+    cc.equipItem(backpackSlot);
+    expect(hero.equipped.weapon?.itemId).toBe(trainingSword.id);
+    expect(getAttr(hero, ATTR.WEAPON_ATK, content.attributes)).toBe(weaponAtkEquipped);
   });
 
   test("craftRecipe consumes materials, grants smithing XP, and produces the crafted weapon", () => {
     const { session } = createDefaultSession();
-    const cc = session.getCharacter("hero.1");
+    const cc = session.getCharacter("hero.knight");
     const hero = cc.hero;
 
     const inventory = session.state.inventories[hero.id]!;
@@ -225,15 +228,15 @@ describe("GameSession location flow", () => {
   test("multiple heroes can exist and be focused independently", () => {
     const { session } = createDefaultSession();
     const heroes = session.listHeroes();
-    expect(heroes.length).toBe(2);
+    expect(heroes.length).toBe(4);
 
-    expect(session.focusedCharId).toBe("hero.1");
-    session.setFocusedChar("hero.2");
-    expect(session.focusedCharId).toBe("hero.2");
+    expect(session.focusedCharId).toBe("hero.knight");
+    session.setFocusedChar("hero.ranger");
+    expect(session.focusedCharId).toBe("hero.ranger");
 
-    const cc1 = session.getCharacter("hero.1");
-    const cc2 = session.getCharacter("hero.2");
-    expect(cc1.hero.name).toBe("勇者");
-    expect(cc2.hero.name).toBe("学徒");
+    const cc1 = session.getCharacter("hero.knight");
+    const cc2 = session.getCharacter("hero.ranger");
+    expect(cc1.hero.name).toBe("骑士");
+    expect(cc2.hero.name).toBe("游侠");
   });
 });

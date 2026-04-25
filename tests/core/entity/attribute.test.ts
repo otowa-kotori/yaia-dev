@@ -21,9 +21,9 @@ const defs: Record<string, AttrDef> = {
     integer: true,
     clampMin: 0,
   },
-  [ATTR.ATK]: {
-    id: ATTR.ATK as AttrId,
-    name: "Atk",
+  [ATTR.PATK]: {
+    id: ATTR.PATK as AttrId,
+    name: "PATK",
     defaultBase: 10,
     integer: true,
     clampMin: 0,
@@ -120,12 +120,12 @@ describe("attribute stacking", () => {
   });
 
   test("cache invalidates on addModifiers / removeModifiersBySource", () => {
-    const s = createAttrSet({ [ATTR.ATK]: 10 });
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(10);
-    addModifiers(s, [mod(ATTR.ATK, "flat", 5)]);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(15);
+    const s = createAttrSet({ [ATTR.PATK]: 10 });
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(10);
+    addModifiers(s, [mod(ATTR.PATK, "flat", 5)]);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(15);
     removeModifiersBySource(s, "test");
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(10);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(10);
   });
 
   test("unknown attr returns 0 when no AttrDef exists", () => {
@@ -138,11 +138,11 @@ describe("attribute stacking", () => {
 
 describe("per-stat cache precision", () => {
   test("addModifiers on stat A does not dirty stat B's cache entry", () => {
-    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.PATK]: 10 });
     // Warm both stats.
     getAttr(s, ATTR.MAX_HP, defs);
-    getAttr(s, ATTR.ATK, defs);
-    const atkKeyBefore = ATTR.ATK in s.cache;
+    getAttr(s, ATTR.PATK, defs);
+    const atkKeyBefore = ATTR.PATK in s.cache;
 
     // Add a modifier that only touches MAX_HP.
     addModifiers(s, [mod(ATTR.MAX_HP, "flat", 50)]);
@@ -150,52 +150,52 @@ describe("per-stat cache precision", () => {
     // MAX_HP must be evicted from cache.
     expect(ATTR.MAX_HP in s.cache).toBe(false);
     // ATK cache entry must still be present (not evicted).
-    expect(ATTR.ATK in s.cache).toBe(atkKeyBefore); // true
+    expect(ATTR.PATK in s.cache).toBe(atkKeyBefore); // true
     // ATK value must be unchanged without recompute.
-    expect(s.cache[ATTR.ATK]).toBe(10);
+    expect(s.cache[ATTR.PATK]).toBe(10);
   });
 
   test("removeModifiersBySource only evicts stats referenced by removed mods", () => {
-    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.PATK]: 10 });
     addModifiers(s, [
       mod(ATTR.MAX_HP, "flat", 20, "gear"),
-      mod(ATTR.ATK, "flat", 5, "other"),
+      mod(ATTR.PATK, "flat", 5, "other"),
     ]);
     // Warm both.
     getAttr(s, ATTR.MAX_HP, defs);
-    getAttr(s, ATTR.ATK, defs);
+    getAttr(s, ATTR.PATK, defs);
 
     // Remove only the MAX_HP modifier.
     removeModifiersBySource(s, "gear");
 
     expect(ATTR.MAX_HP in s.cache).toBe(false);  // evicted
-    expect(ATTR.ATK in s.cache).toBe(true);       // untouched
-    expect(s.cache[ATTR.ATK]).toBe(15);           // still correct
+    expect(ATTR.PATK in s.cache).toBe(true);       // untouched
+    expect(s.cache[ATTR.PATK]).toBe(15);           // still correct
   });
 
   test("modifier touching multiple stats only evicts those stats", () => {
-    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.PATK]: 10 });
     addModifiers(s, [
       mod(ATTR.MAX_HP, "flat", 20, "src"),
-      mod(ATTR.ATK, "flat", 5, "src"),
+      mod(ATTR.PATK, "flat", 5, "src"),
     ]);
     // Warm both, then remove.
     getAttr(s, ATTR.MAX_HP, defs);
-    getAttr(s, ATTR.ATK, defs);
+    getAttr(s, ATTR.PATK, defs);
     // Also warm CRIT_RATE which no mod touches.
     getAttr(s, ATTR.CRIT_RATE, defs);
 
     removeModifiersBySource(s, "src");
 
     expect(ATTR.MAX_HP in s.cache).toBe(false);     // evicted
-    expect(ATTR.ATK in s.cache).toBe(false);         // evicted
+    expect(ATTR.PATK in s.cache).toBe(false);         // evicted
     expect(ATTR.CRIT_RATE in s.cache).toBe(true);    // untouched
   });
 
   test("getAttr recomputes only the dirty stat, not the whole set", () => {
-    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.PATK]: 10 });
     // Warm ATK, leave MAX_HP dirty.
-    getAttr(s, ATTR.ATK, defs);
+    getAttr(s, ATTR.PATK, defs);
 
     // Manually confirm MAX_HP is absent (dirty).
     expect(ATTR.MAX_HP in s.cache).toBe(false);
@@ -203,13 +203,13 @@ describe("per-stat cache precision", () => {
     // Reading MAX_HP computes it without disturbing ATK cache.
     expect(getAttr(s, ATTR.MAX_HP, defs)).toBe(100);
     expect(ATTR.MAX_HP in s.cache).toBe(true);
-    expect(s.cache[ATTR.ATK]).toBe(10); // still present
+    expect(s.cache[ATTR.PATK]).toBe(10); // still present
   });
 
   test("invalidateAttrs marks all stats dirty at once", () => {
-    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.MAX_HP]: 100, [ATTR.PATK]: 10 });
     getAttr(s, ATTR.MAX_HP, defs);
-    getAttr(s, ATTR.ATK, defs);
+    getAttr(s, ATTR.PATK, defs);
     expect(Object.keys(s.cache).length).toBe(2);
 
     invalidateAttrs(s);
@@ -217,12 +217,12 @@ describe("per-stat cache precision", () => {
 
     // Values still correct after recompute on demand.
     expect(getAttr(s, ATTR.MAX_HP, defs)).toBe(100);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(10);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(10);
   });
 
   test("recomputeAttrs eagerly warms every known stat", () => {
     const s = createAttrSet({ [ATTR.MAX_HP]: 200 });
-    addModifiers(s, [mod(ATTR.ATK, "flat", 3)]);
+    addModifiers(s, [mod(ATTR.PATK, "flat", 3)]);
     // cache is empty (dirty), no reads yet.
     expect(Object.keys(s.cache).length).toBe(0);
 
@@ -233,7 +233,7 @@ describe("per-stat cache precision", () => {
       expect(id in s.cache).toBe(true);
     }
     expect(s.cache[ATTR.MAX_HP]).toBe(200);
-    expect(s.cache[ATTR.ATK]).toBe(13);
+    expect(s.cache[ATTR.PATK]).toBe(13);
   });
 });
 
@@ -261,19 +261,19 @@ describe("derived base (computeBase)", () => {
     },
   };
 
-  test("computeBase 覆盖静态 base", () => {
+  test("computeBase 覆盖静�?base", () => {
     const s = createAttrSet({ [STR]: 25, [WEAPON_ATK]: 100 });
     rebuildDepGraph(s, derivedDefs);
     // 100 * (1 + 0.3 * sqrt(25)) = 100 * (1 + 1.5) = 250
     expect(getAttr(s, PATK, derivedDefs)).toBe(250);
   });
 
-  test("依赖属性变化触发 PATK 重算", () => {
+  test("依赖属性变化触�?PATK 重算", () => {
     const s = createAttrSet({ [STR]: 25, [WEAPON_ATK]: 100 });
     rebuildDepGraph(s, derivedDefs);
     // 预热 PATK cache
     expect(getAttr(s, PATK, derivedDefs)).toBe(250);
-    // STR 加 11 → STR = 36
+    // STR �?11 �?STR = 36
     addModifiers(s, [mod(STR, "flat", 11)]);
     // 100 * (1 + 0.3 * sqrt(36)) = 100 * (1 + 1.8) = 280
     expect(getAttr(s, PATK, derivedDefs)).toBe(280);
@@ -300,7 +300,7 @@ describe("derived base (computeBase)", () => {
     rebuildDepGraph(s, chainDefs);
     // B = 20, A = 25
     expect(getAttr(s, A, chainDefs)).toBe(25);
-    // C +5 → C=15, B=30, A=35
+    // C +5 �?C=15, B=30, A=35
     addModifiers(s, [mod(C, "flat", 5)]);
     expect(getAttr(s, A, chainDefs)).toBe(35);
   });
@@ -328,7 +328,7 @@ describe("derived base (computeBase)", () => {
   test("static modifier 叠加到派生 base 上", () => {
     const s = createAttrSet({ [STR]: 25, [WEAPON_ATK]: 100 });
     rebuildDepGraph(s, derivedDefs);
-    // base 来自 computeBase = 250，再加 flat +50
+    // base 来自 computeBase = 250，再�?flat +50
     addModifiers(s, [mod(PATK, "flat", 50)]);
     expect(getAttr(s, PATK, derivedDefs)).toBe(300);
   });
@@ -338,30 +338,30 @@ describe("derived base (computeBase)", () => {
 
 describe("dynamic modifier providers", () => {
   test("addDynamicProvider 影响 getAttr", () => {
-    const s = createAttrSet({ [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.PATK]: 10 });
     addDynamicProvider(s, {
       sourceId: "test-provider",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [],
-      compute: () => [{ stat: ATTR.ATK, op: "flat" as const, value: 10, sourceId: "test-provider" }],
+      compute: () => [{ stat: ATTR.PATK, op: "flat" as const, value: 10, sourceId: "test-provider" }],
     }, defs);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(20);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(20);
   });
 
   test("removeDynamicProvider 还原原值", () => {
-    const s = createAttrSet({ [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.PATK]: 10 });
     addDynamicProvider(s, {
       sourceId: "test-provider",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [],
-      compute: () => [{ stat: ATTR.ATK, op: "flat" as const, value: 10, sourceId: "test-provider" }],
+      compute: () => [{ stat: ATTR.PATK, op: "flat" as const, value: 10, sourceId: "test-provider" }],
     }, defs);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(20);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(20);
     removeDynamicProvider(s, "test-provider", defs);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(10);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(10);
   });
 
-  test("provider 依赖的属性变化 → 目标属性更新", () => {
+  test("provider 依赖的属性变化，目标属性更新", () => {
     const INT = ATTR.INT;
     const HEAL = "attr.heal_power" as AttrId;
     const healDefs: Record<string, AttrDef> = {
@@ -380,48 +380,48 @@ describe("dynamic modifier providers", () => {
         sourceId: "talent:heal",
       }],
     }, healDefs);
-    // INT=100 → HEAL = floor(100*0.1) = 10
+    // INT=100 �?HEAL = floor(100*0.1) = 10
     expect(getAttr(s, HEAL, healDefs)).toBe(10);
-    // 加 +INT buff → INT=150 → HEAL = floor(150*0.1) = 15
+    // �?+INT buff �?INT=150 �?HEAL = floor(150*0.1) = 15
     addModifiers(s, [mod(INT, "flat", 50, "buff")]);
     expect(getAttr(s, HEAL, healDefs)).toBe(15);
   });
 
   test("multiple providers 叠加同一属性", () => {
-    const s = createAttrSet({ [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.PATK]: 10 });
     addDynamicProvider(s, {
       sourceId: "provider-a",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [],
-      compute: () => [{ stat: ATTR.ATK, op: "flat" as const, value: 5, sourceId: "provider-a" }],
+      compute: () => [{ stat: ATTR.PATK, op: "flat" as const, value: 5, sourceId: "provider-a" }],
     }, defs);
     addDynamicProvider(s, {
       sourceId: "provider-b",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [],
-      compute: () => [{ stat: ATTR.ATK, op: "flat" as const, value: 3, sourceId: "provider-b" }],
+      compute: () => [{ stat: ATTR.PATK, op: "flat" as const, value: 3, sourceId: "provider-b" }],
     }, defs);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(18); // 10 + 5 + 3
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(18); // 10 + 5 + 3
   });
 
   test("provider 升级：remove 旧 + add 新，值正确切换", () => {
-    const s = createAttrSet({ [ATTR.ATK]: 10 });
+    const s = createAttrSet({ [ATTR.PATK]: 10 });
     addDynamicProvider(s, {
       sourceId: "talent:lv1",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [],
-      compute: () => [{ stat: ATTR.ATK, op: "flat" as const, value: 5, sourceId: "talent:lv1" }],
+      compute: () => [{ stat: ATTR.PATK, op: "flat" as const, value: 5, sourceId: "talent:lv1" }],
     }, defs);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(15);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(15);
 
     removeDynamicProvider(s, "talent:lv1", defs);
     addDynamicProvider(s, {
       sourceId: "talent:lv2",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [],
-      compute: () => [{ stat: ATTR.ATK, op: "flat" as const, value: 10, sourceId: "talent:lv2" }],
+      compute: () => [{ stat: ATTR.PATK, op: "flat" as const, value: 10, sourceId: "talent:lv2" }],
     }, defs);
-    expect(getAttr(s, ATTR.ATK, defs)).toBe(20);
+    expect(getAttr(s, ATTR.PATK, defs)).toBe(20);
   });
 });
 
@@ -440,19 +440,19 @@ describe("invalidation propagation", () => {
     },
   };
 
-  test("addModifiers 在依赖链上传播 invalidation", () => {
+  test("addModifiers 在依赖链上传�?invalidation", () => {
     const s = createAttrSet({ [STR]: 20 });
     rebuildDepGraph(s, propDefs);
     getAttr(s, PATK, propDefs); // 预热 PATK cache
     expect(PATK in s.cache).toBe(true);
 
     addModifiers(s, [mod(STR, "flat", 5)]);
-    // STR 被 invalidate，PATK 也应被传播 invalidate
+    // STR �?invalidate，PATK 也应被传�?invalidate
     expect(STR in s.cache).toBe(false);
     expect(PATK in s.cache).toBe(false);
   });
 
-  test("removeModifiersBySource 也传播 invalidation", () => {
+  test("removeModifiersBySource 也传�?invalidation", () => {
     const s = createAttrSet({ [STR]: 20 });
     rebuildDepGraph(s, propDefs);
     addModifiers(s, [mod(STR, "flat", 5, "gear")]);
@@ -470,24 +470,24 @@ describe("invalidation propagation", () => {
     getAttr(s, PATK, propDefs);
 
     addModifiers(s, [mod(STR, "flat", 5)]);
-    // PATK 被 invalidate，MAX_HP 不受影响
+    // PATK �?invalidate，MAX_HP 不受影响
     expect(PATK in s.cache).toBe(false);
     expect(ATTR.MAX_HP in s.cache).toBe(true);
   });
 
-  test("已经 dirty 的 stat 不会重复传播（幂等性）", () => {
+  test("已经 dirty �?stat 不会重复传播（幂等性）", () => {
     const s = createAttrSet({ [STR]: 20 });
     rebuildDepGraph(s, propDefs);
     getAttr(s, PATK, propDefs); // 预热
 
-    // 加两条都影响 STR 的 modifier
+    // 加两条都影响 STR �?modifier
     addModifiers(s, [
       mod(STR, "flat", 5, "a"),
       mod(STR, "flat", 3, "b"),
     ]);
-    // PATK 应只被 invalidate 一次（不报错，结果正确）
+    // PATK 应只�?invalidate 一次（不报错，结果正确�?
     expect(PATK in s.cache).toBe(false);
-    // getAttr 正确计算最终值: STR = 20+5+3 = 28, PATK = 28*2 = 56
+    // getAttr 正确计算最终�? STR = 20+5+3 = 28, PATK = 28*2 = 56
     expect(getAttr(s, PATK, propDefs)).toBe(56);
   });
 });
@@ -495,7 +495,7 @@ describe("invalidation propagation", () => {
 // ---------- depGraph management ----------
 
 describe("depGraph management", () => {
-  test("rebuildDepGraph 从 AttrDef.dependsOn 构建正确的边", () => {
+  test("rebuildDepGraph �?AttrDef.dependsOn 构建正确的边", () => {
     const A = "attr.a" as AttrId;
     const B = "attr.b" as AttrId;
     const testDefs: Record<string, AttrDef> = {
@@ -504,7 +504,7 @@ describe("depGraph management", () => {
     };
     const s = createAttrSet();
     rebuildDepGraph(s, testDefs);
-    // A → B 这条边应在图中
+    // A �?B 这条边应在图�?
     expect(s.depGraph[A]?.has(B)).toBe(true);
   });
 
@@ -514,12 +514,12 @@ describe("depGraph management", () => {
     const INT = ATTR.INT;
     addDynamicProvider(s, {
       sourceId: "test",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [INT],
-      compute: (get) => [{ stat: ATTR.ATK, op: "flat" as const, value: get(INT), sourceId: "test" }],
+      compute: (get) => [{ stat: ATTR.PATK, op: "flat" as const, value: get(INT), sourceId: "test" }],
     }, defs);
-    // INT → ATK 这条边应在图中
-    expect(s.depGraph[INT]?.has(ATTR.ATK)).toBe(true);
+    // INT �?ATK 这条边应在图�?
+    expect(s.depGraph[INT]?.has(ATTR.PATK)).toBe(true);
   });
 
   test("removeDynamicProvider 重建后边消失", () => {
@@ -528,15 +528,15 @@ describe("depGraph management", () => {
     const INT = ATTR.INT;
     addDynamicProvider(s, {
       sourceId: "test",
-      targetAttrs: [ATTR.ATK],
+      targetAttrs: [ATTR.PATK],
       dependsOn: [INT],
-      compute: (get) => [{ stat: ATTR.ATK, op: "flat" as const, value: get(INT), sourceId: "test" }],
+      compute: (get) => [{ stat: ATTR.PATK, op: "flat" as const, value: get(INT), sourceId: "test" }],
     }, defs);
-    expect(s.depGraph[INT]?.has(ATTR.ATK)).toBe(true);
+    expect(s.depGraph[INT]?.has(ATTR.PATK)).toBe(true);
 
     removeDynamicProvider(s, "test", defs);
-    // 边应消失（defs 中没有 INT→ATK 的 AttrDef.dependsOn）
-    expect(s.depGraph[INT]?.has(ATTR.ATK) ?? false).toBe(false);
+    // 边应消失（defs 中没�?INT→ATK �?AttrDef.dependsOn�?
+    expect(s.depGraph[INT]?.has(ATTR.PATK) ?? false).toBe(false);
   });
 
   test("rebuildDepGraph 覆盖旧图（幂等重建）", () => {
@@ -550,7 +550,7 @@ describe("depGraph management", () => {
     // 手动污染 depGraph
     s.depGraph["stale"] = new Set(["garbage"]);
     rebuildDepGraph(s, testDefs);
-    // 旧 stale 边应被清除
+    // �?stale 边应被清�?
     expect("stale" in s.depGraph).toBe(false);
     expect(s.depGraph[A]?.has(B)).toBe(true);
   });
@@ -573,7 +573,7 @@ describe("recomputeAttrs 覆盖 dynamic provider 目标属性", () => {
       compute: () => [{ stat: HEAL, op: "flat" as const, value: 42, sourceId: "test" }],
     }, healDefs);
     recomputeAttrs(s, healDefs);
-    // HEAL 应被预热进 cache
+    // HEAL 应被预热�?cache
     expect(HEAL in s.cache).toBe(true);
     expect(s.cache[HEAL]).toBe(42);
   });

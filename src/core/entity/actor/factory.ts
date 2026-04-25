@@ -11,11 +11,17 @@
 //     * after an effect is applied/removed (effect pipeline does this)
 // - attrs.base is PERSISTED. Modifiers/dynamicProviders/depGraph/cache/
 //   derived ability list are NOT.
+//
+// physScaling / magScaling DynamicModifierProviders:
+//   PlayerCharacter: read from HeroConfig via pc.heroConfigId at rebuild time.
+//   Enemy:           read from MonsterDef at rebuild time (default [{STR, 1.0}] / [{INT, 1.0}]).
+//   These configs live in content and are never duplicated on the actor.
 
-import type { AbilityId, AttrDef, MonsterDef } from "../../content/types";
+import type { AbilityId, AttrDef, AttrId, MonsterDef } from "../../content/types";
 import { getContent, getEffect, getItem } from "../../content/registry";
 import type { FormulaRef } from "../../infra/formula/types";
 import {
+  addDynamicProvider,
   addModifiers,
   ATTR,
   createAttrSet,
@@ -40,6 +46,9 @@ import { computeWorldModifiers } from "../../growth/worldrecord";
 export interface CreatePlayerOptions {
   id: string;
   name: string;
+  /** ID linking to HeroConfig (content layer). Used to look up growth /
+   *  physScaling / magScaling at runtime without duplicating them on the actor. */
+  heroConfigId?: string;
   level?: number;
   exp?: number;
   /** XP curve this character levels up with. Required — no fallback. */
@@ -70,6 +79,7 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     id: opts.id,
     name: opts.name,
     kind: "player",
+    heroConfigId: opts.heroConfigId ?? opts.id,
     level: opts.level ?? 1,
     exp: opts.exp ?? 0,
     xpCurve: opts.xpCurve,
@@ -216,7 +226,61 @@ export function rebuildCharacterDerived(
     );
   }
 
-  // 4) Runtime ability list.
+  // 4) physScaling / magScaling DynamicModifierProviders.
+  //    PlayerCharacter: read from HeroConfig via heroConfigId (content layer).
+  //    Enemy:           read from MonsterDef (default STR→PHYS / INT→MAG).
+  //    Installed fresh each rebuild since dynamicProviders was wiped in step 1.
+  {
+    let physScaling: { attr: AttrId; ratio: number }[];
+    let magScaling:  { attr: AttrId; ratio: number }[];
+
+    if (c.kind === "player") {
+      const pc = c as PlayerCharacter;
+      const heroCfg = getContent().starting?.heroes.find(
+        (h) => h.id === pc.heroConfigId,
+      );
+      physScaling = heroCfg?.physScaling ?? [];
+      magScaling  = heroCfg?.magScaling  ?? [];
+    } else if (c.kind === "enemy") {
+      const mdef = safeGetMonsterDef((c as Enemy).defId);
+      physScaling = mdef?.physScaling ?? [{ attr: ATTR.STR, ratio: 1.0 }];
+      magScaling  = mdef?.magScaling  ?? [{ attr: ATTR.INT, ratio: 1.0 }];
+    } else {
+      physScaling = [];
+      magScaling  = [];
+    }
+
+    for (const { attr, ratio } of physScaling) {
+      const sourceId = `phys_potency_scaling:${attr}`;
+      addDynamicProvider(c.attrs, {
+        sourceId,
+        targetAttrs: [ATTR.PHYS_POTENCY],
+        dependsOn: [attr],
+        compute: (get) => [{
+          stat: ATTR.PHYS_POTENCY,
+          op: "flat" as const,
+          value: get(attr) * ratio,
+          sourceId,
+        }],
+      }, attrDefs);
+    }
+    for (const { attr, ratio } of magScaling) {
+      const sourceId = `mag_potency_scaling:${attr}`;
+      addDynamicProvider(c.attrs, {
+        sourceId,
+        targetAttrs: [ATTR.MAG_POTENCY],
+        dependsOn: [attr],
+        compute: (get) => [{
+          stat: ATTR.MAG_POTENCY,
+          op: "flat" as const,
+          value: get(attr) * ratio,
+          sourceId,
+        }],
+      }, attrDefs);
+    }
+  }
+
+  // 5) Runtime ability list.
   if (c.kind === "player") {
     c.abilities = (c as PlayerCharacter).knownAbilities.slice();
   } else if (c.kind === "enemy") {
@@ -228,12 +292,10 @@ export function rebuildCharacterDerived(
     }
   }
 
-  // 4.5) Build dependency graph from AttrDefs + any installed dynamic providers.
-  //      Dynamic providers would be installed here by skills/effects in the future;
-  //      for now the graph is built from AttrDef.dependsOn edges only.
+  // 6) Build dependency graph from AttrDefs + installed dynamic providers.
   rebuildDepGraph(c.attrs, attrDefs);
 
-  // 5) Cache is now dirty (invalidateAttrs above did it); clamp HP/MP.
+  // 7) Cache is now dirty (invalidateAttrs above did it); clamp HP/MP.
   const maxHp = getAttrFromSet(c.attrs, ATTR.MAX_HP, attrDefs);
   const maxMp = getAttrFromSet(c.attrs, ATTR.MAX_MP, attrDefs);
   if (c.currentHp > maxHp) c.currentHp = maxHp;
@@ -261,6 +323,17 @@ export function getAttr(
 function safeGetEffect(id: string) {
   try {
     return getEffect(id);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Soft lookup for MonsterDef — used in rebuildCharacterDerived where the
+ *  def may not be registered in test fixtures. Returns undefined on miss. */
+function safeGetMonsterDef(defId: string): MonsterDef | undefined {
+  try {
+    const monsters = getContent().monsters;
+    return monsters[defId];
   } catch {
     return undefined;
   }

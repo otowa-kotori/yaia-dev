@@ -149,6 +149,13 @@ export interface MonsterDef {
   xpReward: number;
   /** Currencies rewarded on kill. key = currency id (e.g. "currency.gold"). */
   currencyReward?: Record<string, number>;
+  /** Which primary attributes contribute to PHYS_POTENCY (→ PATK).
+   *  Installed as DynamicModifierProviders in rebuildCharacterDerived.
+   *  Default: [{attr: ATTR.STR, ratio: 1.0}]. */
+  physScaling?: { attr: AttrId; ratio: number }[];
+  /** Which primary attributes contribute to MAG_POTENCY (→ MATK).
+   *  Default: [{attr: ATTR.INT, ratio: 1.0}]. */
+  magScaling?: { attr: AttrId; ratio: number }[];
 }
 
 // ---------- Effects ----------
@@ -413,6 +420,16 @@ export interface HeroConfig {
   inventoryCapacity?: number;
   /** Items granted into the hero's personal bag on a brand-new save. */
   startingItems?: { itemId: ItemId; qty: number }[];
+  /** Override per-attribute base values (applied over AttrDef.defaultBase). */
+  baseAttrs?: Partial<Record<AttrId, number>>;
+  /** Per-level attribute increment. Applied to attrs.base on every level-up.
+   *  Small fractions are fine — integer: true AttrDefs floor the final value. */
+  growth?: Partial<Record<AttrId, number>>;
+  /** Which primary attributes contribute to PHYS_POTENCY (→ PATK).
+   *  Installed as DynamicModifierProviders in rebuildCharacterDerived. */
+  physScaling?: { attr: AttrId; ratio: number }[];
+  /** Which primary attributes contribute to MAG_POTENCY (→ MATK). */
+  magScaling?: { attr: AttrId; ratio: number }[];
 }
 
 export interface StartingConfig {

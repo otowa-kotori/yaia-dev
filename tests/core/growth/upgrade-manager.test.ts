@@ -25,14 +25,14 @@ import { ATTR } from "../../../src/core/entity/attribute";
 
 const testUpgrade: UpgradeDef = {
   id: "upgrade.atk_boost",
-  name: "ATK Boost",
-  description: "Increases attack",
+  name: "PATK Boost",
+  description: "Increases physical attack",
   maxLevel: 5,
   costCurrency: "currency.gold",
   // base=100, growth=1.5 → level 1 costs 100, level 2 costs 150, etc.
   costScaling: { kind: "exp_curve_v1", base: 100, growth: 1.5 },
   modifierPerLevel: [
-    { stat: ATTR.ATK as AttrId, op: "flat", value: 5, sourceId: "ignored" },
+    { stat: ATTR.PATK as AttrId, op: "flat", value: 5, sourceId: "ignored" },
   ],
 };
 

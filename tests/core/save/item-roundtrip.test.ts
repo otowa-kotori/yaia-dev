@@ -27,9 +27,9 @@ const moddedSword: ItemDef = {
   name: "Roundtrip Sword",
   stackable: false,
   slot: "weapon",
-  modifiers: [{ stat: ATTR.ATK, op: "flat", value: 5, sourceId: "" }],
+  modifiers: [{ stat: ATTR.PATK, op: "flat", value: 5, sourceId: "" }],
   roll: {
-    mods: [{ stat: ATTR.ATK, op: "flat", min: 1, max: 1 }], // pin to +1 for determinism
+    mods: [{ stat: ATTR.PATK, op: "flat", min: 1, max: 1 }], // pin to +1 for determinism
   },
 };
 
@@ -92,7 +92,7 @@ describe("inventory + gear save roundtrip", () => {
     const loaded = restored.actors[0]!;
     if (!isPlayer(loaded)) throw new Error("expected player");
     expect(loaded.equipped.weapon?.instanceId).toBe(sword.instanceId);
-    // +5 from def.modifiers, +1 from pinned roll (min==max==1) â†’ +6 over base 10.
-    expect(getAttr(loaded, ATTR.ATK, attrDefs)).toBe(16);
+    // +5 from def.modifiers, +1 from pinned roll (min==max==1) â†?+6 over base 10.
+    expect(getAttr(loaded, ATTR.PATK, attrDefs)).toBe(16);
   });
 });

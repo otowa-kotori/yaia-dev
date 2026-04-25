@@ -43,10 +43,11 @@ describe("ability: tryUseAbility", () => {
   test("successful basic attack deals damage", () => {
     const h = makeHarness();
     const caster = makePlayer({ id: "p", abilities: [basicAttackAbility.id], atk: 10 });
-    const target = makeSlime("m"); // hp 30, def 1
+    const target = makeSlime("m"); // hp 30, PDEF 1
     const r = tryUseAbility(caster, basicAttackAbility.id, [target], { ...h });
     expect(r.ok).toBe(true);
-    expect(target.currentHp).toBe(30 - 9);
+    // phys_damage_v1: PATK=10, PDEF=1 → excess=0 → damage=10
+    expect(target.currentHp).toBe(30 - 10);
   });
 
   test("insufficient MP fails and does NOT consume mp or set cooldown", () => {

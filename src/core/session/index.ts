@@ -1076,13 +1076,20 @@ export function createGameSession(
       );
     }
 
+    // focusedCharId 必须在英雄创建循环之前设置：自动装备时 equipItem 会触发
+    // equipmentChanged 事件，store 收到后立即写存档。若此时 focusedCharId 还是
+    // 初始空串，存档就会带着坏数据写进去，导致下次加载时 getCharacter("") 报错。
+    state.focusedCharId = starting.heroes[0]!.id;
+
     // Create all starting heroes.
     for (const heroCfg of starting.heroes) {
       const hero = createPlayerCharacter({
         id: heroCfg.id,
         name: heroCfg.name,
+        heroConfigId: heroCfg.id,
         xpCurve: heroCfg.xpCurve,
         knownAbilities: heroCfg.knownAbilities.slice(),
+        baseAttrs: heroCfg.baseAttrs as Record<string, number> | undefined,
         attrDefs,
       });
       state.actors.push(hero);
@@ -1098,11 +1105,23 @@ export function createGameSession(
       }
       const cc = createCharacterController(hero);
       characters.set(hero.id, cc);
+
+      // 自动装备起始 gear：遍历背包，找到可装备且对应 slot 空着的 gear 就直接装上。
+      // 使用 equipItem 确保 rebuildCharacterDerived 正确触发，modifier 堆叠不遗漏。
+      const inv = state.inventories[hero.id]!;
+      for (let i = 0; i < inv.slots.length; i++) {
+        const slot = inv.slots[i];
+        if (!slot || slot.kind !== "gear") continue;
+        const itemDef = getItem(slot.instance.itemId);
+        if (!itemDef.slot) continue;
+        if (hero.equipped[itemDef.slot]) continue; // slot already filled
+        cc.equipItem(i);
+        break; // 每个 slot 只装一件，起始配置不需要循环多次
+      }
+
       // Enter the initial location for each hero.
       cc.enterLocation(starting.initialLocationId);
     }
-
-    state.focusedCharId = starting.heroes[0]!.id;
   }
 
   // ---------- Speed ----------
