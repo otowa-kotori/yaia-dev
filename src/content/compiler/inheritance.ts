@@ -69,8 +69,9 @@ function readDraftId(draft: object): string | undefined {
 
 function stripAuthoringMeta<T extends object>(draft: AuthoringDef<T>): Partial<T> {
   const { extends: _extends, abstract: _abstract, ...rest } = draft;
-  return rest;
+  return rest as Partial<T>;
 }
+
 
 function mergeValues(parent: unknown, child: unknown): unknown {
   if (child === undefined) return cloneValue(parent);

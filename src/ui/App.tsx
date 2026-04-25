@@ -15,7 +15,7 @@
 // the store. The store is created once (useMemo), shared to all children.
 
 import { useEffect, useMemo, useState } from "react";
-import { buildDefaultContent } from "../content";
+import { DEFAULT_CONTENT } from "../content";
 import { getContent } from "../core/content";
 import { createGameStore, type GameStore } from "./store";
 import { BattleView } from "./BattleView";
