@@ -76,7 +76,7 @@ import {
 } from "../inventory";
 import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance, type GearInstance } from "../item";
-import { grantSkillXp } from "../growth/leveling";
+import { grantCharacterXp, grantSkillXp, xpCostToReach } from "../growth/leveling";
 import { purchaseUpgrade as purchaseUpgradeCore } from "../growth/upgrade-manager";
 import { allocateTalentPoint } from "../growth/talent";
 import {
@@ -171,6 +171,10 @@ export interface GameSession {
 
   setSpeedMultiplier(mul: number): void;
   getSpeedMultiplier(): number;
+  /** Debug/dev only: grant whole character levels to a hero via the normal XP pipeline. */
+  debugGrantHeroLevels(charId: string, levels: number): number;
+  /** Debug/dev only: create items directly in a hero inventory. */
+  debugGiveItem(charId: string, itemId: string, qty: number): void;
 
   // Lifecycle hooks. The Store owns persistence; these methods replace the
   // in-memory graph but do not touch any save adapter.
@@ -307,6 +311,55 @@ export function createGameSession(
 
   function rebuildHeroDerived(hero: PlayerCharacter): void {
     rebuildCharacterDerived(hero, attrDefs, state.worldRecord);
+  }
+
+  function getHeroControllerOrThrow(charId: string): CharacterControllerImpl {
+    const cc = characters.get(charId);
+    if (!cc) {
+      throw new Error(`session: no hero with id "${charId}"`);
+    }
+    return cc;
+  }
+
+  function computeXpForLevelGain(hero: PlayerCharacter, levels: number): number {
+    if (!Number.isInteger(levels) || levels <= 0) {
+      throw new Error(`session.debugGrantHeroLevels: levels must be a positive integer, got ${levels}`);
+    }
+
+    let totalXp = 0;
+    let virtualLevel = hero.level;
+    let carriedExp = hero.exp;
+
+    for (let i = 0; i < levels && virtualLevel < hero.maxLevel; i += 1) {
+      const cost = xpCostToReach(virtualLevel + 1, hero.xpCurve);
+      totalXp += Math.max(0, cost - carriedExp);
+      virtualLevel += 1;
+      carriedExp = 0;
+    }
+
+    return totalXp;
+  }
+
+  function debugGrantHeroLevelsImpl(charId: string, levels: number): number {
+    const hero = getHeroControllerOrThrow(charId).hero;
+    const totalXp = computeXpForLevelGain(hero, levels);
+    if (totalXp <= 0) return 0;
+
+    const gained = grantCharacterXp(hero, totalXp, { bus });
+    if (gained > 0) {
+      rebuildHeroDerived(hero);
+    }
+    return gained;
+  }
+
+  function debugGiveItemImpl(charId: string, itemId: string, qty: number): void {
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new Error(`session.debugGiveItem: qty must be a positive integer, got ${qty}`);
+    }
+
+    const hero = getHeroControllerOrThrow(charId).hero;
+    addItemToInventory(hero.id, itemId, qty);
+    bus.emit("inventoryChanged", { charId: hero.id, inventoryId: hero.id });
   }
 
   function cloneInventory(inv: Inventory): Inventory {
@@ -1350,6 +1403,8 @@ export function createGameSession(
     abandonDungeon: abandonDungeonImpl,
     purchaseUpgrade: purchaseUpgradeImpl,
     setSpeedMultiplier,
+    debugGrantHeroLevels: debugGrantHeroLevelsImpl,
+    debugGiveItem: debugGiveItemImpl,
 
     getSpeedMultiplier,
     loadFromSave,
