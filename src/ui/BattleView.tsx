@@ -463,9 +463,11 @@ function findCurrentBattle(
   return store.state.battles.find((b) => b.id === activity.currentBattleId) ?? null;
 }
 
-function getAtbPct(battle: Battle, actorId: string): number {
+function getAtbPct(battle: Battle, actorId: string): number | undefined {
+  if (battle.scheduler.kind !== "atb") return undefined;
   return getAtbGaugePct(battle.scheduler, actorId);
 }
+
 
 function combatPhaseLabel(phase: string): string {
   switch (phase) {

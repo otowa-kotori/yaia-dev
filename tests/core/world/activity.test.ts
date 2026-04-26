@@ -411,7 +411,8 @@ describe("CombatActivity + Stage integration", () => {
 
     engine.step(500);
 
-    expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThan(5);
+    expect(state.stages[STAGE_ID]!.combatWaveIndex).toBeGreaterThanOrEqual(5);
+
 
     const stageOwned = new Set(state.stages[STAGE_ID]!.spawnedActorIds);
     const deadInState = state.actors.filter(

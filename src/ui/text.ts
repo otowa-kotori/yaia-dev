@@ -282,7 +282,13 @@ export const T = {
   debugWallClock: "上次存档时间",
   debugActors: "Actor 数",
   debugSpeed: "当前倍率",
+  debugBattleMode: "新战斗模式",
+  debugBattleModeHint: "只影响之后创建的战斗；当前进行中的战斗不会切换。",
+  debugBattleMode_atb: "ATB",
+  debugBattleMode_turn: "回合制",
+  debugBattleModeApplied: "后续新战斗将使用 {mode}。",
   debugInvalidPositiveNumber: "请输入大于 0 的数值。",
+
   debugInvalidPositiveInteger: "请输入大于 0 的整数。",
   debugUnknownItem: "请输入有效的道具 ID。",
   debugActionError: "调试操作失败。",

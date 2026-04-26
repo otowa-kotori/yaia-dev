@@ -27,13 +27,15 @@ import { tryUseTalent, type CastResult } from "../../behavior/ability";
 
 import { processActionEffects } from "../../behavior/effect";
 import {
-  createAtbScheduler,
+  createSchedulerForMode,
+  DEFAULT_BATTLE_SCHEDULER_MODE,
   nextActor as schedulerNextActor,
   onActionResolved as schedulerOnActionResolved,
   tickScheduler,
   type SchedulerContext,
   type SchedulerState,
 } from "./scheduler";
+
 import { resolveIntent, type IntentAction } from "../intent";
 
 
@@ -132,8 +134,9 @@ export function createBattle(opts: CreateBattleOptions): Battle {
     id: opts.id,
     mode: opts.mode,
     participantIds: opts.participantIds.slice(),
-    scheduler: opts.scheduler ?? createAtbScheduler(),
+    scheduler: opts.scheduler ?? createSchedulerForMode(DEFAULT_BATTLE_SCHEDULER_MODE),
     outcome: "ongoing",
+
     metadata: opts.metadata
       ? {
           ...opts.metadata,
@@ -395,8 +398,12 @@ function getDefaultEnergyCost(state: SchedulerState): number {
   switch (state.kind) {
     case "atb":
       return state.actionThreshold;
+    case "turn":
+      // 回合制当前不消费 energyCost，但战斗计划阶段仍要求一个正数占位。
+      return 1;
   }
 }
+
 
 // ---------- Termination ----------
 

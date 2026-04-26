@@ -75,9 +75,34 @@ describe("GameSession location flow", () => {
     resetContent();
   });
 
+  test("fresh sessions default future battles to turn mode", () => {
+    const session = createSession(forestLocation.id);
+    const cc = session.getFocusedCharacter();
+
+    expect(session.getBattleSchedulerMode()).toBe("turn");
+
+    cc.startFight(forestCombatZone.id);
+    session.engine.step(COMBAT_ZONE_RECOVERY_RULES.searchTicks + 1);
+
+    expect(session.state.battles.length).toBeGreaterThan(0);
+    expect(session.state.battles[0]!.scheduler.kind).toBe("turn");
+  });
+
+  test("resetToFresh restores the default battle scheduler mode", () => {
+    const session = createSession(forestLocation.id);
+
+    session.setBattleSchedulerMode("atb");
+    expect(session.getBattleSchedulerMode()).toBe("atb");
+
+    session.resetToFresh();
+
+    expect(session.getBattleSchedulerMode()).toBe("turn");
+  });
+
   test("stopActivity tears down the current instance but keeps the chosen location", () => {
     const session = createSession(forestLocation.id);
     const cc = session.getFocusedCharacter();
+
 
     cc.startFight(forestCombatZone.id);
 

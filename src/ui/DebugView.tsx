@@ -1,5 +1,7 @@
 import { useState } from "react";
+import type { BattleSchedulerMode } from "../core/combat/battle";
 import { getContent } from "../core/content";
+
 import {
   getAttr,
   isCharacter,
@@ -7,8 +9,8 @@ import {
   isPlayer,
   type Actor,
   type Character,
-  type PlayerCharacter,
 } from "../core/entity/actor";
+
 import type { AttrDef, EffectDef, Modifier } from "../core/content/types";
 import type { GameStore } from "./store";
 import { T, fmt } from "./text";
@@ -96,7 +98,10 @@ export function DebugView({ store }: { store: GameStore }) {
   const wallClockStr = s.state.lastWallClockMs
     ? new Date(s.state.lastWallClockMs).toLocaleString()
     : "—";
-  const itemEntries = Object.entries(content.items).sort((a, b) => a[1].name.localeCompare(b[1].name, "zh-Hans-CN"));
+  const schedulerMode = s.getBattleSchedulerMode();
+  const itemEntries = Object.entries(content.items).sort((a, b) =>
+    a[1].name.localeCompare(b[1].name, "zh-Hans-CN")
+  );
   const resolvedItem = itemId ? content.items[itemId] : undefined;
 
   function setError(message: string): void {
@@ -105,6 +110,20 @@ export function DebugView({ store }: { store: GameStore }) {
 
   function setSuccess(message: string): void {
     setFeedback({ kind: "success", message });
+  }
+
+  function schedulerModeLabel(mode: BattleSchedulerMode): string {
+    switch (mode) {
+      case "atb":
+        return T.debugBattleMode_atb;
+      case "turn":
+        return T.debugBattleMode_turn;
+    }
+  }
+
+  function handleSchedulerModeChange(mode: BattleSchedulerMode): void {
+    s.setBattleSchedulerMode(mode);
+    setSuccess(fmt(T.debugBattleModeApplied, { mode: schedulerModeLabel(mode) }));
   }
 
   function handleCatchUp(): void {
@@ -184,8 +203,33 @@ export function DebugView({ store }: { store: GameStore }) {
             { label: T.debugWallClock, value: wallClockStr },
             { label: T.debugActors, value: String(actors.length) },
             { label: T.debugSpeed, value: `${s.getSpeedMultiplier()}x` },
+            { label: T.debugBattleMode, value: schedulerModeLabel(schedulerMode) },
           ]}
         />
+      </div>
+
+      <div style={panelStyle}>
+        <div style={sectionTitleStyle}>{T.debugBattleMode}</div>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>{T.debugBattleModeHint}</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          {(["atb", "turn"] as const).map((mode) => {
+            const active = schedulerMode === mode;
+            return (
+              <button
+                key={mode}
+                onClick={() => handleSchedulerModeChange(mode)}
+                style={{
+                  ...buttonStyle,
+                  borderColor: active ? "#6ba6ff" : "#4b657c",
+                  background: active ? "#20364d" : "#2a2a2a",
+                  color: active ? "#dbeaff" : "#fff",
+                }}
+              >
+                {schedulerModeLabel(mode)}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={panelStyle}>
@@ -270,7 +314,10 @@ export function DebugView({ store }: { store: GameStore }) {
               </div>
             </CheatSection>
 
-            <CheatSection title={T.debugCheatItems} hint={resolvedItem ? fmt(T.debugResolvedItem, { name: resolvedItem.name }) : undefined}>
+            <CheatSection
+              title={T.debugCheatItems}
+              hint={resolvedItem ? fmt(T.debugResolvedItem, { name: resolvedItem.name }) : undefined}
+            >
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <input
                   list="debug-item-ids"
@@ -304,6 +351,7 @@ export function DebugView({ store }: { store: GameStore }) {
     </div>
   );
 }
+
 
 function ActorInspector({ actor }: { actor: Actor }) {
   const content = getContent();

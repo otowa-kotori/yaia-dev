@@ -68,7 +68,13 @@ import {
 } from "../entity/actor";
 import { registerBuiltinIntents } from "../combat/intent";
 import {
+  DEFAULT_BATTLE_SCHEDULER_MODE,
+  type BattleSchedulerMode,
+} from "../combat/battle";
+import {
+
   addGear,
+
   addStack,
   createInventory,
   DEFAULT_CHAR_INVENTORY_CAPACITY,
@@ -175,8 +181,12 @@ export interface GameSession {
 
   setSpeedMultiplier(mul: number): void;
   getSpeedMultiplier(): number;
+  /** Debug/dev only: controls which scheduler future new battles will use. */
+  setBattleSchedulerMode(mode: BattleSchedulerMode): void;
+  getBattleSchedulerMode(): BattleSchedulerMode;
   /** Debug/dev only: grant whole character levels to a hero via the normal XP pipeline. */
   debugGrantHeroLevels(charId: string, levels: number): number;
+
   /** Debug/dev only: create items directly in a hero inventory. */
   debugGiveItem(charId: string, itemId: string, qty: number): void;
 
@@ -209,8 +219,11 @@ export function createGameSession(
   //     over the current values through the bindings below.
   let state: GameState = createEmptyState(seed, SAVE_VERSION);
   let rng: Rng = createRng(seed);
+  let battleSchedulerMode: BattleSchedulerMode = DEFAULT_BATTLE_SCHEDULER_MODE;
   const bus = createGameEventBus();
+
   const engine = createTickEngine({ initialSpeedMultiplier: 1 });
+
 
   // Per-hero runtime controllers. Rebuilt on resetToFresh / loadFromSave.
   const characters = new Map<string, CharacterControllerImpl>();
@@ -262,7 +275,9 @@ export function createGameSession(
       rng,
       attrDefs,
       currentTick: engine.currentTick,
+      battleSchedulerMode,
     };
+
   }
 
   // ---------- Shared helpers ----------
@@ -1334,7 +1349,9 @@ export function createGameSession(
 
     state = createEmptyState(seed, SAVE_VERSION);
     rng = createRng(seed);
+    battleSchedulerMode = DEFAULT_BATTLE_SCHEDULER_MODE;
     engine.setTick(0);
+
 
     const starting = content.starting;
     if (!starting) {
@@ -1407,7 +1424,16 @@ export function createGameSession(
     return engine.speedMultiplier;
   }
 
+  function setBattleSchedulerMode(mode: BattleSchedulerMode): void {
+    battleSchedulerMode = mode;
+  }
+
+  function getBattleSchedulerMode(): BattleSchedulerMode {
+    return battleSchedulerMode;
+  }
+
   // ---------- Public API ----------
+
 
   const session: GameSession = {
     get state() {
@@ -1450,10 +1476,13 @@ export function createGameSession(
     abandonDungeon: abandonDungeonImpl,
     purchaseUpgrade: purchaseUpgradeImpl,
     setSpeedMultiplier,
+    setBattleSchedulerMode,
     debugGrantHeroLevels: debugGrantHeroLevelsImpl,
     debugGiveItem: debugGiveItemImpl,
 
     getSpeedMultiplier,
+    getBattleSchedulerMode,
+
     loadFromSave,
     resetToFresh,
     dispose() {

@@ -10,10 +10,12 @@
 // persisted.
 
 import type { AttrDef } from "../../content/types";
+import type { BattleSchedulerMode } from "../../combat/battle";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
 import type { Tickable } from "../../infra/tick";
+
 
 export interface ActivityContext {
   state: GameState;
@@ -21,7 +23,11 @@ export interface ActivityContext {
   rng: Rng;
   attrDefs: Readonly<Record<string, AttrDef>>;
   currentTick: number;
+  /** Optional for backwards-compatible tests/helpers; runtime session always sets it. */
+  battleSchedulerMode?: BattleSchedulerMode;
 }
+
+
 
 /** Common lifecycle. Both character and world activities implement this. */
 export interface Activity extends Tickable {

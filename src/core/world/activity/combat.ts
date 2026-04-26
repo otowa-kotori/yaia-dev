@@ -50,10 +50,14 @@ import type { EffectDef, ItemId } from "../../content/types";
 import type { GameState } from "../../infra/state/types";
 import {
   createBattle,
+  createSchedulerForMode,
+  DEFAULT_BATTLE_SCHEDULER_MODE,
   tickBattle,
   type Battle,
   type TickBattleContext,
 } from "../../combat/battle";
+
+
 import { buildBattleIntents } from "../../combat/intent";
 import { applyEffect, type EffectContext } from "../../behavior/effect";
 import {
@@ -353,9 +357,15 @@ function openBattle(
     id: battleId,
     mode: heroes.length > 1 ? "party" : "solo",
     participantIds: [...heroes.map((h) => h.id), ...enemies.map((e) => e.id)],
+    scheduler: createSchedulerForMode(
+      ctx.battleSchedulerMode ?? DEFAULT_BATTLE_SCHEDULER_MODE,
+    ),
+
+
     startedAtTick: ctx.currentTick,
     intents,
     metadata: {
+
       stageId: activity.stageId,
       locationId: session.locationId,
       combatZoneId: session.currentWave.combatZoneId,

@@ -1,0 +1,168 @@
+import type { Character } from "../../entity/actor";
+import { getAttr, isAlive } from "../../entity/actor";
+import { ATTR } from "../../entity/attribute";
+import type { SchedulerContext } from "./scheduler";
+
+export const DEFAULT_TURN_INTERVAL_TICKS = 25;
+
+export interface TurnSchedulerState {
+  kind: "turn";
+  /** One actor acts every N logic ticks. */
+  turnIntervalTicks: number;
+  /** Countdown until the next action slot opens. 0 = ready now. */
+  ticksUntilNextAction: number;
+  /** Current round number, incremented when a new round snapshot is created. */
+  round: number;
+  /** Remaining participants eligible to act in the current round.
+   *  This is a snapshot taken at round start. New joiners only enter the next
+   *  round; dead / removed participants are skipped when selecting the next
+   *  actor. */
+  roundActorIds: string[];
+}
+
+export interface CreateTurnSchedulerOptions {
+  turnIntervalTicks?: number;
+}
+
+export function createTurnScheduler(
+  opts: CreateTurnSchedulerOptions = {},
+): TurnSchedulerState {
+  const state: TurnSchedulerState = {
+    kind: "turn",
+    turnIntervalTicks: opts.turnIntervalTicks ?? DEFAULT_TURN_INTERVAL_TICKS,
+    ticksUntilNextAction: 0,
+    round: 0,
+    roundActorIds: [],
+  };
+
+  assertTurnConfig(state);
+  return state;
+}
+
+export function tickTurnScheduler(
+  state: TurnSchedulerState,
+  participants: readonly Character[],
+  _ctx: SchedulerContext,
+): void {
+  syncTurnRoundParticipants(state, participants);
+  if (state.ticksUntilNextAction > 0) {
+    state.ticksUntilNextAction -= 1;
+  }
+}
+
+export function nextActorTurn(
+  state: TurnSchedulerState,
+  participants: readonly Character[],
+  ctx: SchedulerContext,
+): Character | null {
+  syncTurnRoundParticipants(state, participants);
+  if (state.ticksUntilNextAction > 0) return null;
+
+  let actor = pickNextTurnActorFromCurrentRound(state, participants, ctx);
+  if (actor) return actor;
+
+  if (!primeTurnRound(state, participants)) return null;
+  actor = pickNextTurnActorFromCurrentRound(state, participants, ctx);
+  if (!actor) {
+    throw new Error("scheduler.turn: round was primed but no actor could be selected");
+  }
+  return actor;
+}
+
+export function onActionResolvedTurn(
+  state: TurnSchedulerState,
+  actor: Character,
+  _energyCost?: number,
+): void {
+  const index = state.roundActorIds.indexOf(actor.id);
+  if (index === -1) {
+    throw new Error(
+      `scheduler.turn: actor ${actor.id} resolved but is not part of the current round snapshot`,
+    );
+  }
+  state.roundActorIds.splice(index, 1);
+  state.ticksUntilNextAction = state.turnIntervalTicks;
+}
+
+function syncTurnRoundParticipants(
+  state: TurnSchedulerState,
+  participants: readonly Character[],
+): void {
+  const liveIds = new Set(participants.map((actor) => actor.id));
+  state.roundActorIds = state.roundActorIds.filter((actorId) => liveIds.has(actorId));
+}
+
+function primeTurnRound(
+  state: TurnSchedulerState,
+  participants: readonly Character[],
+): boolean {
+  const roundActorIds = participants
+    .filter((actor) => isAlive(actor))
+    .map((actor) => actor.id);
+  state.roundActorIds = roundActorIds;
+  if (roundActorIds.length === 0) {
+    return false;
+  }
+  state.round += 1;
+  return true;
+}
+
+function pickNextTurnActorFromCurrentRound(
+  state: TurnSchedulerState,
+  participants: readonly Character[],
+  ctx: SchedulerContext,
+): Character | null {
+  if (state.roundActorIds.length === 0) return null;
+
+  const participantsById = new Map(participants.map((actor) => [actor.id, actor] as const));
+  const indexOf = buildParticipantOrderIndex(participants);
+
+  const candidates = state.roundActorIds
+    .map((actorId) => participantsById.get(actorId))
+    .filter((actor): actor is Character => actor !== undefined && isAlive(actor));
+
+  if (candidates.length === 0) {
+    state.roundActorIds = [];
+    return null;
+  }
+
+  candidates.sort((left, right) => {
+    const speedDelta = getActorSpeed(right, ctx) - getActorSpeed(left, ctx);
+    if (speedDelta !== 0) return speedDelta;
+    return (indexOf.get(left.id) ?? Infinity) - (indexOf.get(right.id) ?? Infinity);
+  });
+
+  return candidates[0] ?? null;
+}
+
+function getActorSpeed(
+  actor: Character,
+  ctx: SchedulerContext,
+): number {
+  const speed = getAttr(actor, ATTR.SPEED, ctx.attrDefs);
+  if (!Number.isFinite(speed) || speed <= 0) {
+    throw new Error(`scheduler.${actor.id}: invalid SPD ${speed} on actor ${actor.id}`);
+  }
+  return speed;
+}
+
+function buildParticipantOrderIndex(
+  participants: readonly Character[],
+): Map<string, number> {
+  const indexOf = new Map<string, number>();
+  for (let i = 0; i < participants.length; i++) {
+    indexOf.set(participants[i]!.id, i);
+  }
+  return indexOf;
+}
+
+function assertTurnConfig(state: TurnSchedulerState): void {
+  if (
+    !Number.isInteger(state.turnIntervalTicks) ||
+    state.turnIntervalTicks <= 0
+  ) {
+    throw new Error(
+      `scheduler.turn: invalid turnIntervalTicks ${state.turnIntervalTicks}`,
+    );
+  }
+}

@@ -39,10 +39,14 @@ import { getDungeon, getMonster } from "../../content/registry";
 import type { DungeonWaveDef, WaveRewardDef, EffectDef, ItemId } from "../../content/types";
 import {
   createBattle,
+  createSchedulerForMode,
+  DEFAULT_BATTLE_SCHEDULER_MODE,
   tickBattle,
   type Battle,
   type TickBattleContext,
 } from "../../combat/battle";
+
+
 import { createEnemy } from "../../entity/actor";
 import { buildBattleIntents } from "../../combat/intent";
 import { applyEffect, type EffectContext } from "../../behavior/effect";
@@ -460,9 +464,15 @@ function openPartyBattle(
     id: battleId,
     mode: heroes.length > 1 ? "party" : "solo",
     participantIds: [...heroes.map((h) => h.id), ...enemies.map((e) => e.id)],
+    scheduler: createSchedulerForMode(
+      ctx.battleSchedulerMode ?? DEFAULT_BATTLE_SCHEDULER_MODE,
+    ),
+
+
     startedAtTick: ctx.currentTick,
     intents,
     metadata: {
+
       stageId: ds.stageId,
       locationId: session.locationId,
       dungeonSessionId: activity.dungeonSessionId,
