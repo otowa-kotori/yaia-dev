@@ -8,10 +8,9 @@
 // and produce level-appropriate modifier values. Each talent installs exactly
 // one EffectInstance — no N-copy stacking.
 
-import type { EffectDef, EffectId, Modifier } from "../../../core/content/types";
+import type { EffectDef, EffectId } from "../../../core/content/types";
 import type { ReactionHooks } from "../../../core/combat/reaction/types";
 import { ATTR } from "../../../core/entity/attribute";
-import { getAttr } from "../../../core/entity/actor/factory";
 
 // ---------- Fortitude ----------
 //
@@ -56,12 +55,8 @@ export const knightRetaliationEffect: EffectDef = {
       const chance = 0.10 + level * 0.10;
       if (ctx.rng.next() >= chance) return;
 
-      const patk = getAttr(owner, ATTR.PATK, ctx.attrDefs);
       const dmgRatio = 0.40 + level * 0.10;
-      const damage = Math.floor(patk * dmgRatio);
-      if (damage > 0) {
-        ctx.dealDamage(owner, event.attacker, damage, "physical");
-      }
+      ctx.dealPhysicalDamage(owner, event.attacker, dmgRatio);
     },
   } as ReactionHooks,
 };

@@ -23,7 +23,7 @@ import { tryUseTalent, type AbilityContext } from "../../../src/core/behavior/ab
 import { dispatchReaction, type ReactionContext } from "../../../src/core/combat/reaction";
 import { createPriorityListIntent, type PriorityRule } from "../../../src/core/combat/intent/priority";
 import { registerIntent, resolveIntent, INTENT } from "../../../src/core/combat/intent";
-import { ATTR, getAttr as getAttrFromSet } from "../../../src/core/entity/attribute";
+import { ATTR, invalidateAttrs } from "../../../src/core/entity/attribute";
 import { createRng } from "../../../src/core/infra/rng";
 import { createGameEventBus } from "../../../src/core/infra/events";
 import { createEmptyState } from "../../../src/core/infra/state";
@@ -120,42 +120,25 @@ describe("knight integration / retaliation reaction", () => {
 
     const enemy = makeSlime("e1");
     const initialEnemyHp = enemy.currentHp;
-
-    // Build a ReactionContext with seeded RNG that will pass the chance check.
-    // Retaliation chance at level 1 = 20%. We'll try multiple times with
-    // known RNG seed to verify it triggers at least once.
-    const rng = createRng(1); // seed chosen so first roll < 0.2
+    const rng = createRng(1);
     const bus = createGameEventBus();
     const state = createEmptyState(1, SAVE_VERSION);
+    state.actors.push(pc, enemy);
 
-    const reactionCtx: ReactionContext = {
-      dealDamage(source, target, amount, _damageType) {
-        const dmg = Math.max(0, Math.floor(amount));
-        if (dmg > 0) target.currentHp = Math.max(0, target.currentHp - dmg);
-      },
-      healTarget(_target, _amount) {},
-      applyEffect() {},
-      removeEffect() {},
-      activeReactionKeys: new Set(),
-      reactionDepth: 0,
+    const ctx: AbilityContext = {
+      state,
+      bus,
       rng,
       attrDefs,
-      bus,
-      state,
-      battle: {} as any,
+      currentTick: 0,
       participants: [pc, enemy],
     };
 
-    // Dispatch after_damage_taken multiple times to give RNG a chance to trigger.
     let retaliated = false;
     for (let i = 0; i < 20; i++) {
       const hpBefore = enemy.currentHp;
-      dispatchReaction(pc, {
-        kind: "after_damage_taken",
-        attacker: enemy,
-        damage: 10,
-        damageType: "physical",
-      }, reactionCtx);
+      const result = tryUseTalent(enemy, basicAttackTalent.id as string, [pc], ctx);
+      expect(result.ok).toBe(true);
       if (enemy.currentHp < hpBefore) {
         retaliated = true;
         break;
@@ -163,7 +146,6 @@ describe("knight integration / retaliation reaction", () => {
     }
 
     expect(retaliated).toBe(true);
-    // Enemy should have lost HP from the counter-attack.
     expect(enemy.currentHp).toBeLessThan(initialEnemyHp);
   });
 
@@ -183,6 +165,12 @@ describe("knight integration / retaliation reaction", () => {
     const state = createEmptyState(1, SAVE_VERSION);
 
     const reactionCtx: ReactionContext = {
+      dealPhysicalDamage() {
+        throw new Error("retaliation should not fire on magical damage");
+      },
+      dealMagicDamage() {
+        throw new Error("retaliation should not fire on magical damage");
+      },
       dealDamage(source, target, amount) {
         target.currentHp = Math.max(0, target.currentHp - Math.floor(amount));
       },
@@ -210,6 +198,54 @@ describe("knight integration / retaliation reaction", () => {
     }
 
     expect(enemy.currentHp).toBe(initialEnemyHp);
+  });
+
+  test("retaliation is mitigated by the attacker's PDEF", () => {
+    const makeKnight = () => {
+      const knight = makePlayer({ id: "hero.knight", talents: [basicAttackTalent.id as string], maxHp: 200, atk: 20 });
+      knight.level = 10;
+      knight.heroConfigId = "hero.knight";
+      knight.side = "player";
+      knight.talentLevels[knightFortitude.id as string] = 1;
+      allocateTalentPoint(knight, knightRetaliation.id, content);
+      return knight;
+    };
+
+    const measureRetaliationDamage = (enemy: Character, knight: Character, seed: number) => {
+      const ctx: AbilityContext = {
+        state: createEmptyState(seed, SAVE_VERSION),
+        bus: createGameEventBus(),
+        rng: createRng(seed),
+        attrDefs,
+        currentTick: 0,
+        participants: [knight, enemy],
+      };
+      ctx.state.actors.push(knight, enemy);
+
+      for (let i = 0; i < 20; i++) {
+        const hpBefore = enemy.currentHp;
+        const result = tryUseTalent(enemy, basicAttackTalent.id as string, [knight], ctx);
+        expect(result.ok).toBe(true);
+        if (enemy.currentHp < hpBefore) {
+          return hpBefore - enemy.currentHp;
+        }
+      }
+
+      return 0;
+    };
+
+    const lowPdefKnight = makeKnight();
+    const lowPdefEnemy = makeSlime("e-low");
+    const lowRetaliationDamage = measureRetaliationDamage(lowPdefEnemy, lowPdefKnight, 11);
+
+    const highPdefKnight = makeKnight();
+    const highPdefEnemy = makeSlime("e-high");
+    highPdefEnemy.attrs.base[ATTR.PDEF] = 100;
+    invalidateAttrs(highPdefEnemy.attrs);
+    const highRetaliationDamage = measureRetaliationDamage(highPdefEnemy, highPdefKnight, 11);
+
+    expect(lowRetaliationDamage).toBeGreaterThan(0);
+    expect(highRetaliationDamage).toBeLessThan(lowRetaliationDamage);
   });
 });
 

@@ -97,7 +97,11 @@ export type ReactionHooks = {
  * reaction handlers don't need raw access to the combat pipeline.
  */
 export interface ReactionContext {
-  /** Deal flat damage to a target (bypasses formula). Used by counter-attacks etc. */
+  /** Deal physical damage using the standard combat formula + reaction pipeline. */
+  dealPhysicalDamage(source: Character, target: Character, coefficient: number): number;
+  /** Deal magical damage using the standard combat formula + reaction pipeline. */
+  dealMagicDamage(source: Character, target: Character, coefficient: number): number;
+  /** Deal flat damage to a target. Bypasses formulas; use for redirected/already-resolved damage. */
   dealDamage(source: Character, target: Character, amount: number, damageType?: DamageType): void;
   /** Heal a target. */
   healTarget(target: Character, amount: number): void;

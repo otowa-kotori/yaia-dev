@@ -12,7 +12,8 @@
 // rule violations — returns { ok: false, reason } instead — so UI code and
 // intent code can branch on failure modes without try/catch.
 
-import type { TalentDef, AttrDef, TargetKind, CastContext, EffectId } from "../../content/types";
+import type { TalentDef, AttrDef, TargetKind, CastContext } from "../../content/types";
+
 import { getTalent, getEffect } from "../../content/registry";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
@@ -364,9 +365,15 @@ function createReactionContext(
   participants: readonly Character[],
   battle?: Battle,
 ): ReactionContext {
-  return {
+  const reactionCtx: ReactionContext = {
+    dealPhysicalDamage(source, target, coefficient) {
+      return dealDamageWithReactions(source, target, coefficient, "physical", ctx, reactionCtx);
+    },
+    dealMagicDamage(source, target, coefficient) {
+      return dealDamageWithReactions(source, target, coefficient, "magical", ctx, reactionCtx);
+    },
     dealDamage(source, target, amount, _damageType) {
-      // Flat damage — no formula, no reactions (avoid infinite loops)
+      // Flat damage for redirected / already-resolved damage.
       const dmg = Math.max(0, Math.floor(amount));
       if (dmg > 0) {
         target.currentHp = Math.max(0, target.currentHp - dmg);
@@ -394,4 +401,6 @@ function createReactionContext(
     battle: battle as unknown as Battle,  // may be undefined in non-battle context
     participants,
   };
+  return reactionCtx;
 }
+
