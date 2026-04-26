@@ -24,7 +24,6 @@ export {
   knightRage,
   knightRetaliation,
   knightWarcry,
-  monsterMagicAttack,
 } from "./default/talents";
 export {
   beastHide,
