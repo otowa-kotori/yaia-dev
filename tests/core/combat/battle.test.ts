@@ -1,5 +1,11 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { createBattle, tickBattle } from "../../../src/core/combat/battle";
+import {
+  createAtbScheduler,
+  createBattle,
+  createTurnScheduler,
+  tickBattle,
+} from "../../../src/core/combat/battle";
+
 import { patchContent, resetContent } from "../../../src/core/content";
 
 import { createRng } from "../../../src/core/infra/rng";
@@ -16,8 +22,10 @@ import {
 } from "../../fixtures/content";
 import type { PlayerCharacter, Enemy } from "../../../src/core/entity/actor";
 import type { TalentDef, TalentId } from "../../../src/core/content/types";
+import { ATTR } from "../../../src/core/entity/attribute";
 
 import { INTENT } from "../../../src/core/combat/intent";
+
 
 function freshState(): GameState {
   return createEmptyState(42, 1);
@@ -174,7 +182,81 @@ describe("Battle: tick loop", () => {
     expect(extraEvents).toBe(0);
   });
 
+  test("ATB natural regen is spread across the reference self-turn ticks", () => {
+    const state = freshState();
+    const bus = createGameEventBus();
+    const rng = createRng(7);
+    const hero = makePlayer({
+      id: "p1",
+      talents: [],
+      hp: 50,
+      mp: 0,
+      maxHp: 100,
+      maxMp: 20,
+      speed: 40,
+    });
+    hero.attrs.base[ATTR.HP_REGEN] = 25;
+    hero.attrs.base[ATTR.MP_REGEN] = 25;
+    hero.attrs.cache = {};
+
+    const slime = makeSlime("s1");
+    slime.knownTalentIds = [];
+    state.actors = [hero, slime];
+
+    const battle = createBattle({
+      id: "b.regen.atb",
+      mode: "solo",
+      participantIds: [hero.id, slime.id],
+      scheduler: createAtbScheduler(),
+      startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
+    });
+
+    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 });
+
+    expect(hero.currentHp).toBe(51);
+    expect(hero.currentMp).toBe(1);
+  });
+
+  test("turn natural regen is granted once per completed living-actor round", () => {
+    const state = freshState();
+    const bus = createGameEventBus();
+    const rng = createRng(8);
+    const hero = makePlayer({
+      id: "p1",
+      talents: [],
+      hp: 50,
+      maxHp: 100,
+      speed: 20,
+    });
+    hero.attrs.base[ATTR.HP_REGEN] = 5;
+    hero.attrs.cache = {};
+
+    const slime = makeSlime("s1");
+    slime.knownTalentIds = [];
+    state.actors = [hero, slime];
+
+    const battle = createBattle({
+      id: "b.regen.turn",
+      mode: "solo",
+      participantIds: [hero.id, slime.id],
+      scheduler: createTurnScheduler({ turnIntervalTicks: 1 }),
+      startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
+    });
+
+    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 });
+    expect(hero.currentHp).toBe(50);
+
+    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 2 });
+    expect(hero.currentHp).toBe(50);
+
+    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 3 });
+    expect(hero.currentHp).toBe(55);
+  });
+
   test("createBattle rejects participants without explicit intents", () => {
+
     const hero = makePlayer({
       id: "p1",
       talents: [basicAttackTalent.id],

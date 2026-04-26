@@ -2,19 +2,41 @@ import type { AttrDef } from "../content/types";
 import { getAttr, type Character } from "./actor";
 import { ATTR } from "./attribute";
 
+/**
+ * Raw per-logic-tick resource regen.
+ *
+ * Used by non-battle activity phases whose recovery is explicitly defined in
+ * logic ticks (search, rest, respawn windows, etc.).
+ */
 export function applyTickResourceRegen(
   actor: Character,
   attrDefs: Readonly<Record<string, AttrDef>>,
 ): void {
+  applyScaledResourceRegen(actor, attrDefs, 1);
+}
+
+/**
+ * Apply current HP/MP regen attributes scaled by an arbitrary time-basis factor.
+ *
+ * Battle uses this to map the same regen attribute onto different scheduler
+ * clocks: ATB spreads regen across a reference self-turn; turn mode grants it
+ * once per completed global round.
+ */
+export function applyScaledResourceRegen(
+  actor: Character,
+  attrDefs: Readonly<Record<string, AttrDef>>,
+  scale: number,
+): void {
   if (actor.currentHp <= 0) return;
+  if (!Number.isFinite(scale) || scale <= 0) return;
 
   const maxHp = Math.max(0, getAttr(actor, ATTR.MAX_HP, attrDefs));
   const maxMp = Math.max(0, getAttr(actor, ATTR.MAX_MP, attrDefs));
   const hpRegen = Math.max(0, getAttr(actor, ATTR.HP_REGEN, attrDefs));
   const mpRegen = Math.max(0, getAttr(actor, ATTR.MP_REGEN, attrDefs));
 
-  actor.currentHp = clamp(actor.currentHp + hpRegen, 0, maxHp);
-  actor.currentMp = clamp(actor.currentMp + mpRegen, 0, maxMp);
+  actor.currentHp = clamp(actor.currentHp + hpRegen * scale, 0, maxHp);
+  actor.currentMp = clamp(actor.currentMp + mpRegen * scale, 0, maxMp);
 }
 
 function clamp(value: number, min: number, max: number): number {

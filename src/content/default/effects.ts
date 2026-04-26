@@ -29,9 +29,11 @@ export const magicStrikeEffect: EffectDef = {
  * 活动层临时挂载的阶段恢复 effect。
  *
  * 它不依赖 action 过期，而是由 CombatActivity / DungeonActivity 在 phase
- * 进入时安装、离开时移除。effect 只是统一承载“临时加自回”的 modifier 形态，
- * 真正的回复发生在每个 logic tick 读取 HP_REGEN / MP_REGEN 时。
+ * 进入时安装、离开时移除。effect 只是统一承载“临时加回复”的 modifier 形态；
+ * 活动层会在每个 logic tick 读取 HP_REGEN / MP_REGEN，而战斗内自然回复则由
+ * scheduler 专用时间基单独缩放，不复用这里的 tick 语义。
  */
+
 export const phaseRecoveryEffect: EffectDef = {
   id: "effect.system.phase_recovery" as EffectId,
   kind: "duration",

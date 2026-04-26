@@ -3,7 +3,8 @@ import { getAttr, isAlive } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
 import type { SchedulerContext } from "./scheduler";
 
-export const DEFAULT_TURN_INTERVAL_TICKS = 25;
+export const TURN_ACTION_SLOT_TICKS = 10;
+export const DEFAULT_TURN_INTERVAL_TICKS = TURN_ACTION_SLOT_TICKS;
 
 export interface TurnSchedulerState {
   kind: "turn";
@@ -13,11 +14,16 @@ export interface TurnSchedulerState {
   ticksUntilNextAction: number;
   /** Current round number, incremented when a new round snapshot is created. */
   round: number;
-  /** Remaining participants eligible to act in the current round.
-   *  This is a snapshot taken at round start. New joiners only enter the next
-   *  round; dead / removed participants are skipped when selecting the next
-   *  actor. */
-  roundActorIds: string[];
+  /** Actors that were alive when this round started. New joiners wait until the
+   *  next round; dead / removed participants are pruned out on sync. */
+  roundEligibleActorIds: string[];
+  /** Actors from the current round snapshot that have already spent their action
+   *  window this round. This defines a round by “which living actors have
+   *  acted”, not by a cached participant count. */
+  roundActedActorIds: string[];
+  /** Number of fully completed global rounds waiting to be observed by the
+   *  battle loop (used by round-based natural resource regen). */
+  completedRounds: number;
 }
 
 export interface CreateTurnSchedulerOptions {
@@ -32,7 +38,9 @@ export function createTurnScheduler(
     turnIntervalTicks: opts.turnIntervalTicks ?? DEFAULT_TURN_INTERVAL_TICKS,
     ticksUntilNextAction: 0,
     round: 0,
-    roundActorIds: [],
+    roundEligibleActorIds: [],
+    roundActedActorIds: [],
+    completedRounds: 0,
   };
 
   assertTurnConfig(state);
@@ -61,6 +69,10 @@ export function nextActorTurn(
   let actor = pickNextTurnActorFromCurrentRound(state, participants, ctx);
   if (actor) return actor;
 
+  if (state.roundEligibleActorIds.length > 0) {
+    state.completedRounds += 1;
+  }
+
   if (!primeTurnRound(state, participants)) return null;
   actor = pickNextTurnActorFromCurrentRound(state, participants, ctx);
   if (!actor) {
@@ -74,33 +86,53 @@ export function onActionResolvedTurn(
   actor: Character,
   _energyCost?: number,
 ): void {
-  const index = state.roundActorIds.indexOf(actor.id);
-  if (index === -1) {
+  if (!state.roundEligibleActorIds.includes(actor.id)) {
     throw new Error(
       `scheduler.turn: actor ${actor.id} resolved but is not part of the current round snapshot`,
     );
   }
-  state.roundActorIds.splice(index, 1);
+  if (state.roundActedActorIds.includes(actor.id)) {
+    throw new Error(
+      `scheduler.turn: actor ${actor.id} resolved twice in the same round snapshot`,
+    );
+  }
+  state.roundActedActorIds.push(actor.id);
   state.ticksUntilNextAction = state.turnIntervalTicks;
+}
+
+export function consumeCompletedTurnRounds(
+  state: TurnSchedulerState,
+): number {
+  const completed = state.completedRounds;
+  state.completedRounds = 0;
+  return completed;
 }
 
 function syncTurnRoundParticipants(
   state: TurnSchedulerState,
   participants: readonly Character[],
 ): void {
-  const liveIds = new Set(participants.map((actor) => actor.id));
-  state.roundActorIds = state.roundActorIds.filter((actorId) => liveIds.has(actorId));
+  const liveIds = new Set(
+    participants.filter((actor) => isAlive(actor)).map((actor) => actor.id),
+  );
+  state.roundEligibleActorIds = state.roundEligibleActorIds.filter((actorId) =>
+    liveIds.has(actorId),
+  );
+  state.roundActedActorIds = state.roundActedActorIds.filter((actorId) =>
+    liveIds.has(actorId),
+  );
 }
 
 function primeTurnRound(
   state: TurnSchedulerState,
   participants: readonly Character[],
 ): boolean {
-  const roundActorIds = participants
+  const roundEligibleActorIds = participants
     .filter((actor) => isAlive(actor))
     .map((actor) => actor.id);
-  state.roundActorIds = roundActorIds;
-  if (roundActorIds.length === 0) {
+  state.roundEligibleActorIds = roundEligibleActorIds;
+  state.roundActedActorIds = [];
+  if (roundEligibleActorIds.length === 0) {
     return false;
   }
   state.round += 1;
@@ -112,17 +144,18 @@ function pickNextTurnActorFromCurrentRound(
   participants: readonly Character[],
   ctx: SchedulerContext,
 ): Character | null {
-  if (state.roundActorIds.length === 0) return null;
+  if (state.roundEligibleActorIds.length === 0) return null;
 
+  const actedIds = new Set(state.roundActedActorIds);
   const participantsById = new Map(participants.map((actor) => [actor.id, actor] as const));
   const indexOf = buildParticipantOrderIndex(participants);
 
-  const candidates = state.roundActorIds
+  const candidates = state.roundEligibleActorIds
+    .filter((actorId) => !actedIds.has(actorId))
     .map((actorId) => participantsById.get(actorId))
     .filter((actor): actor is Character => actor !== undefined && isAlive(actor));
 
   if (candidates.length === 0) {
-    state.roundActorIds = [];
     return null;
   }
 

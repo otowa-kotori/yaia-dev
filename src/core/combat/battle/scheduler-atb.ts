@@ -3,14 +3,18 @@ import { getAttr, isAlive } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
 import type { SchedulerContext } from "./scheduler";
 
-export const DEFAULT_ATB_ACTION_THRESHOLD = 1000;
+export const ATB_REFERENCE_SELF_TURN_TICKS = 25;
 export const DEFAULT_ATB_BASE_ENERGY_GAIN = 40;
+export const DEFAULT_ATB_ACTION_THRESHOLD =
+  DEFAULT_ATB_BASE_ENERGY_GAIN * ATB_REFERENCE_SELF_TURN_TICKS;
+
 /** Base SPD that maps 1:1 to baseEnergyGain. With baseSPD = 40 and
  *  baseEnergyGain = 40, energy gained per tick = exactly SPD.
  *  A unit with SPD 40 gains 40 energy/tick → acts every 25 ticks (2.5 s). */
 export const DEFAULT_ATB_BASE_SPEED = 40;
 /** Opening initiative: initialEnergy = SPD × this. Capped below threshold. */
 export const DEFAULT_ATB_INITIAL_ENERGY_PER_SPEED = 12;
+
 
 export interface AtbSchedulerState {
   kind: "atb";
@@ -131,10 +135,17 @@ export function onActionResolvedAtb(
   state.energyFloorByActorId[actor.id] = Math.min(0, after);
 }
 
+export function getAtbReferenceSelfTurnTicks(
+  state: Pick<AtbSchedulerState, "actionThreshold" | "baseEnergyGain">,
+): number {
+  return state.actionThreshold / state.baseEnergyGain;
+}
+
 export function getAtbGaugePct(
   state: AtbSchedulerState,
   actorId: string,
 ): number {
+
   const energy = state.energyByActorId[actorId] ?? 0;
   const floor = state.energyFloorByActorId[actorId] ?? 0;
   const threshold = state.actionThreshold;

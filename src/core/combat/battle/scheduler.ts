@@ -16,8 +16,10 @@
 import type { AttrDef } from "../../content/types";
 import type { Character } from "../../entity/actor";
 import {
+  ATB_REFERENCE_SELF_TURN_TICKS,
   createAtbScheduler,
   getAtbGaugePct as getAtbGaugePctAtb,
+  getAtbReferenceSelfTurnTicks as getAtbReferenceSelfTurnTicksAtb,
   nextActorAtb,
   onActionResolvedAtb,
   tickAtbScheduler,
@@ -29,6 +31,7 @@ import {
   DEFAULT_ATB_INITIAL_ENERGY_PER_SPEED,
 } from "./scheduler-atb";
 import {
+  consumeCompletedTurnRounds,
   createTurnScheduler,
   nextActorTurn,
   onActionResolvedTurn,
@@ -36,6 +39,7 @@ import {
   type CreateTurnSchedulerOptions,
   type TurnSchedulerState,
   DEFAULT_TURN_INTERVAL_TICKS,
+  TURN_ACTION_SLOT_TICKS,
 } from "./scheduler-turn";
 
 /** Input to scheduler dispatchers. The live mutable scheduler state is stored in
@@ -50,7 +54,6 @@ export const DEFAULT_BATTLE_SCHEDULER_MODE: BattleSchedulerMode = "turn";
 
 export type SchedulerState = AtbSchedulerState | TurnSchedulerState;
 
-
 export type {
   AtbSchedulerState,
   CreateAtbSchedulerOptions,
@@ -59,11 +62,13 @@ export type {
 };
 
 export {
+  ATB_REFERENCE_SELF_TURN_TICKS,
   DEFAULT_ATB_ACTION_THRESHOLD,
   DEFAULT_ATB_BASE_ENERGY_GAIN,
   DEFAULT_ATB_BASE_SPEED,
   DEFAULT_ATB_INITIAL_ENERGY_PER_SPEED,
   DEFAULT_TURN_INTERVAL_TICKS,
+  TURN_ACTION_SLOT_TICKS,
   createAtbScheduler,
   createTurnScheduler,
 };
@@ -124,6 +129,41 @@ export function onActionResolved(
       onActionResolvedTurn(state, actor, energyCost);
       return;
   }
+}
+
+/** Natural combat regen that should be applied every logic tick.
+ *
+ *  ATB has no global round boundary, so regen is smeared evenly across the
+ *  reference self-turn duration. Turn mode grants regen on completed rounds via
+ *  `consumeCompletedRounds()` instead, so the per-tick portion is 0. */
+export function getPassiveBattleRegenScalePerTick(
+  state: SchedulerState,
+): number {
+  switch (state.kind) {
+    case "atb":
+      return 1 / getAtbReferenceSelfTurnTicksAtb(state);
+    case "turn":
+      return 0;
+  }
+}
+
+/** Completed global rounds waiting to be observed by the battle loop. */
+export function consumeCompletedRounds(state: SchedulerState): number {
+  switch (state.kind) {
+    case "atb":
+      return 0;
+    case "turn":
+      return consumeCompletedTurnRounds(state);
+  }
+}
+
+export function getAtbReferenceSelfTurnTicks(
+  state: SchedulerState,
+): number {
+  if (state.kind !== "atb") {
+    throw new Error("scheduler.getAtbReferenceSelfTurnTicks: scheduler is not ATB");
+  }
+  return getAtbReferenceSelfTurnTicksAtb(state);
 }
 
 /** Normalized ATB gauge value in [0, 1] for display.

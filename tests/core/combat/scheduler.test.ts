@@ -1,7 +1,10 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import {
+  ATB_REFERENCE_SELF_TURN_TICKS,
+  consumeCompletedRounds,
   createAtbScheduler,
   createTurnScheduler,
+  getAtbReferenceSelfTurnTicks,
   tickScheduler,
   nextActor,
   onActionResolved,
@@ -10,6 +13,7 @@ import {
   DEFAULT_ATB_BASE_SPEED,
   DEFAULT_ATB_INITIAL_ENERGY_PER_SPEED,
 } from "../../../src/core/combat/battle";
+
 import { resetContent } from "../../../src/core/content";
 import { loadFixtureContent, makePlayer, attrDefs } from "../../fixtures/content";
 import { ATTR } from "../../../src/core/entity/attribute";
@@ -51,6 +55,16 @@ describe("ATB Scheduler", () => {
     const expectedGain = DEFAULT_ATB_BASE_ENERGY_GAIN * (80 / DEFAULT_ATB_BASE_SPEED);
     expect(after - before).toBe(expectedGain);
   });
+
+  test("default ATB action threshold derives from reference self-turn ticks", () => {
+    const sched = createAtbScheduler();
+    expect(DEFAULT_ATB_ACTION_THRESHOLD).toBe(
+      DEFAULT_ATB_BASE_ENERGY_GAIN * ATB_REFERENCE_SELF_TURN_TICKS,
+    );
+    expect(getAtbReferenceSelfTurnTicks(sched)).toBe(ATB_REFERENCE_SELF_TURN_TICKS);
+  });
+
+
 
   test("nextActor returns null when no one above threshold", () => {
     const p1 = makePlayer({ id: "p1", speed: 40 });
@@ -186,4 +200,25 @@ describe("Turn Scheduler", () => {
     tickScheduler(sched, participants, { attrDefs });
     expect(nextActor(sched, participants, { attrDefs })?.id).toBe("c");
   });
+
+  test("completed round depends on living acted actors, not original headcount", () => {
+    const a = makePlayer({ id: "a", speed: 60 });
+    const b = makePlayer({ id: "b", speed: 40 });
+    const c = makePlayer({ id: "c", speed: 20 });
+    const sched = createTurnScheduler({ turnIntervalTicks: 1 });
+    const participants = [a, b, c] as const;
+
+    expect(nextActor(sched, participants, { attrDefs })?.id).toBe("a");
+    onActionResolved(sched, a);
+
+    c.currentHp = 0;
+    tickScheduler(sched, participants, { attrDefs });
+    expect(nextActor(sched, participants, { attrDefs })?.id).toBe("b");
+    onActionResolved(sched, b);
+
+    tickScheduler(sched, participants, { attrDefs });
+    expect(nextActor(sched, participants, { attrDefs })?.id).toBe("a");
+    expect(consumeCompletedRounds(sched)).toBe(1);
+  });
 });
+

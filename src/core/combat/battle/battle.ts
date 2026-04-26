@@ -22,19 +22,22 @@ import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
 import type { Character } from "../../entity/actor";
 import { isAlive, isCharacter, isEnemy, isPlayer } from "../../entity/actor";
-import { applyTickResourceRegen } from "../../entity/resource";
+import { applyScaledResourceRegen } from "../../entity/resource";
 import { tryUseTalent, type CastResult } from "../../behavior/ability";
 
 import { processActionEffects } from "../../behavior/effect";
 import {
+  consumeCompletedRounds,
   createSchedulerForMode,
   DEFAULT_BATTLE_SCHEDULER_MODE,
+  getPassiveBattleRegenScalePerTick,
   nextActor as schedulerNextActor,
   onActionResolved as schedulerOnActionResolved,
   tickScheduler,
   type SchedulerContext,
   type SchedulerState,
 } from "./scheduler";
+
 
 import { resolveIntent, type IntentAction } from "../intent";
 
@@ -170,10 +173,9 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
   if (battle.outcome !== "ongoing") return;
 
   let participants = resolveParticipants(battle, ctx.state);
-  for (const participant of participants) {
-    applyTickResourceRegen(participant, ctx.attrDefs);
-  }
+  applyPassiveBattleRegen(battle.scheduler, participants, ctx.attrDefs);
   emitNewDeaths(battle, participants, ctx);
+
   maybeTerminate(battle, participants, ctx);
 
   if (battle.outcome !== "ongoing") return;
@@ -191,7 +193,10 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
     const actor = schedulerNextActor(battle.scheduler, participants, schedCtx);
     if (!actor) return;
 
+    applyCompletedRoundBattleRegen(battle.scheduler, participants, ctx.attrDefs);
+
     actionsServed += 1;
+
     if (actionsServed > maxActionsThisTick) {
       throw new Error(
         `battle ${battle.id}: exceeded ${maxActionsThisTick} action windows in one tick`,
@@ -404,8 +409,32 @@ function getDefaultEnergyCost(state: SchedulerState): number {
   }
 }
 
+function applyPassiveBattleRegen(
+  scheduler: SchedulerState,
+  participants: readonly Character[],
+  attrDefs: Readonly<Record<string, AttrDef>>,
+): void {
+  const scale = getPassiveBattleRegenScalePerTick(scheduler);
+  if (scale <= 0) return;
+  for (const participant of participants) {
+    applyScaledResourceRegen(participant, attrDefs, scale);
+  }
+}
+
+function applyCompletedRoundBattleRegen(
+  scheduler: SchedulerState,
+  participants: readonly Character[],
+  attrDefs: Readonly<Record<string, AttrDef>>,
+): void {
+  const completedRounds = consumeCompletedRounds(scheduler);
+  if (completedRounds <= 0) return;
+  for (const participant of participants) {
+    applyScaledResourceRegen(participant, attrDefs, completedRounds);
+  }
+}
 
 // ---------- Termination ----------
+
 
 /**
  * Recompute battle outcome from the current participant snapshot.
