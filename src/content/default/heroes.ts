@@ -72,10 +72,6 @@ const authoredHeroes = {
       [ATTR.DEX]: 1,
     },
     physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
-    intentConfig: [
-      { talentId: knightWarcry.id as string, targetPolicy: "self", conditions: ["off_cooldown", "has_mp"] },
-      { talentId: knightPowerStrike.id as string, conditions: ["off_cooldown", "has_mp"] },
-    ],
   },
   "hero.ranger": {
     id: "hero.ranger",

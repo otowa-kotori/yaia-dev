@@ -5,16 +5,18 @@
 // whose conditions are all met and whose talent can find valid targets. If no
 // rule matches, falls through to a basic attack.
 //
+// off_cooldown and has_mp are ALWAYS checked implicitly for every rule.
+// The conditions array is only for additional checks beyond those two basics.
+//
 // This provides flexible per-character AI without touching Battle or the
 // tryUseTalent pipeline. Content can define different priority lists for
 // different hero classes (e.g. knight: Warcry > Power Strike > Attack).
 //
 // Usage:
 //   const intent = createPriorityListIntent([
-//     { talentId: "talent.knight.warcry", conditions: ["off_cooldown", "has_mp"] },
-//     { talentId: "talent.knight.power_strike", conditions: ["off_cooldown", "has_mp"] },
+//     { talentId: "talent.knight.warcry" },
+//     { talentId: "talent.knight.power_strike" },
 //   ]);
-//   registerIntent("intent.knight_priority", intent);
 
 import type { Character, PlayerCharacter } from "../../entity/actor/types";
 import { isPlayer } from "../../entity/actor/types";
@@ -104,18 +106,38 @@ function tryRule(
   const activeParams = talentDef.getActiveParams?.(level);
   if (!activeParams) return null; // not an active talent
 
-  // Check conditions.
+  // Implicit checks: off_cooldown + has_mp are ALWAYS required.
+  const cdRemaining = actor.cooldowns[talentId] ?? 0;
+  if (cdRemaining > 0) return null;
+  if (actor.currentMp < activeParams.mpCost) return null;
+
+  // Check extra conditions (beyond the implicit off_cooldown + has_mp).
   const conditions = rule.conditions ?? [];
   for (const cond of conditions) {
     if (!checkCondition(cond, talentId, actor, activeParams)) return null;
   }
 
-  // Resolve targets.
-  const policy = rule.targetPolicy ?? "random_enemy";
+  // Resolve targets. Use explicit targetPolicy from the rule, or infer from
+  // the talent's targetKind, or fall back to TalentDef.intentTargetPolicy.
+  const policy = rule.targetPolicy
+    ?? talentDef.intentTargetPolicy
+    ?? inferTargetPolicy(activeParams.targetKind);
   const targets = resolveTargets(policy, actor, ctx);
   if (!targets || targets.length === 0) return null;
 
   return { talentId, targets };
+}
+
+/** Infer a target policy from the talent's targetKind. */
+function inferTargetPolicy(targetKind: string): TargetPolicy {
+  switch (targetKind) {
+    case "self":         return "self";
+    case "single_enemy": return "random_enemy";
+    case "all_enemies":  return "all_enemies";
+    case "single_ally":  return "lowest_hp_ally";
+    case "all_allies":   return "random_ally";
+    default:             return "random_enemy";
+  }
 }
 
 function checkCondition(

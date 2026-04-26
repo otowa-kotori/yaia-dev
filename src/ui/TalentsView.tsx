@@ -1,12 +1,14 @@
-// Talent allocation panel.
+// Talent allocation + equip panel.
 //
 // Shows the hero's available talent points (TP) and a card for each talent
 // available to the hero's class. Cards show: name, type badge, level progress,
-// description, prereqs, and a +1 button.
+// description, prereqs, equip state, and action buttons.
 
 import { useState } from "react";
 import { getContent } from "../core/content";
 import type { TalentDef } from "../core/content/types";
+import { getAttr } from "../core/entity/actor";
+import { ATTR } from "../core/entity/attribute";
 import { computeAvailableTp, computeTotalTp } from "../core/growth/talent";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
@@ -27,6 +29,8 @@ export function TalentsView({ store }: { store: GameStore }) {
   const availableTalentIds = heroCfg?.availableTalents ?? [];
   const totalTp = computeTotalTp(hero.level);
   const availableTp = computeAvailableTp(hero.level, hero.talentLevels, content.talents);
+  const maxSlots = getAttr(hero, ATTR.TALENT_SLOTS, content.attributes);
+  const equippedCount = hero.equippedTalents.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -58,6 +62,23 @@ export function TalentsView({ store }: { store: GameStore }) {
           background: "#59c",
           transition: "width 150ms",
         }} />
+      </div>
+
+      {/* Equip slots header */}
+      <div style={{
+        background: "#1a2a2a", borderRadius: 4, padding: "6px 12px",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <div>
+          <span style={{ fontSize: 11, opacity: 0.5 }}>{T.talentEquipTitle}</span>
+          <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>{T.talentEquipHint}</div>
+        </div>
+        <span style={{
+          fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+          color: equippedCount >= maxSlots ? "#c97" : "#9bd",
+        }}>
+          {equippedCount} / {maxSlots}
+        </span>
       </div>
 
       {/* Error banner */}
@@ -98,6 +119,9 @@ export function TalentsView({ store }: { store: GameStore }) {
             }
 
             const canAllocate = !maxed && prereqMet && availableTp >= def.tpCost;
+            const isEquipped = hero.equippedTalents.includes(id as string);
+            const isEquippable = def.type === "active" || def.type === "sustain";
+            const canEquip = isEquippable && currentLevel > 0 && !isEquipped && equippedCount < maxSlots;
 
             return (
               <TalentCard
@@ -107,12 +131,31 @@ export function TalentsView({ store }: { store: GameStore }) {
                 maxed={maxed}
                 canAllocate={canAllocate}
                 prereqHint={prereqHint}
+                isEquipped={isEquipped}
+                isEquippable={isEquippable}
+                canEquip={canEquip}
                 onAllocate={() => {
                   try {
                     cc.allocateTalent(id as string);
                     setError(null);
                   } catch (e) {
                     setError(e instanceof Error ? e.message : T.talentAllocFailed);
+                  }
+                }}
+                onEquip={() => {
+                  try {
+                    cc.equipTalent(id as string);
+                    setError(null);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : T.talentEquipFailed);
+                  }
+                }}
+                onUnequip={() => {
+                  try {
+                    cc.unequipTalent(id as string);
+                    setError(null);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : T.talentUnequipFailed);
                   }
                 }}
               />
@@ -146,14 +189,24 @@ function TalentCard({
   maxed,
   canAllocate,
   prereqHint,
+  isEquipped,
+  isEquippable,
+  canEquip,
   onAllocate,
+  onEquip,
+  onUnequip,
 }: {
   def: TalentDef;
   currentLevel: number;
   maxed: boolean;
   canAllocate: boolean;
   prereqHint: string;
+  isEquipped: boolean;
+  isEquippable: boolean;
+  canEquip: boolean;
   onAllocate: () => void;
+  onEquip: () => void;
+  onUnequip: () => void;
 }) {
   const pct = def.maxLevel > 0 ? currentLevel / def.maxLevel : 0;
   const typeLabel = TYPE_LABELS[def.type] ?? def.type;
@@ -163,9 +216,9 @@ function TalentCard({
     <div style={{
       background: "#222", borderRadius: 4, padding: 10,
       display: "flex", flexDirection: "column", gap: 6,
-      border: maxed ? "1px solid #3a6" : "1px solid #333",
+      border: isEquipped ? "1px solid #59c" : maxed ? "1px solid #3a6" : "1px solid #333",
     }}>
-      {/* Header: name + type badge + level */}
+      {/* Header: name + type badge + level + equip indicator */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
           <span style={{ fontWeight: 600, fontSize: 13, color: maxed ? "#4a9" : "#eee" }}>
@@ -177,6 +230,14 @@ function TalentCard({
           }}>
             {typeLabel}
           </span>
+          {isEquipped && (
+            <span style={{
+              fontSize: 9, padding: "1px 4px", borderRadius: 3,
+              background: "#2a4a5a", color: "#9bd",
+            }}>
+              {T.talentEquipped}
+            </span>
+          )}
         </div>
         <span style={{ fontSize: 11, opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>
           Lv {currentLevel} / {def.maxLevel}
@@ -198,15 +259,15 @@ function TalentCard({
         <div style={{ fontSize: 12, opacity: 0.7 }}>{def.description}</div>
       )}
 
-      {/* Level-specific description from describeLevel */}
-      {def.describeLevel && (
+      {/* Level-specific description from describe */}
+      {def.describe && (
         <div style={{ fontSize: 11, opacity: 0.55, marginTop: -2 }}>
           {currentLevel > 0 && (
-            <div>Lv{currentLevel}: {def.describeLevel(currentLevel)}</div>
+            <div>Lv{currentLevel}: {def.describe({ level: currentLevel })}</div>
           )}
           {!maxed && (
             <div style={{ color: "#9bd" }}>
-              {currentLevel > 0 ? "→ " : ""}Lv{currentLevel + 1}: {def.describeLevel(currentLevel + 1)}
+              {currentLevel > 0 ? "→ " : ""}Lv{currentLevel + 1}: {def.describe({ level: currentLevel + 1 })}
             </div>
           )}
         </div>
@@ -219,29 +280,66 @@ function TalentCard({
         </div>
       )}
 
-      {/* Allocate button or maxed label */}
-      {maxed ? (
-        <div style={{ fontSize: 12, color: "#4a9", fontWeight: 500, textAlign: "center", marginTop: 2 }}>
-          {T.talentMaxLevel}
-        </div>
-      ) : (
-        <button
-          onClick={onAllocate}
-          disabled={!canAllocate}
-          style={{
-            marginTop: 2, padding: "5px 10px", fontSize: 12, borderRadius: 4,
-            border: "1px solid #444",
-            background: canAllocate ? "#2a4a2a" : "#2a2a2a",
-            color: canAllocate ? "#8d8" : "#666",
-            cursor: canAllocate ? "pointer" : "not-allowed",
-            fontFamily: "inherit",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-          }}
-        >
-          <span>{T.btn_allocateTalent}</span>
-          <span style={{ opacity: 0.5, fontSize: 10 }}>({def.tpCost} TP)</span>
-        </button>
-      )}
+      {/* Action buttons row */}
+      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+        {/* Allocate button */}
+        {maxed ? (
+          <div style={{ fontSize: 12, color: "#4a9", fontWeight: 500, flex: 1, textAlign: "center" }}>
+            {T.talentMaxLevel}
+          </div>
+        ) : (
+          <button
+            onClick={onAllocate}
+            disabled={!canAllocate}
+            style={{
+              flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4,
+              border: "1px solid #444",
+              background: canAllocate ? "#2a4a2a" : "#2a2a2a",
+              color: canAllocate ? "#8d8" : "#666",
+              cursor: canAllocate ? "pointer" : "not-allowed",
+              fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            }}
+          >
+            <span>{T.btn_allocateTalent}</span>
+            <span style={{ opacity: 0.5, fontSize: 10 }}>({def.tpCost} TP)</span>
+          </button>
+        )}
+
+        {/* Equip/unequip button — only for active/sustain with level > 0 */}
+        {isEquippable && currentLevel > 0 && (
+          isEquipped ? (
+            <button
+              onClick={onUnequip}
+              style={{
+                padding: "5px 8px", fontSize: 11, borderRadius: 4,
+                border: "1px solid #555",
+                background: "#3a2a2a",
+                color: "#c88",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {T.btn_unequipTalent}
+            </button>
+          ) : (
+            <button
+              onClick={onEquip}
+              disabled={!canEquip}
+              style={{
+                padding: "5px 8px", fontSize: 11, borderRadius: 4,
+                border: "1px solid #555",
+                background: canEquip ? "#2a3a4a" : "#2a2a2a",
+                color: canEquip ? "#9bd" : "#666",
+                cursor: canEquip ? "pointer" : "not-allowed",
+                fontFamily: "inherit",
+              }}
+            >
+              {T.btn_equipTalent}
+            </button>
+          )
+        )}
+      </div>
     </div>
   );
 }

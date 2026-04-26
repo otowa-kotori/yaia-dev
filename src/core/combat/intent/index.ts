@@ -180,16 +180,44 @@ import { getContent } from "../../content/registry";
 import { isPlayer, isEnemy } from "../../entity/actor";
 import type { PlayerCharacter, Enemy } from "../../entity/actor";
 import { createPriorityListIntent, type PriorityRule } from "./priority";
+import { getTalent } from "../../content/registry";
 
 /**
- * A single shared intent that dynamically resolves intentConfig from content
+ * A single shared intent that dynamically resolves rules from content
  * at action time. This avoids per-hero / per-monster intent registration and
  * survives save/load without re-registration.
+ *
+ * For players: builds rules from the actor's knownTalentIds sorted by
+ * TalentDef.intentPriority (lower first). off_cooldown + has_mp checks are
+ * performed automatically by tryRule, no need to declare them.
+ *
+ * For enemies: reads MonsterDef.intentConfig if present, else builds from
+ * the monster's talent list.
  *
  * Internally caches the compiled PriorityListIntent per config identity so
  * we don't rebuild every tick.
  */
 const _compiledCache = new Map<string, Intent>();
+
+function buildRulesFromTalents(talentIds: readonly string[]): PriorityRule[] {
+  const entries: { talentId: string; priority: number; policy?: string }[] = [];
+  for (const tid of talentIds) {
+    let def;
+    try { def = getTalent(tid); } catch { continue; }
+    if (def.type !== "active") continue;
+    if (def.intentPriority === undefined) continue;
+    entries.push({
+      talentId: tid,
+      priority: def.intentPriority,
+      policy: def.intentTargetPolicy as string | undefined,
+    });
+  }
+  entries.sort((a, b) => a.priority - b.priority);
+  return entries.map(e => ({
+    talentId: e.talentId,
+    ...(e.policy ? { targetPolicy: e.policy as any } : {}),
+  }));
+}
 
 const PriorityListIntent: Intent = (actor, ctx) => {
   let rules: PriorityRule[] = [];
@@ -199,14 +227,19 @@ const PriorityListIntent: Intent = (actor, ctx) => {
 
   if (isPlayer(actor)) {
     const pc = actor as PlayerCharacter;
-    cacheKey = pc.heroConfigId;
-    const heroCfg = content.starting?.heroes.find(h => h.id === pc.heroConfigId);
-    rules = heroCfg?.intentConfig ?? [];
+    cacheKey = `player:${pc.heroConfigId}:${pc.equippedTalents.join(",")}`;
+    // Build rules from the hero's EQUIPPED talents using intentPriority on TalentDef.
+    rules = buildRulesFromTalents(pc.equippedTalents);
   } else if (isEnemy(actor)) {
     const e = actor as Enemy;
     cacheKey = e.defId as string;
     const mdef = content.monsters[e.defId as string];
-    rules = mdef?.intentConfig ?? [];
+    if (mdef?.intentConfig && mdef.intentConfig.length > 0) {
+      rules = mdef.intentConfig;
+    } else {
+      // Build from monster talent list.
+      rules = buildRulesFromTalents(e.knownTalentIds as string[]);
+    }
   } else {
     return null;
   }

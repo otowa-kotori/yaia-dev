@@ -341,4 +341,8 @@ export const ATTR = {
   // 仇恨权重 — 被选为攻击目标的相对概率，默认 1.0。
   // 战吼 buff 临时提升该值，Intent 按此加权随机 pick 目标。
   AGGRO_WEIGHT: "attr.aggro_weight" as AttrId,
+
+  // 技能装备槽上限 — 决定角色可以装备多少个主动/sustain 技能。
+  // 基础攻击不占槽。默认 3，可通过升级系统提升。
+  TALENT_SLOTS: "attr.talent_slots" as AttrId,
 } as const;

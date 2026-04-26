@@ -79,7 +79,7 @@ import { getInventoryStackLimit } from "../inventory/stack-limit";
 import { createGearInstance, type GearInstance } from "../item";
 import { grantCharacterXp, grantSkillXp, xpCostToReach } from "../growth/leveling";
 import { purchaseUpgrade as purchaseUpgradeCore } from "../growth/upgrade-manager";
-import { allocateTalentPoint } from "../growth/talent";
+import { allocateTalentPoint, equipTalent as equipTalentCore, unequipTalent as unequipTalentCore } from "../growth/talent";
 import {
   enterStage as enterStageCore,
   leaveStage as leaveStageCore,
@@ -146,6 +146,8 @@ export interface CharacterController {
    *  entries that could not be picked up (still pending). */
   pickUpAllPendingLoot(): number;
   allocateTalent(talentId: string): void;
+  equipTalent(talentId: string): void;
+  unequipTalent(talentId: string): void;
 }
 
 export interface GameSession {
@@ -884,6 +886,20 @@ export function createGameSession(
           talentId,
           newLevel: result.newLevel,
         });
+      },
+
+      equipTalent(talentId: string): void {
+        const result = equipTalentCore(cc.hero, talentId as any, content);
+        if (!result.ok) {
+          throw new Error(`session.equipTalent: ${result.reason} for talent "${talentId}"`);
+        }
+      },
+
+      unequipTalent(talentId: string): void {
+        const result = unequipTalentCore(cc.hero, talentId as any, content);
+        if (!result.ok) {
+          throw new Error(`session.unequipTalent: ${result.reason} for talent "${talentId}"`);
+        }
       },
     };
 

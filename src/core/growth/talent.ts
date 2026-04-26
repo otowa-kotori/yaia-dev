@@ -13,7 +13,7 @@
 import type { PlayerCharacter, Character } from "../entity/actor/types";
 import type { ContentDb, TalentId, TalentDef, EffectId, AttrDef } from "../content/types";
 import type { EffectInstance } from "../infra/state/types";
-import { addModifiers, removeModifiersBySource } from "../entity/attribute";
+import { addModifiers, removeModifiersBySource, ATTR, getAttr as getAttrFromSet } from "../entity/attribute";
 import { getEffect } from "../content/registry";
 
 export function computeTotalTp(level: number): number {
@@ -98,6 +98,16 @@ export function allocateTalentPoint(
       pc.knownTalents.push(talentId);
       // Rebuild runtime list.
       pc.knownTalentIds = pc.knownTalents.slice();
+    }
+  }
+
+  // Auto-equip newly learned active/sustain talent if there's a free slot.
+  if (currentLevel === 0 && (def.type === "active" || def.type === "sustain")) {
+    const maxSlots = getAttrFromSet(pc.attrs, ATTR.TALENT_SLOTS, content.attributes);
+    if (pc.equippedTalents.length < maxSlots) {
+      if (!pc.equippedTalents.includes(talentId as string)) {
+        pc.equippedTalents.push(talentId as string);
+      }
     }
   }
 
@@ -246,4 +256,98 @@ export function toggleSustain(
     installPassiveEffects(pc, def, level, content.attributes);
   }
   return { ok: true, activated: true };
+}
+
+// ---------- Talent equip / unequip ----------
+
+export type EquipTalentFailure =
+  | "unknown_talent"
+  | "not_learned"
+  | "already_equipped"
+  | "no_free_slot"
+  | "passive_cannot_equip";
+
+export type EquipTalentResult =
+  | { ok: true }
+  | { ok: false; reason: EquipTalentFailure };
+
+/**
+ * Equip an active or sustain talent into a combat slot.
+ * Passive talents cannot be equipped (they are always active).
+ * Basic attack is implicitly always available and does not occupy a slot.
+ */
+export function equipTalent(
+  pc: PlayerCharacter,
+  talentId: TalentId,
+  content: ContentDb,
+): EquipTalentResult {
+  const def = content.talents[talentId as string];
+  if (!def) return { ok: false, reason: "unknown_talent" };
+  if (def.type === "passive") return { ok: false, reason: "passive_cannot_equip" };
+
+  const level = pc.talentLevels[talentId as string] ?? 0;
+  if (level === 0) return { ok: false, reason: "not_learned" };
+
+  if (pc.equippedTalents.includes(talentId as string)) {
+    return { ok: false, reason: "already_equipped" };
+  }
+
+  const maxSlots = getAttrFromSet(pc.attrs, ATTR.TALENT_SLOTS, content.attributes);
+  if (pc.equippedTalents.length >= maxSlots) {
+    return { ok: false, reason: "no_free_slot" };
+  }
+
+  pc.equippedTalents.push(talentId as string);
+
+  // If it's a sustain and has grantEffects, install its effects.
+  if (def.type === "sustain" && def.grantEffects) {
+    // Handle exclusiveGroup — deactivate old sustain in same group.
+    if (def.exclusiveGroup) {
+      const group = def.exclusiveGroup;
+      const oldTalentId = pc.activeSustains[group];
+      if (oldTalentId && oldTalentId !== (talentId as string)) {
+        removePassiveEffectsForTalent(pc, oldTalentId);
+      }
+      pc.activeSustains[group] = talentId as string;
+    }
+    installPassiveEffects(pc, def, level, content.attributes);
+  }
+
+  return { ok: true };
+}
+
+export type UnequipTalentFailure =
+  | "not_equipped";
+
+export type UnequipTalentResult =
+  | { ok: true }
+  | { ok: false; reason: UnequipTalentFailure };
+
+/**
+ * Unequip an active or sustain talent from a combat slot.
+ * If it's a sustain, its effects are removed.
+ */
+export function unequipTalent(
+  pc: PlayerCharacter,
+  talentId: TalentId,
+  content: ContentDb,
+): UnequipTalentResult {
+  const idx = pc.equippedTalents.indexOf(talentId as string);
+  if (idx === -1) return { ok: false, reason: "not_equipped" };
+
+  pc.equippedTalents.splice(idx, 1);
+
+  // If it was a sustain, remove its effects and deactivate.
+  const def = content.talents[talentId as string];
+  if (def?.type === "sustain") {
+    removePassiveEffectsForTalent(pc, talentId as string);
+    if (def.exclusiveGroup) {
+      const group = def.exclusiveGroup;
+      if (pc.activeSustains[group] === (talentId as string)) {
+        delete pc.activeSustains[group];
+      }
+    }
+  }
+
+  return { ok: true };
 }

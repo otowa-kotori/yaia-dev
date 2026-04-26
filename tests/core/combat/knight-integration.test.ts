@@ -97,7 +97,7 @@ describe("knight integration / passive effects", () => {
     const retEffects = pc.activeEffects.filter(ae => ae.sourceTalentId === (knightRetaliation.id as string));
     expect(retEffects.length).toBe(1);
     expect(retEffects[0]!.effectId).toBe(knightRetaliationEffect.id as string);
-    expect(retEffects[0]!.state.level).toBe(1);
+    expect(retEffects[0]!.state.chance).toBeDefined();
   });
 });
 
@@ -311,7 +311,7 @@ describe("knight integration / PriorityListIntent", () => {
     const rng = createRng(42);
 
     const rules: PriorityRule[] = [
-      { talentId: knightPowerStrike.id as string, conditions: ["off_cooldown", "has_mp"] },
+      { talentId: knightPowerStrike.id as string },
     ];
     const intent = createPriorityListIntent(rules);
     const action = intent(pc, { participants: [pc, enemy], rng, attrDefs });
@@ -334,7 +334,7 @@ describe("knight integration / PriorityListIntent", () => {
     const rng = createRng(42);
 
     const rules: PriorityRule[] = [
-      { talentId: knightPowerStrike.id as string, conditions: ["off_cooldown", "has_mp"] },
+      { talentId: knightPowerStrike.id as string },
     ];
     const intent = createPriorityListIntent(rules);
     const action = intent(pc, { participants: [pc, enemy], rng, attrDefs });

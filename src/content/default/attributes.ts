@@ -139,6 +139,13 @@ const authoredAttributes = {
     defaultBase: 1.0,
     clampMin: 0.1,
   },
+  [ATTR.TALENT_SLOTS]: {
+    id: ATTR.TALENT_SLOTS,
+    name: "技能槽",
+    defaultBase: 3,
+    integer: true,
+    clampMin: 1,
+  },
 } satisfies Record<string, AuthoringDef<AttrDef>>;
 
 export const attrDefs = compileInheritedCollection<AttrDef>({

@@ -112,6 +112,8 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
       rebuildCharacterDerived(a, opts.attrDefs);
     } else if (isPlayer(a)) {
       a.knownTalentIds = a.knownTalents.slice();
+      // Backfill for saves created before equippedTalents was introduced.
+      if (!a.equippedTalents) a.equippedTalents = [];
       rebuildCharacterDerived(a, opts.attrDefs, state.worldRecord);
     }
   }

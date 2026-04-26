@@ -11,7 +11,7 @@
 
 import type { FormulaRef } from "../infra/formula/types";
 import type { ReactionHooks } from "../combat/reaction/types";
-import type { PriorityRule } from "../combat/intent/priority";
+import type { PriorityRule, TargetPolicy } from "../combat/intent/priority";
 
 // ---------- Branded ID types ----------
 // Brands are compile-time only; at runtime they're plain strings.
@@ -256,7 +256,20 @@ export interface CastContext {
 // and entity/actor/types. At runtime both live in the same TS project; the
 // branded import is purely for type-checking the execute signature.
 // Actual Character type is defined in entity/actor/types.ts.
-import type { Character } from "../entity/actor/types";
+import type { Character, PlayerCharacter } from "../entity/actor/types";
+
+/**
+ * Context passed to TalentDef.describe(). Allows description text to scale
+ * with both talent level and (optionally) the owning character's stats.
+ */
+export interface TalentDescribeContext {
+  /** Talent level being described (0 = preview before first allocation). */
+  level: number;
+  /** The owning player character, if available (e.g. in talent UI). */
+  owner?: PlayerCharacter;
+  /** Attribute definitions for reading derived stats. */
+  attrDefs?: Readonly<Record<string, AttrDef>>;
+}
 
 export interface TalentDef {
   id: TalentId;
@@ -272,12 +285,36 @@ export interface TalentDef {
   tags?: string[];
   /**
    * Returns a human-readable description of what this talent does at the given
-   * level. Shown in the talent allocation UI so the player can see what each
-   * level provides. Level 0 describes the talent before any points are spent
-   * (i.e. "next level preview"). Omit for talents whose description field
-   * suffices (e.g. basic attack with no scaling).
+   * context (level + optional player state). Shown in the talent allocation UI
+   * so the player can see what each level provides. Level 0 describes the
+   * talent before any points are spent (i.e. "next level preview"). Omit for
+   * talents whose description field suffices (e.g. basic attack with no scaling).
    */
-  describeLevel?: (level: number) => string;
+  describe?: (ctx: TalentDescribeContext) => string;
+
+  // ---- intent AI fields ----
+
+  /** Default priority when auto-building intent rules from equipped talents.
+   *  Lower = higher priority (tried first). Omit to fall after all talents
+   *  that have an explicit priority. */
+  intentPriority?: number;
+  /** Override target selection policy for intent AI. If omitted, inferred
+   *  from getActiveParams().targetKind:
+   *    self → "self", single_enemy → "random_enemy",
+   *    all_enemies → "all_enemies", single_ally → "lowest_hp_ally",
+   *    all_allies → (all allies). */
+  intentTargetPolicy?: TargetPolicy;
+
+  // ---- effect parameter getter ----
+
+  /**
+   * Compute concrete effect values for a given talent level. Single source of
+   * truth: grantEffects passes these into EffectInstance.state, describe()
+   * reads them for UI text, and execute() uses them for runtime logic.
+   * Eliminates the need to duplicate scaling formulas in both talent and
+   * effect definitions.
+   */
+  getEffectParams?: (level: number) => Record<string, number>;
 
   // ---- active skill fields ----
 
@@ -528,9 +565,6 @@ export interface HeroConfig {
   physScaling?: { attr: AttrId; ratio: number }[];
   /** Which primary attributes contribute to MAG_POTENCY (→ MATK). */
   magScaling?: { attr: AttrId; ratio: number }[];
-  /** Priority-list AI rules for combat. If omitted, the hero uses basic
-   *  attack on a random enemy (empty rules = PriorityListIntent fallback). */
-  intentConfig?: PriorityRule[];
 }
 
 export interface StartingConfig {

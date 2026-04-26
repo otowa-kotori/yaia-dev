@@ -116,6 +116,11 @@ export interface PlayerCharacter extends Character {
    *  When a sustain is toggled on, its group is recorded here; toggling another
    *  sustain in the same group replaces the old one. (persisted) */
   activeSustains: Record<string, string>;
+  /** Equipped active/sustain talent ids. Only equipped talents can be used in
+   *  combat (intent reads from this list, tryUseTalent validates against it).
+   *  Basic attack is implicitly always available and does NOT occupy a slot.
+   *  Slot count is driven by ATTR.TALENT_SLOTS. (persisted) */
+  equippedTalents: string[];
 }
 
 // ---------- Enemy ----------

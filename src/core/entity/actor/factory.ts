@@ -100,6 +100,7 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     stageId: null,
     dungeonSessionId: null,
     activeSustains: {},
+    equippedTalents: [],
   };
   rebuildCharacterDerived(pc, opts.attrDefs);
   pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, opts.attrDefs);

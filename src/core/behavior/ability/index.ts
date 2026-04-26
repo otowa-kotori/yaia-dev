@@ -75,6 +75,16 @@ export function tryUseTalent(
     return fail("not_known");
   }
 
+  // For players, non-basic talents must be equipped to use in combat.
+  if (isPlayer(caster)) {
+    const pc = caster as PlayerCharacter;
+    const def0 = safeGetTalent(talentId);
+    // Basic attacks (tpCost 0) are implicitly always available.
+    if (def0 && def0.tpCost > 0 && !pc.equippedTalents.includes(talentId)) {
+      return fail("not_known", "talent not equipped");
+    }
+  }
+
   const def = safeGetTalent(talentId);
   if (!def) return fail("unknown_talent");
   const activeParams = def.getActiveParams?.(1);
