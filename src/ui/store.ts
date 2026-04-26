@@ -21,9 +21,8 @@ import {
   serialize,
   type SaveAdapter,
 } from "../core/save";
+import { ENABLE_DEBUG_PANEL, SAVE_KEY } from "../env";
 
-
-const SAVE_KEY = "yaia:save";
 const AUTOSAVE_INTERVAL_MS = 10_000;
 
 // ---------- Public interface ----------
@@ -394,10 +393,15 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     },
   }) as GameStore;
 
-  // Debug hook + flush-on-close. `window.__game` matches the old API so any
-  // devtools inspectors keep working.
+  // Debug hook is gated by release channel; flush-on-close stays enabled for
+  // every build so page close still persists reliably.
   if (typeof window !== "undefined") {
-    (window as unknown as { __game: GameStore }).__game = store;
+    const debugWindow = window as unknown as { __game?: GameStore };
+    if (ENABLE_DEBUG_PANEL) {
+      debugWindow.__game = store;
+    } else {
+      delete debugWindow.__game;
+    }
     window.addEventListener("beforeunload", () => {
       try {
         persistNowForced();

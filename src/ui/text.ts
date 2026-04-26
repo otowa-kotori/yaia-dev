@@ -212,6 +212,13 @@ export const T = {
   talentUnequipFailed: "技能卸下失败",
 
   // ── Settings ──
+  buildInfo: "构建信息",
+  releaseChannelLabel: "发布频道：",
+  releaseChannelDev: "开发版",
+  releaseChannelStable: "稳定版",
+  versionLabel: "版本号：",
+  saveNamespaceLabel: "存档命名空间：",
+  buildCommitLabel: "构建提交：",
   speed: "速度",
   pause: "暂停",
   dangerZone: "危险区域",

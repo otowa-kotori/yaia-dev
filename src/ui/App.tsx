@@ -15,6 +15,7 @@
 // the store. The store is created once (useMemo), shared to all children.
 
 import { useEffect, useMemo, useState } from "react";
+import { APP_VERSION, BUILD_SHA, ENABLE_DEBUG_PANEL, RELEASE_CHANNEL, SAVE_NAMESPACE } from "../env";
 import { DEFAULT_CONTENT } from "../content";
 import { getContent } from "../core/content";
 import { createGameStore, type GameStore } from "./store";
@@ -51,7 +52,8 @@ const containerStyle: React.CSSProperties = {
 
 type TabId = "map" | "log" | "inventory" | "crafting" | "xp" | "talents" | "upgrades" | "settings" | "debug";
 
-const SHOW_DEBUG_TAB = import.meta.env.DEV;
+const SHOW_DEBUG_TAB = ENABLE_DEBUG_PANEL;
+const RELEASE_CHANNEL_LABEL = RELEASE_CHANNEL === "dev" ? T.releaseChannelDev : T.releaseChannelStable;
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "map",       label: T.tab_map },
@@ -73,9 +75,23 @@ export function App() {
 
   return (
     <div style={containerStyle}>
-      <h1 style={{ margin: "0 0 12px", fontSize: 20, color: "#fff" }}>
-        YAIA
-      </h1>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 12,
+          marginBottom: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: 20, color: "#fff" }}>
+          YAIA
+        </h1>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>
+          {RELEASE_CHANNEL_LABEL} · v{APP_VERSION}
+        </div>
+      </div>
       <CatchUpOverlay store={store} />
       <CharacterBar store={store} />
       <TabBar activeTab={activeTab} onSelect={setActiveTab} />
@@ -432,6 +448,30 @@ function SettingsTab({ store }: { store: GameStore }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ background: "#222", borderRadius: 4, padding: 10 }}>
+        <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
+          {T.buildInfo}
+        </div>
+        <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
+          <div>
+            <span style={{ opacity: 0.6 }}>{T.releaseChannelLabel}</span>
+            {RELEASE_CHANNEL_LABEL}
+          </div>
+          <div>
+            <span style={{ opacity: 0.6 }}>{T.versionLabel}</span>
+            {APP_VERSION}
+          </div>
+          <div>
+            <span style={{ opacity: 0.6 }}>{T.saveNamespaceLabel}</span>
+            <code>{SAVE_NAMESPACE}</code>
+          </div>
+          <div>
+            <span style={{ opacity: 0.6 }}>{T.buildCommitLabel}</span>
+            <code>{BUILD_SHA}</code>
+          </div>
+        </div>
+      </div>
+
       {/* Speed */}
       <div style={{ background: "#222", borderRadius: 4, padding: 10 }}>
         <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>
