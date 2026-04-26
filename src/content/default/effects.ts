@@ -8,7 +8,7 @@ import {
   knightWarcryEffect,
 } from "../behaviors/effects/knight";
 
-/** ratio-power 破甲方案，详见 docs/design/combat-formula.md §2。 */
+/** return-to-line 物理伤害方案，详见 docs/design/combat-formula.md §2。 */
 export const strikeEffect: EffectDef = {
   id: "effect.combat.strike" as EffectId,
   kind: "instant",

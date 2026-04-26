@@ -31,11 +31,12 @@ describe("effect: instant", () => {
       currentTick: h.currentTick,
     });
 
-    // PATK=15, PDEF=1 → excess = max(0, 1/15 - 1) = 0 → 破甲 → armorCoeff ≈ 1
-    // 伤害 = floor(15 × 1.0) = 15
-    expect(damage).toBe(15);
-    expect(defender.currentHp).toBe(30 - 15);
+    // 默认 t=0.25, m=1.0
+    // x = 15 / 1 = 15 → damage = floor(1 × (14 + 0.25 / 15)) = 14
+    expect(damage).toBe(14);
+    expect(defender.currentHp).toBe(30 - 14);
   });
+
 
   test("emits 'damage' event", () => {
     const h = makeHarness();
@@ -47,8 +48,9 @@ describe("effect: instant", () => {
     expect(received.length).toBe(1);
     expect(received[0]!.attackerId).toBe("a");
     expect(received[0]!.targetId).toBe("b");
-    // PATK=12, PDEF=1 → excess=0 → damage=12
-    expect(received[0]!.amount).toBe(12);
+    // PATK=12, PDEF=1 → x=12 → damage = floor(1 × (11 + 0.25 / 12)) = 11
+    expect(received[0]!.amount).toBe(11);
+
   });
 
   test("currentHp is clamped to 0 on lethal damage", () => {

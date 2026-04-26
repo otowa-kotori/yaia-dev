@@ -40,23 +40,33 @@ export function evalFormula(ref: FormulaRef, ctx: FormulaContext): number {
     }
 
     case "phys_damage_v1": {
-      // 两步计算：
+      // return-to-line 方案：
       //   有效攻击 = PATK × skillMul
-      //   excess   = max(0, PDEF / 有效攻击 − 1)
-      //   破甲系数 = max(floor, K / (K + excess^p))
-      //   最终伤害 = ⌊有效攻击 × 破甲系数⌋
-      const patk     = varOrZero(vars, "patk");
-      const pdef     = varOrZero(vars, "pdef");
+      //   x = 有效攻击 / PDEF
+      //   y = t × x^a                      , x <= 1
+      //   y = (x - 1) + t / (1 + m(x - 1)), x > 1
+      //   a = (1 - t × m) / t
+      //   最终伤害 = ⌊PDEF × y⌋
+      const patk = varOrZero(vars, "patk");
+      const pdef = varOrZero(vars, "pdef");
       const skillMul = ref.skillMul ?? 1;
-      const K        = ref.K ?? 0.8;
-      const p        = ref.p ?? 1.5;
-      const fl       = ref.floor ?? 0.1;
+      const t = ref.t ?? 0.25;
+      const m = ref.m ?? 1.0;
       const effectiveAtk = patk * skillMul;
       if (effectiveAtk <= 0) return 0;
-      const excess = Math.max(0, pdef / effectiveAtk - 1);
-      const armorCoeff = Math.max(fl, K / (K + Math.pow(excess, p)));
-      return Math.floor(effectiveAtk * armorCoeff);
+      if (pdef <= 0) return Math.floor(effectiveAtk);
+      if (!(t > 0 && t < 1)) {
+        throw new Error(`phys_damage_v1: t must be in (0, 1), got ${t}`);
+      }
+      if (!(m > 0 && m < 1 / t)) {
+        throw new Error(`phys_damage_v1: m must be in (0, ${1 / t}), got ${m}`);
+      }
+      const x = effectiveAtk / pdef;
+      const a = (1 - t * m) / t;
+      const y = x <= 1 ? t * Math.pow(x, a) : (x - 1) + t / (1 + m * (x - 1));
+      return Math.floor(pdef * y);
     }
+
 
     case "magic_damage_v1": {
       // 最终伤害 = ⌊MATK × skillMul × (1 − MRES)⌋

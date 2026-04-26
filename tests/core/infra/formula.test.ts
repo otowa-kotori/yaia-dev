@@ -97,29 +97,42 @@ describe("formula", () => {
     expect(evalFormula(f, { vars: { lvl: 5 } })).toBe(183);
   });
 
-  test("phys_damage_v1: 已破甲时伤害 = floor(PATK × skillMul)", () => {
-    // PATK=15, PDEF=1 → excess=max(0,1/15-1)=0 → armorCoeff=1 → damage=15
+  test("phys_damage_v1: PDEF<=0 时视为无甲", () => {
     const f: FormulaRef = { kind: "phys_damage_v1" };
-    expect(evalFormula(f, { vars: { patk: 15, pdef: 1 } })).toBe(15);
+    expect(evalFormula(f, { vars: { patk: 15, pdef: 0 } })).toBe(15);
   });
 
-  test("phys_damage_v1: PDEF > PATK 时衰减明显", () => {
-    // PATK=10, PDEF=20 → excess=max(0,20/10-1)=1
-    // armorCoeff = max(0.1, 0.8/(0.8+1^1.5)) = 0.8/1.8 ≈ 0.444
-    // damage = floor(10 × 0.444) = 4
+  test("phys_damage_v1: x=1 时命中阈值伤害", () => {
+    // 默认 t=0.25, m=1 → x=1 时 y=t=0.25
+    // PATK=10, PDEF=10 → damage = floor(10 × 0.25) = 2
     const f: FormulaRef = { kind: "phys_damage_v1" };
-    const damage = evalFormula(f, { vars: { patk: 10, pdef: 20 } });
-    expect(damage).toBe(4);
+    expect(evalFormula(f, { vars: { patk: 10, pdef: 10 } })).toBe(2);
   });
 
-  test("phys_damage_v1: skillMul < 1 时有效攻击降低，破甲系数也降低", () => {
-    // 有效攻击 = 40 × 0.65 = 26, PDEF=35
-    // excess = max(0, 35/26 - 1) ≈ 0.346
-    // armorCoeff = 0.8/(0.8+0.346^1.5) ≈ 0.8/0.804 ≈ 0.87 (但多段更弱)
-    const f: FormulaRef = { kind: "phys_damage_v1", skillMul: 0.65 };
-    const damage = evalFormula(f, { vars: { patk: 40, pdef: 35 } });
-    expect(damage).toBeGreaterThan(0);
-    expect(damage).toBeLessThan(26);
+  test("phys_damage_v1: 破甲前增长慢", () => {
+    // x = 8 / 10 = 0.8, a = (1 - 0.25 × 1) / 0.25 = 3
+    // y = 0.25 × 0.8^3 = 0.128
+    // damage = floor(10 × 0.128) = 1
+    const f: FormulaRef = { kind: "phys_damage_v1" };
+    expect(evalFormula(f, { vars: { patk: 8, pdef: 10 } })).toBe(1);
+  });
+
+  test("phys_damage_v1: 破甲后逐步回归减法直觉", () => {
+    // x = 12 / 10 = 1.2
+    // y = (1.2 - 1) + 0.25 / (1 + 1 × 0.2) = 0.4083...
+    // damage = floor(10 × 0.4083...) = 4
+    const f: FormulaRef = { kind: "phys_damage_v1" };
+    expect(evalFormula(f, { vars: { patk: 12, pdef: 10 } })).toBe(4);
+  });
+
+  test("phys_damage_v1: skillMul < 1 时有效攻击降低，伤害也明显降低", () => {
+    const base: FormulaRef = { kind: "phys_damage_v1" };
+    const multiHit: FormulaRef = { kind: "phys_damage_v1", skillMul: 0.65 };
+    const normalDamage = evalFormula(base, { vars: { patk: 40, pdef: 35 } });
+    const reducedDamage = evalFormula(multiHit, { vars: { patk: 40, pdef: 35 } });
+    expect(normalDamage).toBe(12);
+    expect(reducedDamage).toBe(3);
+    expect(reducedDamage).toBeLessThan(normalDamage);
   });
 
   test("phys_damage_v1: patk=0 返回 0", () => {
@@ -127,13 +140,27 @@ describe("formula", () => {
     expect(evalFormula(f, { vars: { patk: 0, pdef: 10 } })).toBe(0);
   });
 
-  test("phys_damage_v1: floor 保底生效", () => {
-    // PATK=1, PDEF=10000 → 极高 excess → armorCoeff 趋近 floor=0.1
+  test("phys_damage_v1: 极高护甲允许打成 0", () => {
     const f: FormulaRef = { kind: "phys_damage_v1" };
-    const damage = evalFormula(f, { vars: { patk: 1, pdef: 10000 } });
-    // 保底 floor(1 × 0.1) = 0，floor 是倍率，不是绝对值下限
-    // 所以这里 damage 可能是 0，不违反设计
-    expect(damage).toBeGreaterThanOrEqual(0);
+    expect(evalFormula(f, { vars: { patk: 1, pdef: 100 } })).toBe(0);
+  });
+
+  test("phys_damage_v1: 自定义 t/m 会改变阈值和回归速度", () => {
+    // t=0.2, m=1.5 时，a = (1 - 0.2 × 1.5) / 0.2 = 3.5
+    // x = 15 / 10 = 1.5
+    // y = 0.5 + 0.2 / (1 + 1.5 × 0.5) = 0.614285...
+    // damage = floor(10 × 0.614285...) = 6
+    const f: FormulaRef = { kind: "phys_damage_v1", t: 0.2, m: 1.5 };
+    expect(evalFormula(f, { vars: { patk: 15, pdef: 10 } })).toBe(6);
+  });
+
+  test("phys_damage_v1: 非法参数直接抛错", () => {
+    expect(() => {
+      evalFormula({ kind: "phys_damage_v1", t: 1 }, { vars: { patk: 10, pdef: 10 } });
+    }).toThrow();
+    expect(() => {
+      evalFormula({ kind: "phys_damage_v1", t: 0.25, m: 4 }, { vars: { patk: 10, pdef: 10 } });
+    }).toThrow();
   });
 
   test("magic_damage_v1: 基础计算", () => {

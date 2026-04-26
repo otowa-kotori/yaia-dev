@@ -46,8 +46,9 @@ describe("talent: tryUseTalent", () => {
     const target = makeSlime("m"); // hp 30, PDEF 1
     const r = tryUseTalent(caster, basicAttackTalent.id, [target], { ...h });
     expect(r.ok).toBe(true);
-    // phys_damage_v1: PATK=10, PDEF=1 → excess=0 → damage=10
-    expect(target.currentHp).toBe(30 - 10);
+    // phys_damage_v1: PATK=10, PDEF=1 → x=10 → damage = floor(1 × (9 + 0.25 / 10)) = 9
+    expect(target.currentHp).toBe(30 - 9);
+
   });
 
   test("insufficient MP fails and does NOT consume mp or set cooldown", () => {
