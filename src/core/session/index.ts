@@ -41,6 +41,7 @@ import {
   type GameState,
   type DungeonSession,
 } from "../infra/state";
+
 import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
 import { getCombatZone, getItem, getLocation, getRecipe, getSkill, getDungeon, setContent } from "../content";
@@ -110,6 +111,7 @@ interface DungeonActivityData extends Record<string, unknown> {
   currentBattleId: string | null;
   transitionTick: number;
 }
+
 
 interface GatherActivityData extends Record<string, unknown> {
   nodeId: string;
@@ -928,19 +930,29 @@ export function createGameSession(
     // Rehydrate dungeon world activities from state.dungeons.
     for (const [dsId, ds] of Object.entries(state.dungeons)) {
       if (ds.status !== "in_progress") continue;
+
+      const partyLeader = ds.partyCharIds
+        .map((charId) => state.actors.find((actor) => actor.id === charId))
+        .find((actor): actor is PlayerCharacter => !!actor && isPlayer(actor));
+      const heroActivity = partyLeader?.activity?.kind === ACTIVITY_DUNGEON_KIND
+        ? (partyLeader.activity.data as DungeonActivityData)
+        : null;
+
       const da = createDungeonActivity({
         dungeonSessionId: dsId,
         ctxProvider: buildCtx,
         restoreParty: () => restoreDungeonParty(dsId, { state }),
         resume: {
-          phase: "spawningWave", // conservative: restart from spawning
-          currentBattleId: null,
-          transitionTick: engine.currentTick,
+          phase: heroActivity?.phase ?? ds.phase,
+          currentBattleId: heroActivity?.currentBattleId ?? null,
+          transitionTick: heroActivity?.transitionTick ?? ds.transitionTick,
+
         },
       });
       dungeonActivities.set(dsId, da);
       engine.register(da);
     }
+
 
     // Rehydrate activities for each character.
     // Combat activities are now WorldActivities keyed by stageId — deduplicate.
@@ -967,6 +979,8 @@ export function createGameSession(
             currentBattleId: data.currentBattleId,
             lastTransitionTick: data.lastTransitionTick,
           },
+
+
         });
         combatActivities.set(data.stageId, ca);
         cc._activity = ca;
@@ -1188,9 +1202,13 @@ export function createGameSession(
       savedActivities,
       currentWaveIndex: 0,
       status: "in_progress",
+      phase: "spawningWave",
+      transitionTick: engine.currentTick,
       startedAtTick: engine.currentTick,
       stageId,
     };
+
+
     state.dungeons[dungeonSessionId] = ds;
 
     // Point all characters to the dungeon.
@@ -1209,6 +1227,8 @@ export function createGameSession(
           transitionTick: engine.currentTick,
         },
       };
+
+
     }
 
     // Create and register the DungeonWorldActivity.

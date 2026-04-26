@@ -1,10 +1,10 @@
 // CombatActivity — party combat in a combat zone (infinite loop).
 //
 // This is strictly the ACTIVITY layer: it drives battle ticks, handles
-// hero recovery, explicitly requests enemy searches, and issues stop cleanup.
-// The ACTOR POPULATION of the instance (spawning/searching waves of enemies)
-// is the StageController's job — CombatActivity just looks at the world and
-// fights whatever enemies are currently in the running instance.
+// inter-wave recovery, explicitly requests enemy searches, and issues stop
+// cleanup. The ACTOR POPULATION of the instance (spawning/searching waves of
+// enemies) is the StageController's job — CombatActivity just looks at the
+// world and fights whatever enemies are currently in the running instance.
 //
 // Party model (unified with DungeonActivity):
 //   CombatActivity is a WorldActivity keyed by a shared stageId. It holds
@@ -14,16 +14,17 @@
 //
 // State machine:
 //
-//   searchingEnemies — actively looking for the next combat zone wave.
+//   searchingEnemies — fixed 5s search / rest window between waves.
 //     | enemies appear -> fighting
 //     | stopRequested   -> stopped
 //   fighting          — a Battle is active; delegate ticks to tickBattle.
-//     | battle ends players_won -> searchingEnemies / recovering
-//     | battle ends enemies_won -> recovering
+//     | battle ends players_won -> searchingEnemies
+//     | battle ends enemies_won / any hero dead -> deathRecovering
 //     | stopRequested (and battle ends) -> stopped
-//   recovering        — party HP too low after battle. Regen HP per tick until full.
-//     | party full-hp -> searchingEnemies
-//     | stopRequested (at full-hp) -> stopped
+//   deathRecovering   — a death penalty timer. Living heroes refill via a
+//                       temporary regen effect; dead heroes wait for the timer.
+//     | timer finished -> searchingEnemies
+//     | stopRequested  -> stopped
 //   stopped           — terminal.
 //
 // Kill rewards flow via the bus — CombatActivity subscribes to 'kill' for
@@ -63,6 +64,14 @@ import {
 import { mintBattleId } from "../../runtime-ids";
 import type { StageSession } from "../stage/types";
 import type { WorldActivity, ActivityContext } from "./types";
+import {
+  COMBAT_ZONE_RECOVERY_RULES,
+  PHASE_RECOVERY_SOURCE_PREFIX,
+  applyActorResourceRegen,
+  clearPhaseRecoveryEffects,
+  ensurePhaseRecoveryEffect,
+  restoreActorToFull,
+} from "./recovery";
 
 export const ACTIVITY_COMBAT_KIND = "activity.combat";
 
@@ -72,8 +81,6 @@ export interface CombatActivityOptions {
   /** Character ids participating. Solo = [heroId]. */
   partyCharIds: string[];
   ctxProvider: () => ActivityContext;
-  /** HP regen per tick during `recovering`, in [0, 1]. Default 0.02. */
-  recoverHpPctPerTick?: number;
   /** Pre-set initial state for load-from-save. */
   resume?: {
     phase: CombatActivityPhase;
@@ -85,7 +92,7 @@ export interface CombatActivityOptions {
 export type CombatActivityPhase =
   | "searchingEnemies"
   | "fighting"
-  | "recovering"
+  | "deathRecovering"
   | "stopped";
 
 export interface CombatActivity extends WorldActivity {
@@ -104,11 +111,6 @@ export interface CombatActivity extends WorldActivity {
 export function createCombatActivity(
   opts: CombatActivityOptions,
 ): CombatActivity {
-  // 0.02 = ~50 ticks (5s @ 10Hz) to full-heal from zero, a floor tuning
-  // choice. Session does not pass this any more; if it ever needs to be
-  // per-stage, expose it via content.
-  const recoverHp = opts.recoverHpPctPerTick ?? 0.02;
-
   const initialCtx = opts.ctxProvider();
   const resume = opts.resume;
 
@@ -127,6 +129,7 @@ export function createCombatActivity(
       // Fresh-start reset only. The resume path (opts.resume set) never hits
       // onStart because the caller skips it when rehydrating from a save.
       for (const hero of getPartyHeroes(activity, ctx.state)) {
+        clearPhaseRecoveryEffects(hero);
         hero.currentHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
         hero.currentMp = getAttr(hero, ATTR.MAX_MP, ctx.attrDefs);
         // Clear temporary effects (finite-duration combat buffs/debuffs) but
@@ -142,9 +145,7 @@ export function createCombatActivity(
 
     tick() {
       const ctx = opts.ctxProvider();
-      stepPhase(activity, ctx, {
-        recoverHpPctPerTick: recoverHp,
-      });
+      stepPhase(activity, ctx);
     },
 
     isDone() {
@@ -164,36 +165,30 @@ export function createCombatActivity(
 
 // ---------- State machine ----------
 
-interface StepParams {
-  recoverHpPctPerTick: number;
-}
-
 function stepPhase(
   activity: CombatActivity,
   ctx: ActivityContext,
-  params: StepParams,
 ): void {
   switch (activity.phase) {
     case "searchingEnemies":
-      stepSearching(activity, ctx, params);
+      stepSearching(activity, ctx);
       return;
     case "fighting":
-      stepFighting(activity, ctx, params);
+      stepFighting(activity, ctx);
       return;
-    case "recovering":
-      stepRecovering(activity, ctx, params);
+    case "deathRecovering":
+      stepDeathRecovering(activity, ctx);
       return;
     case "stopped":
       return;
   }
 }
 
-/** While searching, request the next wave search if needed and poll the current
- *  stage for alive enemies. When any appear, open a battle against them. */
+/** While searching, request the next wave search if needed, apply the temporary
+ *  inter-wave regen buff, and poll the current stage for alive enemies. */
 function stepSearching(
   activity: CombatActivity,
   ctx: ActivityContext,
-  _params: StepParams,
 ): void {
   if (activity.stopRequested) {
     enterStopped(activity, ctx);
@@ -202,10 +197,17 @@ function stepSearching(
   const session = ctx.state.stages[activity.stageId];
   if (!session) return;
 
-  if (!session.currentWave && !session.pendingCombatWaveSearch && session.mode.kind === "combatZone") {
-    const zone = getCombatZone(session.mode.combatZoneId);
-    beginCombatWaveSearch(zone, session, ctx.currentTick);
+  const heroes = getPartyHeroes(activity, ctx.state);
+  if (heroes.length === 0) {
+    enterStopped(activity, ctx);
+    return;
   }
+
+  if (!session.currentWave && !session.pendingCombatWaveSearch && session.mode.kind === "combatZone") {
+    beginCombatWaveSearch(session, ctx.currentTick);
+  }
+
+  applyCombatZoneInterWaveRecovery(activity, heroes, ctx);
 
   const enemies = stageEnemies(session, ctx.state).filter((e) => e.currentHp > 0);
   if (enemies.length === 0) return;
@@ -216,11 +218,10 @@ function stepSearching(
 function stepFighting(
   activity: CombatActivity,
   ctx: ActivityContext,
-  _params: StepParams,
 ): void {
   const battle = lookupBattle(activity, ctx.state);
   if (!battle) {
-    // Lost the battle reference somehow — fall back to searching.
+    // Lost the battle reference somehow — fall back to the search/rest phase.
     activity.phase = "searchingEnemies";
     activity.currentBattleId = null;
     syncCombatToHeroes(activity, ctx.state);
@@ -280,41 +281,51 @@ function stepFighting(
     return;
   }
 
-  activity.phase = partyNeedsRecovery(activity, heroes, ctx)
-    ? "recovering"
+  activity.phase = partyHasDeaths(heroes)
+    ? "deathRecovering"
     : "searchingEnemies";
   syncCombatToHeroes(activity, ctx.state);
 }
 
-function stepRecovering(
+function stepDeathRecovering(
   activity: CombatActivity,
   ctx: ActivityContext,
-  params: StepParams,
 ): void {
+  if (activity.stopRequested) {
+    enterStopped(activity, ctx);
+    return;
+  }
+
   const heroes = getPartyHeroes(activity, ctx.state);
   if (heroes.length === 0) {
     enterStopped(activity, ctx);
     return;
   }
 
-  let allFull = true;
   for (const hero of heroes) {
-    const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
-    if (maxHp <= 0) continue;
-    const per = Math.max(1, Math.floor(maxHp * params.recoverHpPctPerTick));
-    hero.currentHp = Math.min(maxHp, hero.currentHp + per);
-    if (hero.currentHp < maxHp) allFull = false;
+    ensurePhaseRecoveryEffect(hero, ctx, {
+      sourceId: deathRecoverySourceId(activity, hero.id),
+      totalTicks: COMBAT_ZONE_RECOVERY_RULES.deathRespawnTicks,
+      hpPct: 1,
+      mpPct: 1,
+    });
+    applyActorResourceRegen(hero, ctx);
   }
 
-  if (allFull) {
-    if (activity.stopRequested) {
-      enterStopped(activity, ctx);
-      return;
-    }
-    activity.phase = "searchingEnemies";
-    activity.lastTransitionTick = ctx.currentTick;
+  const elapsed = Math.max(0, ctx.currentTick - activity.lastTransitionTick);
+  if (elapsed < COMBAT_ZONE_RECOVERY_RULES.deathRespawnTicks) {
     syncCombatToHeroes(activity, ctx.state);
+    return;
   }
+
+  clearCombatRecoveryEffects(activity, ctx.state);
+  for (const hero of heroes) {
+    restoreActorToFull(hero, ctx);
+  }
+
+  activity.phase = "searchingEnemies";
+  activity.lastTransitionTick = ctx.currentTick;
+  syncCombatToHeroes(activity, ctx.state);
 }
 
 // ---------- Battle setup ----------
@@ -326,6 +337,8 @@ function openBattle(
 ): void {
   const heroes = getPartyHeroes(activity, ctx.state);
   if (heroes.length === 0) return;
+
+  clearCombatRecoveryEffects(activity, ctx.state);
 
   const session = ctx.state.stages[activity.stageId];
   if (!session?.currentWave) {
@@ -522,26 +535,53 @@ function lookupBattle(
   return state.battles.find((b) => b.id === activity.currentBattleId) ?? null;
 }
 
-function partyNeedsRecovery(
-  activity: CombatActivity,
-  heroes: PlayerCharacter[],
-  ctx: ActivityContext,
-): boolean {
-  const session = ctx.state.stages[activity.stageId];
-  if (!session || session.mode.kind !== "combatZone") return false;
-  const zone = getCombatZone(session.mode.combatZoneId);
-  const threshold = zone.recoverBelowHpFactor ?? 0;
-  if (threshold <= 0) return false;
+function partyHasDeaths(heroes: readonly PlayerCharacter[]): boolean {
+  return heroes.some((hero) => hero.currentHp <= 0);
+}
 
+function applyCombatZoneInterWaveRecovery(
+  activity: CombatActivity,
+  heroes: readonly PlayerCharacter[],
+  ctx: ActivityContext,
+): void {
   for (const hero of heroes) {
-    if (hero.currentHp <= 0) return true;
-    const maxHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
-    if (maxHp > 0 && hero.currentHp / maxHp <= threshold) return true;
+    ensurePhaseRecoveryEffect(hero, ctx, {
+      sourceId: searchRecoverySourceId(activity, hero.id),
+      totalTicks: COMBAT_ZONE_RECOVERY_RULES.searchTicks,
+      hpPct: COMBAT_ZONE_RECOVERY_RULES.interWaveRecoverHpPct,
+      mpPct: COMBAT_ZONE_RECOVERY_RULES.interWaveRecoverMpPct,
+    });
+    applyActorResourceRegen(hero, ctx);
   }
-  return false;
+
+  syncCombatToHeroes(activity, ctx.state);
+}
+
+function searchRecoverySourceId(
+  activity: CombatActivity,
+  actorId: string,
+): string {
+  return `${PHASE_RECOVERY_SOURCE_PREFIX}combat.search:${activity.id}:${actorId}`;
+}
+
+function deathRecoverySourceId(
+  activity: CombatActivity,
+  actorId: string,
+): string {
+  return `${PHASE_RECOVERY_SOURCE_PREFIX}combat.death:${activity.id}:${actorId}`;
+}
+
+function clearCombatRecoveryEffects(
+  activity: CombatActivity,
+  state: GameState,
+): void {
+  for (const hero of getPartyHeroes(activity, state)) {
+    clearPhaseRecoveryEffects(hero);
+  }
 }
 
 function enterStopped(activity: CombatActivity, ctx: ActivityContext): void {
+  clearCombatRecoveryEffects(activity, ctx.state);
   activity.phase = "stopped";
   activity.currentBattleId = null;
   // Clear activity reference on all party heroes.

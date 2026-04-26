@@ -337,10 +337,11 @@ export interface SkillDef {
 // Three-layer model:
 //   LocationDef   — "where am I" (physical place / map area)
 //   LocationEntry — "what can I do here" (combat / gather / npc entries)
-//   CombatZoneDef  — "how does this fight work" (waves, rewards, thresholds)
+//   CombatZoneDef  — "how does this fight work" (waves, rewards,队伍限制)
 //
 // CombatZoneDef is a top-level ContentDb citizen so it can be looked up by
 // id without knowing which Location it belongs to.
+
 
 export type CombatZoneWaveSelection = "random";
 
@@ -374,11 +375,6 @@ export interface CombatZoneDef {
   waves: WaveDef[];
   /** Selection strategy hook for future zone-specific logic. */
   waveSelection?: CombatZoneWaveSelection;
-  /** Ticks spent searching before the next combat wave may spawn. */
-  waveSearchTicks?: number;
-  /** After a battle ends, pause to heal if HP ratio is at or below this threshold.
-   *  Different difficulty zones can use different thresholds. */
-  recoverBelowHpFactor?: number;
   /** Minimum party size required to enter this combat zone. */
   minPartySize?: number;
   /** Maximum party size allowed in this combat zone. */
@@ -386,6 +382,7 @@ export interface CombatZoneDef {
   /** Which skill's XP this combat zone grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
 }
+
 
 
 // ---------- Dungeons ----------
@@ -408,10 +405,6 @@ export interface DungeonDef {
   name: string;
   /** Fixed-order wave sequence. Players fight wave[0], then wave[1], etc. */
   waves: DungeonWaveDef[];
-  /** After each wave, heal if HP ratio is at or below this threshold. */
-  recoverBelowHpFactor: number;
-  /** Ticks to wait between waves (transition / search animation). */
-  waveTransitionTicks: number;
   /** Bonus rewards granted on full dungeon completion. */
   completionRewards?: WaveRewardDef;
   /** Minimum party size required to enter. */
@@ -419,6 +412,7 @@ export interface DungeonDef {
   /** Maximum party size allowed. */
   maxPartySize?: number;
 }
+
 // ---------- Location entries ----------
 
 export type LocationEntryDef =

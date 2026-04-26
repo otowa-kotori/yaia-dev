@@ -204,8 +204,9 @@ function DungeonCombatPanel({
     .map((id) => store.state.actors.find((a) => a.id === id))
     .filter((a): a is PlayerCharacter => a !== undefined && isPlayer(a));
 
-  const phase = inferDungeonPhase(ds, stage, partyHeroes);
+  const phase = ds.phase;
   const phaseLabel = dungeonPhaseLabel(phase);
+
 
   const enemies = stage
     ? (stage.currentWave?.enemyIds ?? stage.spawnedActorIds)
@@ -354,8 +355,9 @@ function PanelHeader({ phaseLabel }: { phaseLabel: string }) {
 function PhaseBadge({ label, phase }: { label: string; phase: string }) {
   const color =
     phase === "fighting" || phase === T.inCombat ? "#58A6FF"
-    : phase === "recovering" || phase === T.recovering ? "#F0C674"
+    : phase === "deathRecovering" || phase === T.deathRecovering || phase === "waveResting" || phase === T.dungeonPhase_waveResting ? "#F0C674"
     : phase === T.dungeonPhase_waveCleared || phase === T.dungeonPhase_completed ? "#3FB950"
+
     : phase === T.dungeonPhase_failed || phase === T.dungeonPhase_abandoned ? "#F85149"
     : "#8B949E";
   return (
@@ -467,44 +469,33 @@ function getAtbPct(battle: Battle, actorId: string): number {
 
 function combatPhaseLabel(phase: string): string {
   switch (phase) {
-    case "recovering": return T.recovering;
+    case "deathRecovering": return T.deathRecovering;
     case "searchingEnemies": return T.searchingEnemies;
     case "fighting": return T.inCombat;
     default: return T.stopped;
   }
 }
 
+
 // ── Dungeon phase inference (moved from DungeonStatusPanel) ──
 
 type DungeonPhase =
   | "spawningWave" | "fighting" | "waveCleared"
-  | "recovering" | "completed" | "failed" | "abandoned";
-
-function inferDungeonPhase(
-  ds: DungeonSession,
-  stage: StageSession | null,
-  party: PlayerCharacter[],
-): DungeonPhase {
-  if (ds.status !== "in_progress") return ds.status as DungeonPhase;
-  if (stage?.currentWave?.status === "active") return "fighting";
-  if (stage?.currentWave?.status === "victory") return "waveCleared";
-  if (stage?.currentWave?.status === "defeat") return "failed";
-  if (ds.currentWaveIndex > 0 && party.some((h) => h.currentHp <= 0)) return "recovering";
-  return "spawningWave";
-}
+  | "waveResting" | "completed" | "failed" | "abandoned";
 
 function dungeonPhaseLabel(phase: DungeonPhase): string {
   const map: Record<DungeonPhase, string> = {
     spawningWave: T.dungeonPhase_spawningWave,
     fighting: T.dungeonPhase_fighting,
     waveCleared: T.dungeonPhase_waveCleared,
-    recovering: T.dungeonPhase_recovering,
+    waveResting: T.dungeonPhase_waveResting,
     completed: T.dungeonPhase_completed,
     failed: T.dungeonPhase_failed,
     abandoned: T.dungeonPhase_abandoned,
   };
   return map[phase];
 }
+
 
 // ── Styles ──
 

@@ -59,8 +59,9 @@ export const T = {
 
   // ── Battle view ──
   pickLocation: "选择一个地点开始冒险。",
-  recovering: "恢复生命中...",
-  searchingEnemies: "搜索敌人中...",
+  deathRecovering: "死亡恢复中...",
+  searchingEnemies: "搜索敌人中（休整）...",
+
   inCombat: "战斗中",
   stopped: "已停止",
   enemies: "敌人",
@@ -71,8 +72,9 @@ export const T = {
 
   // ── Hero card / dungeon ──
   status_hero_inCombat: "战斗中",
-  status_hero_recovering: "恢复中",
-  status_hero_searching: "搜索中",
+  status_hero_deathRecovering: "死亡恢复中",
+  status_hero_searching: "搜索/休整中",
+
   status_hero_idle: "待命",
   status_hero_gathering: "采集中",
   status_hero_dungeon: "副本中",
@@ -102,7 +104,8 @@ export const T = {
   dungeonPhase_spawningWave: "准备下一波",
   dungeonPhase_fighting: "战斗中",
   dungeonPhase_waveCleared: "波次已清理",
-  dungeonPhase_recovering: "波间恢复",
+  dungeonPhase_waveResting: "波间休整",
+
   dungeonPhase_completed: "已通关",
   dungeonPhase_failed: "挑战失败",
   dungeonPhase_abandoned: "已放弃",

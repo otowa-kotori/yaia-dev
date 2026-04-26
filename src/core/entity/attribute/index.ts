@@ -310,7 +310,10 @@ export function removeDynamicProvider(
 export const ATTR = {
   MAX_HP:  "attr.max_hp"  as AttrId,
   MAX_MP:  "attr.max_mp"  as AttrId,
+  HP_REGEN: "attr.hp_regen" as AttrId,
+  MP_REGEN: "attr.mp_regen" as AttrId,
   STR:     "attr.str"     as AttrId,
+
   DEX:     "attr.dex"     as AttrId,
   INT:     "attr.int"     as AttrId,
   SPEED:   "attr.speed"   as AttrId,

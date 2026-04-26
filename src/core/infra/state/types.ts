@@ -79,6 +79,16 @@ export interface DungeonSavedCharState {
   activity: CharacterActivityState | null;
 }
 
+export type DungeonSessionPhase =
+
+  | "spawningWave"
+  | "fighting"
+  | "waveCleared"
+  | "waveResting"
+  | "completed"
+  | "failed"
+  | "abandoned";
+
 export interface DungeonSession {
   dungeonId: string;
   /** Character ids participating in this dungeon run. */
@@ -89,10 +99,16 @@ export interface DungeonSession {
   currentWaveIndex: number;
   /** Overall dungeon run status. */
   status: "in_progress" | "completed" | "failed" | "abandoned";
+  /** Current runtime phase for save / UI / rehydrate. */
+  phase: DungeonSessionPhase;
+  /** Tick at which the current phase started. */
+  transitionTick: number;
   startedAtTick: number;
+
   /** The shared stage instance id for this dungeon run. */
   stageId: string;
 }
+
 // ---------- WorldRecord (cross-run permanent progress) ----------
 //
 // Stored alongside GameState but semantically separate: WorldRecord survives

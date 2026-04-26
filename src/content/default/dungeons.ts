@@ -5,8 +5,6 @@ import { direWolf, duskWolf, blackfangAlpha, caveBat, oreCrab } from "./monsters
 export const wolfDenDungeon: DungeonDef = {
   id: "dungeon.twilight.wolf_den" as DungeonId,
   name: "狼穴",
-  recoverBelowHpFactor: 0.6,
-  waveTransitionTicks: 10,
   minPartySize: 1,
   maxPartySize: 3,
   waves: [
@@ -31,8 +29,6 @@ export const wolfDenDungeon: DungeonDef = {
 export const blackfangSanctumDungeon: DungeonDef = {
   id: "dungeon.boss.blackfang_sanctum" as DungeonId,
   name: "黑牙兽巢",
-  recoverBelowHpFactor: 0.7,
-  waveTransitionTicks: 12,
   minPartySize: 1,
   maxPartySize: 3,
   waves: [

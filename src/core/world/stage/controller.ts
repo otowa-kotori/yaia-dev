@@ -29,6 +29,8 @@ import {
 } from "../../entity/actor";
 import type { AttrDef, CombatZoneDef, WaveDef } from "../../content/types";
 import { getCombatZone, getMonster, getResourceNode } from "../../content/registry";
+import { COMBAT_ZONE_RECOVERY_RULES } from "../activity/recovery";
+
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import {
@@ -66,10 +68,9 @@ export interface CreateStageControllerOptions {
   resume?: boolean;
 }
 
-export const DEFAULT_WAVE_SEARCH_TICKS = 20;
-
 /** Enter an instance: create session, spawn initial population, return a
  *  Tickable controller you should register on the tick engine. */
+
 export function enterStage(opts: CreateStageControllerOptions): StageController {
   const mode: StageMode = opts.mode ?? { kind: "gather" };
   const stageId = opts.stageId;
@@ -129,21 +130,17 @@ export function leaveStage(stageId: string, ctx: StageControllerContext): void {
 }
 
 export function beginCombatWaveSearch(
-  zone: CombatZoneDef,
   session: StageSession,
   currentTick: number,
 ): void {
   if (session.currentWave) return;
   if (session.pendingCombatWaveSearch) return;
-  const waveSearchTicks = Math.max(
-    0,
-    zone.waveSearchTicks ?? DEFAULT_WAVE_SEARCH_TICKS,
-  );
   session.pendingCombatWaveSearch = {
     startedAtTick: currentTick,
-    readyAtTick: currentTick + waveSearchTicks,
+    readyAtTick: currentTick + COMBAT_ZONE_RECOVERY_RULES.searchTicks,
   };
 }
+
 
 // ---------- Step ----------
 

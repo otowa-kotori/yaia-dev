@@ -22,7 +22,9 @@ import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
 import type { Character } from "../../entity/actor";
 import { isAlive, isCharacter, isEnemy, isPlayer } from "../../entity/actor";
+import { applyTickResourceRegen } from "../../entity/resource";
 import { tryUseTalent, type CastResult } from "../../behavior/ability";
+
 import { processActionEffects } from "../../behavior/effect";
 import {
   createAtbScheduler,
@@ -165,8 +167,12 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
   if (battle.outcome !== "ongoing") return;
 
   let participants = resolveParticipants(battle, ctx.state);
+  for (const participant of participants) {
+    applyTickResourceRegen(participant, ctx.attrDefs);
+  }
   emitNewDeaths(battle, participants, ctx);
   maybeTerminate(battle, participants, ctx);
+
   if (battle.outcome !== "ongoing") return;
 
   const schedCtx: SchedulerContext = { attrDefs: ctx.attrDefs };
@@ -235,7 +241,8 @@ function runActorActionWindow(
     participants,
     ctx,
   );
-  emitPlannedActionResult(battle, actor, plannedAction, result, ctx);
+  emitPlannedActionResult(battle, actor, result, ctx);
+
 
   // Decrement all cooldowns by 1 after the actor's action resolves.
   decrementCooldowns(actor);
@@ -341,10 +348,10 @@ function executePlannedAction(
 function emitPlannedActionResult(
   battle: Battle,
   actor: Character,
-  plannedAction: PlannedAction,
   result: CastResult,
   ctx: TickBattleContext,
 ): void {
+
 
   if (result.ok) {
     ctx.bus.emit("battleActionResolved", {

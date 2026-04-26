@@ -36,8 +36,9 @@ export function DungeonStatusPanel({
   const dungeon = getContent().dungeons[session.dungeonId] ?? null;
   const stage = store.state.stages[session.stageId] ?? null;
   const party = getPartyMembers(store, session);
-  const phase = inferDungeonPhase(session, stage, party);
+  const phase = session.phase;
   const phaseLabel = getDungeonPhaseLabel(phase);
+
   const enemies = getDungeonEnemies(store, stage);
   const localLog = getDungeonLogEntries(store.state.gameLog, heroId);
   const totalWaves = dungeon?.waves.length ?? Math.max(1, session.currentWaveIndex + 1);
@@ -119,12 +120,11 @@ export function getCharacterDungeonStatusLabel(
   }
 
   const session = store.state.dungeons[hero.dungeonSessionId] ?? null;
-  const stage = hero.stageId ? store.state.stages[hero.stageId] ?? null : null;
-  const party = session ? getPartyMembers(store, session) : [];
-  const phase = session ? inferDungeonPhase(session, stage, party) : null;
+  const phase = session?.phase ?? null;
 
   if (phase === "fighting") return T.status_hero_inCombat;
-  if (phase === "recovering") return T.status_hero_recovering;
+  if (phase === "waveResting") return T.status_hero_dungeon;
+
   return T.status_hero_dungeon;
 }
 
@@ -155,25 +155,6 @@ function getDungeonLogEntries(
   );
 }
 
-function inferDungeonPhase(
-
-
-  session: DungeonSession,
-  stage: StageSession | null,
-  party: PlayerCharacter[],
-): DungeonPhase {
-  if (session.status !== "in_progress") {
-    return session.status;
-  }
-  if (stage?.currentWave?.status === "active") return "fighting";
-  if (stage?.currentWave?.status === "victory") return "waveCleared";
-  if (stage?.currentWave?.status === "defeat") return "failed";
-  if (session.currentWaveIndex > 0 && party.some((hero) => !isAtFullHp(hero))) {
-    return "recovering";
-  }
-  return "spawningWave";
-}
-
 function getDungeonPhaseLabel(phase: DungeonPhase): string {
   switch (phase) {
     case "spawningWave":
@@ -182,8 +163,8 @@ function getDungeonPhaseLabel(phase: DungeonPhase): string {
       return T.dungeonPhase_fighting;
     case "waveCleared":
       return T.dungeonPhase_waveCleared;
-    case "recovering":
-      return T.dungeonPhase_recovering;
+    case "waveResting":
+      return T.dungeonPhase_waveResting;
     case "completed":
       return T.dungeonPhase_completed;
     case "failed":
@@ -193,10 +174,6 @@ function getDungeonPhaseLabel(phase: DungeonPhase): string {
   }
 }
 
-function isAtFullHp(actor: Character): boolean {
-  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP, ATTR_DEFS));
-  return actor.currentHp >= maxHp;
-}
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
@@ -353,8 +330,9 @@ function phaseBadgeStyle(phase: DungeonPhase): React.CSSProperties {
   const color =
     phase === "fighting"
       ? "#58A6FF"
-      : phase === "recovering"
+      : phase === "waveResting"
       ? "#F0C674"
+
       : phase === "waveCleared"
       ? "#3FB950"
       : phase === "failed" || phase === "abandoned"

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ACTIVITY_GATHER_KIND } from "../../src/core/world/activity";
+import { COMBAT_ZONE_RECOVERY_RULES } from "../../src/core/world/activity/recovery";
+
 import { getAttr, isResourceNode } from "../../src/core/entity/actor";
 import { ATTR } from "../../src/core/entity/attribute";
 import { resetContent } from "../../src/core/content";
@@ -80,9 +82,17 @@ describe("GameSession location flow", () => {
     cc.startFight(forestCombatZone.id);
 
     const stageId = cc.hero.stageId!;
-    session.engine.step(10);
+    for (
+      let i = 0;
+      i < COMBAT_ZONE_RECOVERY_RULES.searchTicks + 20
+        && (session.state.stages[stageId]?.spawnedActorIds.length ?? 0) === 0;
+      i++
+    ) {
+      session.engine.step(1);
+    }
 
     const spawnedIds = session.state.stages[stageId]?.spawnedActorIds.slice() ?? [];
+
     expect(spawnedIds.length).toBeGreaterThan(0);
     expect(session.state.actors.some((a) => a.kind === "enemy")).toBe(true);
 
@@ -131,7 +141,8 @@ describe("GameSession location flow", () => {
     const cc = session.getFocusedCharacter();
 
     cc.startFight(forestCombatZone.id);
-    session.engine.step((forestCombatZone.waveSearchTicks ?? 0) + 1);
+    session.engine.step(COMBAT_ZONE_RECOVERY_RULES.searchTicks + 1);
+
 
     const firstStageId = cc.hero.stageId!;
     const firstStage = session.state.stages[firstStageId]!;
@@ -151,7 +162,8 @@ describe("GameSession location flow", () => {
     const rehydrated = session.getFocusedCharacter();
     rehydrated.stopActivity();
     rehydrated.startFight(forestCombatZone.id);
-    session.engine.step((forestCombatZone.waveSearchTicks ?? 0) + 1);
+    session.engine.step(COMBAT_ZONE_RECOVERY_RULES.searchTicks + 1);
+
 
     const secondStageId = rehydrated.hero.stageId!;
     const secondStage = session.state.stages[secondStageId]!;

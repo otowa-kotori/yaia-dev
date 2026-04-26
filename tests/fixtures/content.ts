@@ -56,7 +56,20 @@ export const attrDefs: Record<string, AttrDef> = {
     integer: true,
     clampMin: 0,
   },
+  [ATTR.HP_REGEN]: {
+    id: ATTR.HP_REGEN,
+    name: "HP Regen",
+    defaultBase: 0,
+    clampMin: 0,
+  },
+  [ATTR.MP_REGEN]: {
+    id: ATTR.MP_REGEN,
+    name: "MP Regen",
+    defaultBase: 0,
+    clampMin: 0,
+  },
   [ATTR.PATK]: {
+
     id: ATTR.PATK,
     name: "PATK",
     defaultBase: 10,
@@ -113,7 +126,21 @@ export const shieldBuffEffect: EffectDef = {
   ],
 };
 
+export const phaseRecoveryEffect: EffectDef = {
+  id: "effect.system.phase_recovery" as EffectId,
+  kind: "duration",
+  computeModifiers: (state) => {
+    const hpRegen = Math.max(0, Number(state.hpRegen ?? 0));
+    const mpRegen = Math.max(0, Number(state.mpRegen ?? 0));
+    return [
+      { stat: ATTR.HP_REGEN, op: "flat" as const, value: hpRegen, sourceId: "" },
+      { stat: ATTR.MP_REGEN, op: "flat" as const, value: mpRegen, sourceId: "" },
+    ].filter((modifier) => modifier.value > 0);
+  },
+};
+
 // ---------- Common fixture talents ----------
+
 
 export const basicAttackTalent: TalentDef = {
   id: "talent.basic.attack" as TalentId,
@@ -254,9 +281,8 @@ export const forestCombatZone: CombatZoneDef = {
   id: "combatzone.forest.test_path" as CombatZoneId,
   name: "Test Path",
   waveSelection: "random",
-  waveSearchTicks: 5,
-  recoverBelowHpFactor: 0.5,
   waves: [
+
     {
       id: "wave.forest.test_slimes",
       name: "Twin Slimes",
@@ -285,9 +311,8 @@ export const forestCombatZone: CombatZoneDef = {
 export const testDungeon: DungeonDef = {
   id: "dungeon.test.slime_cave" as DungeonId,
   name: "Test Slime Cave",
-  recoverBelowHpFactor: 0.5,
-  waveTransitionTicks: 2,
   waves: [
+
     {
       id: "dungeon.wave.0",
       name: "Slime Vanguard",
@@ -341,6 +366,7 @@ export function loadFixtureContent(): ContentDb {
       [basicStrikeEffect.id]: basicStrikeEffect,
       [burnDotEffect.id]: burnDotEffect,
       [shieldBuffEffect.id]: shieldBuffEffect,
+      [phaseRecoveryEffect.id]: phaseRecoveryEffect,
     },
     talents: {
       [basicAttackTalent.id]: basicAttackTalent,

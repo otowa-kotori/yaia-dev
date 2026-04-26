@@ -30,7 +30,20 @@ const authoredAttributes = {
     integer: true,
     clampMin: 0,
   },
+  [ATTR.HP_REGEN]: {
+    id: ATTR.HP_REGEN,
+    name: "生命回复",
+    defaultBase: 0,
+    clampMin: 0,
+  },
+  [ATTR.MP_REGEN]: {
+    id: ATTR.MP_REGEN,
+    name: "法力回复",
+    defaultBase: 0,
+    clampMin: 0,
+  },
   [ATTR.STR]: { id: ATTR.STR, name: "力量", defaultBase: 5, integer: true },
+
   [ATTR.DEX]: { id: ATTR.DEX, name: "敏捷", defaultBase: 5, integer: true },
   [ATTR.INT]: { id: ATTR.INT, name: "智力", defaultBase: 5, integer: true },
   [ATTR.SPEED]: {
