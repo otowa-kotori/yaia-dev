@@ -1,40 +1,54 @@
 # 响应式属性：派生 base 与动态 modifier
 
-> 依赖：[combat-formula.md](./combat-formula.md), [skill-system.md](./skill-system.md)  
-> 被依赖：attribute 模块实现  
-> **状态**：已实现（`src/core/entity/attribute/index.ts`，`src/core/content/types.ts`）
+> 依赖：[combat-formula.md](./combat-formula.md), [skill-system.md](./skill-system.md)
+> 
+> **状态**：已实现（`src/core/entity/attribute/index.ts`，`src/content/default/attributes.ts`）
 
 ---
 
 ## 1. 要解决的问题
 
-当前属性系统只处理**静态 modifier**——安装时数值就确定，直到被移除都不变。但技能系统引入了两类新需求：
+当前属性系统不只是静态 modifier 堆叠，还需要支持两类“值会跟别的属性联动变化”的场景。
 
 ### 1.1 派生 base
 
-`面板 PATK = 武器ATK × (1 + k × √STR) × 被动乘数 + flat`（来自 combat-formula.md）。PATK 的 base 不是一个写死的数字，它取决于 STR 的最终值。STR 变了（升级、buff、装备），PATK 应该自动过期。
+例如当前默认内容里：
+
+- 一级属性先汇聚成 `PHYS_POTENCY / MAG_POTENCY`
+- `PATK / MATK` 再通过 `computeBase` 从武器值与潜力值派生
+
+这意味着 `PATK` 的 base 不是一个写死的数字；它会随着 `STR / DEX / INT`、装备、buff 一起变化。
 
 ### 1.2 动态 modifier
 
-技能"基于 INT 提升治疗量"。effect 安装时往目标身上加一条 `{ stat: HEAL_POWER, op: "flat", value: INT * 0.1 }` modifier。如果之后 INT 因为战斗中的 buff 变了，这条 modifier 的 value 就过期了。
+例如某个被动效果写成“基于 INT 提升治疗量”。
 
-### 1.3 为什么不能用检查点批量刷新
+如果之后 `INT` 因为战斗中的 buff 变化，这条 modifier 的 value 也必须自动失效并重算，而不是等到某个“检查点刷新”。
 
-直觉方案是"装备切换 / 天赋升级后遍历刷新"。但这遗漏了战斗中 buff 导致的属性变化——一个 +INT buff 安装后，依赖 INT 的 modifier 不会被刷新，直到下一个检查点（可能是战斗结束后才触发）。
+### 1.3 为什么不能靠检查点批量刷新
 
-真正的触发条件应该是**属性值变了**，不是某个宽泛操作发生了。
+直觉方案是“装备切换 / 天赋升级后遍历刷新”。问题在于：
+
+- 战斗中 buff 导致的属性变化不会经过这些检查点
+- 一个 +INT buff 安装后，依赖 INT 的 modifier 会一直是旧值
+
+真正的触发条件应该是：**属性值本身变了**，而不是某个宽泛操作发生了。
 
 ---
 
 ## 2. 核心思路：统一 lazy invalidation
 
-当前属性系统已经是 lazy 的——`getAttr` 发现 cache miss 才 `recomputeStat`。新需求可以自然融入：
+当前属性系统已经是 lazy 的——`getAttr()` 发现 cache miss 才 `recomputeStat()`。新需求正好融入这条路径：
 
-1. **派生 base**：`recomputeStat` 时不读 `set.base[id]`，而是调一个函数。函数内部读其他属性 → 递归触发它们的 lazy recompute。
-2. **动态 modifier**：`recomputeStat` 时除了折叠静态 modifier，还调用动态 provider 函数现算。函数内部同理读其他属性。
-3. **invalidation 传播**：当某个属性的 cache 被清除时（因为 modifier 安装/移除），顺着依赖图向下传播，把所有依赖它的属性 cache 也清除。
+1. **派生 base**：`recomputeStat()` 时不直接读 `set.base[id]`，而是调 `computeBase(get)`
+2. **动态 modifier**：`recomputeStat()` 时除了折叠静态 modifier，还调用动态 provider 的 `compute(get)`
+3. **失效传播**：当某个属性的 cache 被清除时，顺着依赖图把所有 downstream 属性一起标脏
 
-一切靠 cache invalidation 传播 + lazy recompute，不需要显式的"刷新"调用或回调注册。
+结果是：
+
+- 不需要一套额外的“刷新 API”
+- 也不需要事件订阅式的细粒度人工维护
+- 只靠 cache invalidation + lazy recompute 就能覆盖这两类问题
 
 ---
 
@@ -44,7 +58,6 @@
 
 ```ts
 interface AttrDef {
-  // ---- 已有字段（不变） ----
   id: AttrId;
   name: string;
   defaultBase: number;
@@ -52,55 +65,41 @@ interface AttrDef {
   clampMax?: number;
   integer?: boolean;
 
-  // ---- 新增（可选，ContentDb 侧，可持有函数） ----
-
-  /**
-   * 派生 base 计算函数。如果提供，recomputeStat 时用它的返回值
-   * 替代 set.base[id]。内部通过 get() 读其他属性的 final 值。
-   */
   computeBase?: (get: (attrId: AttrId) => number) => number;
-
-  /**
-   * computeBase 读取了哪些属性。用于 invalidation 传播。
-   * 只在有 computeBase 时有意义。
-   */
   dependsOn?: AttrId[];
 }
 ```
 
-**示例——PATK**：
+### 示例——PATK
+
+当前默认内容的 `PATK` 更接近下面这种写法：
 
 ```ts
 {
-  id: "attr.patk" as AttrId,
+  id: ATTR.PATK,
   name: "物理攻击力",
   defaultBase: 0,
   integer: true,
-  computeBase: (get) => {
-    const weaponAtk = get(ATTR.WEAPON_ATK);
-    const str = get(ATTR.STR);
-    return weaponAtk * (1 + 0.3 * Math.sqrt(str));
-  },
-  dependsOn: [ATTR.WEAPON_ATK, ATTR.STR],
+  computeBase: (get) =>
+    get(ATTR.WEAPON_ATK) * (1 + K_SCALING * Math.sqrt(get(ATTR.PHYS_POTENCY))),
+  dependsOn: [ATTR.WEAPON_ATK, ATTR.PHYS_POTENCY],
 }
 ```
+
+也就是说，一级属性不会直接写死在 `PATK` 公式里，而是先汇聚到 `PHYS_POTENCY`。
 
 ### 3.2 DynamicModifierProvider
 
 ```ts
 interface DynamicModifierProvider {
-  /** 唯一标识，用于安装/卸载时定位。 */
   sourceId: string;
-  /** 这个 provider 输出的 modifier 影响哪些属性。 */
   targetAttrs: AttrId[];
-  /** 它读取哪些属性来计算 modifier value。 */
   dependsOn: AttrId[];
-  /** recomputeStat 时被调用。get() 读其他属性的 final 值。 */
   compute: (get: (id: AttrId) => number) => Modifier[];
 }
 ```
 
-**示例——基于 INT 提升治疗量**：
+### 示例——基于 INT 提升治疗量
 
 ```ts
 {
@@ -120,36 +119,25 @@ interface DynamicModifierProvider {
 
 ```ts
 interface AttrSet {
-  // ---- 已有（不变） ----
   base: Record<string, number>;
   modifiers: Modifier[];
   cache: Record<string, number>;
-
-  // ---- 新增（非持久化，rebuild on load） ----
-
-  /** 动态 modifier 提供者。recomputeStat 时调用 compute 获取当前值。 */
   dynamicProviders: DynamicModifierProvider[];
-
-  /**
-   * 反向依赖图：stat → 依赖它的 stat 集合。
-   * 由 AttrDef.dependsOn + DynamicModifierProvider.dependsOn 汇总生成。
-   * invalidation 时顺着这张图向下传播。
-   */
   depGraph: Record<string, Set<string>>;
 }
 ```
 
-`dynamicProviders` 和 `depGraph` 都是运行时派生数据，不进存档。读档时由 `rebuildCharacterDerived` 重建（和 `modifiers`、`cache` 同理）。
+`dynamicProviders` 和 `depGraph` 都是运行时派生数据，不进存档。读档时由 `rebuildCharacterDerived()` 重建。
 
 ---
 
 ## 4. invalidation 传播
 
-当前的 `addModifiers` / `removeModifiersBySource` 在清除 cache 时只清除直接相关的 stat。新方案改为递归传播：
+当一个属性变化时，不能只删掉它自己的 cache，还必须把依赖它的属性一起标脏：
 
 ```ts
 function invalidateStat(set: AttrSet, stat: string): void {
-  if (!(stat in set.cache)) return;    // 已经脏了，不重复传播
+  if (!(stat in set.cache)) return;
   delete set.cache[stat];
   const dependents = set.depGraph[stat];
   if (dependents) {
@@ -160,254 +148,111 @@ function invalidateStat(set: AttrSet, stat: string): void {
 }
 ```
 
-改动点：
-
-| 现有函数 | 改动 |
-|----------|------|
-| `addModifiers` | `delete set.cache[m.stat]` → `invalidateStat(set, m.stat)` |
-| `removeModifiersBySource` | 同上 |
-| `invalidateAttrs` | 清整个 cache（不变，已经全脏了） |
-
-### depGraph 的构建
-
-depGraph 在两个时机被更新：
-
-1. **rebuildCharacterDerived 时**：遍历 `attrDefs`，把所有 `dependsOn` 边加入图。
-2. **addDynamicProvider 时**：把 provider 的 `dependsOn → targetAttrs` 边加入图。
-3. **removeDynamicProvider 时**：重建图（provider 数量少，全量重建即可）。
-
-```ts
-function rebuildDepGraph(
-  set: AttrSet,
-  attrDefs: Record<string, AttrDef>,
-): void {
-  set.depGraph = {};
-  // 来自 AttrDef.dependsOn（派生 base）
-  for (const def of Object.values(attrDefs)) {
-    if (def.dependsOn) {
-      for (const dep of def.dependsOn) {
-        (set.depGraph[dep] ??= new Set()).add(def.id);
-      }
-    }
-  }
-  // 来自 DynamicModifierProvider
-  for (const p of set.dynamicProviders) {
-    for (const dep of p.dependsOn) {
-      for (const target of p.targetAttrs) {
-        (set.depGraph[dep] ??= new Set()).add(target);
-      }
-    }
-  }
-}
-```
+`addModifiers()` / `removeModifiersBySource()` / `addDynamicProvider()` 都依赖这条路径传播失效。
 
 ---
 
-## 5. recomputeStat 的变化
+## 5. recomputeStat 的关键变化
+
+`recomputeStat()` 现在要做三件事：
+
+1. 计算 base（静态 base 或 `computeBase`）
+2. 折叠静态 modifiers
+3. 折叠动态 provider 现算出来的 modifiers
+
+最后再统一：
+
+- clamp
+- 整数取整
+- 写回 cache
+
+### 整数取整（已修正）
+
+旧文档曾写 `integer: true` 时使用 `Math.floor`。当前实现不是这样。
+
+当前 runtime 的规则是：
 
 ```ts
-// 调用栈环检测（模块级临时 Set，per-recompute-chain 使用）
-const recomputing = new Set<string>();
-
-function recomputeStat(
-  set: AttrSet,
-  attrId: string,
-  attrDefs: Readonly<Record<string, AttrDef>>,
-): void {
-  // ---- 环检测 ----
-  if (recomputing.has(attrId)) {
-    throw new Error(`Circular attr dependency: ${attrId}`);
-  }
-  recomputing.add(attrId);
-
-  try {
-    const def = attrDefs[attrId];
-    const get = (id: AttrId) => getAttr(set, id, attrDefs);
-
-    // ---- base ----
-    const base = def?.computeBase
-      ? def.computeBase(get)
-      : set.base[attrId] ?? def?.defaultBase ?? 0;
-
-    // ---- 静态 modifiers（和现在完全一样） ----
-    let flat = 0, pctAdd = 0, pctMult = 1;
-    for (const m of set.modifiers) {
-      if (m.stat !== attrId) continue;
-      switch (m.op) {
-        case "flat":     flat += m.value; break;
-        case "pct_add":  pctAdd += m.value; break;
-        case "pct_mult": pctMult *= (1 + m.value); break;
-      }
-    }
-
-    // ---- 动态 modifiers（新增） ----
-    for (const provider of set.dynamicProviders) {
-      if (!provider.targetAttrs.includes(attrId as AttrId)) continue;
-      const mods = provider.compute(get);
-      for (const m of mods) {
-        if (m.stat !== attrId) continue;
-        switch (m.op) {
-          case "flat":     flat += m.value; break;
-          case "pct_add":  pctAdd += m.value; break;
-          case "pct_mult": pctMult *= (1 + m.value); break;
-        }
-      }
-    }
-
-    // ---- clamp / floor / cache（和现在完全一样） ----
-    let v = (base + flat) * (1 + pctAdd) * pctMult;
-    if (def) {
-      if (def.clampMin !== undefined && v < def.clampMin) v = def.clampMin;
-      if (def.clampMax !== undefined && v > def.clampMax) v = def.clampMax;
-      if (def.integer) v = Math.floor(v);
-    }
-    set.cache[attrId] = v;
-  } finally {
-    recomputing.delete(attrId);
-  }
-}
+if (def.integer) v = Math.round(v)
 ```
+
+所以所有关于成长、小数属性和 affix 的说明，都应该以 **round** 为准，而不是 floor。
 
 ---
 
 ## 6. Provider 管理 API
 
-```ts
-function addDynamicProvider(
-  set: AttrSet,
-  provider: DynamicModifierProvider,
-  attrDefs: Readonly<Record<string, AttrDef>>,
-): void {
-  set.dynamicProviders.push(provider);
-  // 更新 depGraph
-  for (const dep of provider.dependsOn) {
-    for (const target of provider.targetAttrs) {
-      (set.depGraph[dep] ??= new Set()).add(target);
-    }
-  }
-  // 目标属性标脏
-  for (const t of provider.targetAttrs) {
-    invalidateStat(set, t);
-  }
-}
+当前实现已经有：
 
-function removeDynamicProvider(
-  set: AttrSet,
-  sourceId: string,
-  attrDefs: Readonly<Record<string, AttrDef>>,
-): void {
-  const idx = set.dynamicProviders.findIndex(p => p.sourceId === sourceId);
-  if (idx < 0) return;
-  const provider = set.dynamicProviders[idx];
-  set.dynamicProviders.splice(idx, 1);
-  // 目标属性标脏
-  for (const t of provider.targetAttrs) {
-    invalidateStat(set, t);
-  }
-  // 重建 depGraph（provider 数量少，全量重建代价低）
-  rebuildDepGraph(set, attrDefs);
-}
-```
+- `addDynamicProvider()`
+- `removeDynamicProvider()`
+- `rebuildDepGraph()`
+
+语义分别是：
+
+- 安装 provider，并把它影响的目标属性标脏
+- 移除 provider，并重建依赖图
+- 在读档或整体重建后，从头生成完整依赖图
 
 ---
 
 ## 7. 防环
 
-环检测由 `recomputing: Set<string>` 在 `recomputeStat` 入口执行。如果发现某个属性正在被计算的过程中又被请求计算（A→B→A），立刻 throw。
+`recomputeStat()` 入口维护一个模块级 `recomputing: Set<string>`。
 
-合法的依赖图必须是 **DAG**。如果出现环，说明内容设计有逻辑问题（"基于 HP 提升 INT，基于 INT 提升 HP"），应该修改内容定义。alpha 阶段不兜底——throw 暴露问题。
+如果出现：
+
+```text
+A -> B -> A
+```
+
+这样的依赖环，会立即 throw。
+
+这符合 alpha 阶段策略：
+
+- 环依赖属于内容设计错误
+- 应该尽早暴露，而不是静默容错
 
 ---
 
-## 8. 端到端场景走查
+## 8. 端到端例子
 
-### 8.1 PATK 随 STR 自动更新
+### 8.1 STR / DEX 变化后，PATK 自动更新
 
-```
-1. 角色有 STR base=20, PATK 由 computeBase 派生
-2. 穿装备加了 STR flat +5 → addModifiers → invalidateStat("attr.str")
-   → depGraph["attr.str"] 包含 "attr.patk" → invalidateStat("attr.patk")
-3. 下次 getAttr(ATTR.PATK) → cache miss → recomputeStat
-   → 调用 computeBase → get(ATTR.STR) → cache miss → recomputeStat(STR)
-   → STR final = 25 → 返回 → PATK base = weaponAtk * (1 + 0.3*√25) → 缓存
-```
-
-### 8.2 战斗中 buff 改变 INT → 依赖 INT 的 modifier 自动更新
-
-```
-1. 圣女有 effect "基于 INT 提升 HEAL_POWER"（DynamicModifierProvider）
-2. 法师给圣女上了 +INT buff → addModifiers([{ stat: INT, op: flat, value: 30 }])
-   → invalidateStat("attr.int")
-   → depGraph["attr.int"] 包含 "attr.heal_power" → invalidateStat("attr.heal_power")
-3. 圣女下次治疗时读 HEAL_POWER → cache miss → recomputeStat
-   → 折叠静态 modifiers + 调用 provider.compute(get)
-   → provider 内部 get(ATTR.INT) → 读到新 INT → 返回更大的 flat value → 治疗量提升
+```text
+1. 装备或 buff 改变一级属性
+2. 对应上游属性 cache 被删掉
+3. depGraph 把 PHYS_POTENCY 和 PATK 一起标脏
+4. 下次读取 PATK 时：
+   先重算 PHYS_POTENCY，再重算 PATK
 ```
 
-### 8.3 buff 过期 → 自动回落
+### 8.2 战斗中 INT buff 改变治疗量
 
-```
-1. +INT buff 到期 → removeModifiersBySource → invalidateStat("attr.int")
-   → 传播到 "attr.heal_power"
-2. 下次读 HEAL_POWER → provider 读到较低的 INT → 回到原来的数值
+```text
+1. +INT buff 安装
+2. INT 被标脏
+3. depGraph 把依赖 INT 的 HEAL_POWER 一起标脏
+4. 下次治疗时，provider 读到新的 INT，得到新的治疗量
 ```
 
-### 8.4 天赋升级刷新 provider
+### 8.3 buff 过期自动回落
 
-```
-1. 天赋 guardian_prayer 从 Lv3 升到 Lv4
-2. removeDynamicProvider("talent:guardian_prayer:3")
-   → HEAL_POWER 标脏 → depGraph 重建
-3. addDynamicProvider({ sourceId: "talent:guardian_prayer:4", ... })
-   → HEAL_POWER 标脏
-4. 下次读 HEAL_POWER → 用新 provider（Lv4 系数更高）计算
+```text
+1. +INT buff 移除
+2. INT 被再次标脏
+3. 下游属性跟着失效
+4. 下次读取时自然回到较低值
 ```
 
 ---
 
-## 9. 性能
+## 9. 结论
 
-| 操作 | 开销 | 频率 |
-|------|------|------|
-| `getAttr`（cache hit） | O(1) 字典查找 | 每次伤害/治疗/intent 判定 |
-| `getAttr`（cache miss）| O(modifiers + providers) 折叠 | 只在 cache 被 invalidate 后首次读取 |
-| `invalidateStat` 传播 | O(depGraph 深度) | 只在 addModifiers / removeModifiers 时 |
-| `addDynamicProvider` | O(deps × targets) 更新 depGraph | effect 安装时 |
-| `removeDynamicProvider` | O(所有 provider) 重建 depGraph | effect 移除时 |
+这套机制的核心不是“多加几个刷新点”，而是把下面三件事统一到一条求值路径上：
 
-依赖图节点数 = 属性数量（~15），边数 = 派生关系数（~10）。所有操作对这个量级来说是 O(1) 级别。
+- 派生 base
+- 动态 modifier
+- cache invalidation 传播
 
----
-
-## 10. 持久化
-
-以下字段**不进存档**，读档时由 `rebuildCharacterDerived` 重建：
-
-- `attrSet.dynamicProviders`：从角色身上的 activeEffects + 天赋 重新安装
-- `attrSet.depGraph`：从 attrDefs + dynamicProviders 重新构建
-- `attrSet.cache`：全部标脏，lazy recompute
-
-和现有的 `modifiers` / `cache` 处理方式完全一致。
-
----
-
-## 11. 与 skill-system.md 的关系
-
-skill-system.md 中涉及属性刷新的场景全部由本机制覆盖：
-
-| skill-system 场景 | 本机制的处理 |
-|-------------------|-------------|
-| 天赋升级刷新被动 effect | 卸载旧 provider + 安装新 provider |
-| "基于 INT 提升 X" | DynamicModifierProvider |
-| PATK = f(STR, WEAPON_ATK) | AttrDef.computeBase + dependsOn |
-| 战斗中 buff 改变属性 → 依赖链刷新 | invalidation 传播 + lazy recompute |
-
-skill-system.md 不需要定义自己的刷新机制——引用本文档即可。
-
----
-
-## 开放问题
-
-- [ ] `computeBase` 内是否允许读 `set.base` 里的其他属性（而非 final 值）？当前方案全部读 final 值，语义更统一，但如果某些派生只想看 base 值则需要额外的 `getBase` API。
-- [ ] `DynamicModifierProvider.compute` 返回的 modifier 数量是否可变？（比如某些条件下返回空数组。）当前方案允许，但 `targetAttrs` 声明需要覆盖所有可能输出的 stat。
-- [ ] `recomputing` Set 是模块级变量——在并发场景（将来 web worker？）下需要改为 per-call-chain 传递。alpha 阶段不需要担心。
+这样技能、装备、成长、buff 才能在同一个属性系统里长期共存，而不会不断补临时刷新逻辑。
