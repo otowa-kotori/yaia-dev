@@ -1,13 +1,13 @@
 // Talent scaling helpers.
 //
 // Designers configure effect values as (lv1Value, lv10Value) pairs. The
-// helper linearly interpolates between them so that level 1 gives exactly
+// linear helper interpolates between them so that level 1 gives exactly
 // lv1Value and level 10 gives exactly lv10Value. Levels outside [1, 10]
 // extrapolate linearly (no clamping — alpha stage, fail loud if numbers
 // look wrong in content review).
 //
 // Usage:
-//   const chanceFn = fromTo(0.20, 0.60);  // lv1 → 20%, lv10 → 60%
+//   const chanceFn = fromToLinear(0.20, 0.60);  // lv1 → 20%, lv10 → 60%
 //   chanceFn(1)  === 0.20
 //   chanceFn(5)  ≈  0.3778
 //   chanceFn(10) === 0.60
@@ -16,7 +16,7 @@
  * Linear interpolation from lv1Value at level 1 to lv10Value at level 10.
  * Returns a function (level) => value.
  */
-export function fromTo(lv1Value: number, lv10Value: number): (level: number) => number {
+export function fromToLinear(lv1Value: number, lv10Value: number): (level: number) => number {
   const perLevel = (lv10Value - lv1Value) / 9;
   const base = lv1Value - perLevel; // value at "level 0"
   return (level: number) => base + perLevel * level;

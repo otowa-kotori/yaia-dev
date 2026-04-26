@@ -101,12 +101,12 @@
 
 | Talent | 类型 | 当前行为 |
 |--------|------|----------|
-| `重击` | active | 单体高系数物理伤害 |
-| `坚守` | passive | 提升生命上限与物理防御 |
-| `反击` | passive | 受击后概率反击；当前前置是 `坚守 Lv1` |
-| `狂怒` | sustain | `+PATK% / -PDEF%` |
-| `守护` | sustain | `+PDEF% / -PATK%`，并带代伤逻辑 |
-| `战吼` | active | 给自己上 buff，提高 `AGGRO_WEIGHT` 与 `PDEF`；当前前置是 `坚守 Lv2` |
+| `重击` | active | 单体高系数物理伤害；MP 消耗随等级提升 |
+| `坚韧`（id 仍为 `fortitude`） | passive | 提升生命上限与生命回复 |
+| `反击` | passive | 受击且实际掉血后概率反击；当前前置是 `战吼 Lv5` |
+| `狂怒` | sustain | `+PATK% / -PDEF%`；当前前置是 `重击 Lv5` |
+| `守护` | sustain | `+PDEF% / -PATK%`，并带代伤逻辑；当前前置是 `坚韧 Lv5` |
+| `战吼` | active | 给自己上 buff，提高 `AGGRO_WEIGHT` 与 flat `PDEF`；当前前置是 `坚韧 Lv5` |
 
 ### 当前落地边界
 

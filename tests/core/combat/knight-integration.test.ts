@@ -8,31 +8,35 @@
 
 import { describe, test, expect, beforeEach } from "bun:test";
 import {
-  loadFixtureContent,
-  makePlayer,
-  makeSlime,
   attrDefs,
   basicAttackTalent,
   basicStrikeEffect,
-  makeHarness,
+  makePlayer,
+  makeSlime,
 } from "../../fixtures/content";
 import { setContent, emptyContentDb } from "../../../src/core/content";
-import type { ContentDb, TalentDef, TalentId, EffectId } from "../../../src/core/content/types";
+import type { ContentDb } from "../../../src/core/content/types";
 import { allocateTalentPoint } from "../../../src/core/growth/talent";
 import { tryUseTalent, type AbilityContext } from "../../../src/core/behavior/ability";
 import { dispatchReaction, type ReactionContext } from "../../../src/core/combat/reaction";
 import { createPriorityListIntent, type PriorityRule } from "../../../src/core/combat/intent/priority";
-import { registerIntent, resolveIntent, INTENT } from "../../../src/core/combat/intent";
 import { ATTR, invalidateAttrs } from "../../../src/core/entity/attribute";
 import { createRng } from "../../../src/core/infra/rng";
 import { createGameEventBus } from "../../../src/core/infra/events";
 import { createEmptyState } from "../../../src/core/infra/state";
 import { SAVE_VERSION } from "../../../src/core/save/migrations";
-import { knightPowerStrike, knightFortitude, knightRetaliation } from "../../../src/content/behaviors/talents/knight";
-import { knightFortitudeEffect, knightRetaliationEffect } from "../../../src/content/behaviors/effects/knight";
+import {
+  knightFortitude,
+  knightPowerStrike,
+  knightRetaliation,
+  knightWarcry,
+} from "../../../src/content/behaviors/talents/knight";
+import {
+  knightFortitudeEffect,
+  knightRetaliationEffect,
+  knightWarcryEffect,
+} from "../../../src/content/behaviors/effects/knight";
 import type { Character } from "../../../src/core/entity/actor/types";
-
-// ---------- Setup ----------
 
 function knightTestContent(): ContentDb {
   const db: ContentDb = {
@@ -42,11 +46,13 @@ function knightTestContent(): ContentDb {
       [basicStrikeEffect.id]: basicStrikeEffect,
       [knightFortitudeEffect.id]: knightFortitudeEffect,
       [knightRetaliationEffect.id]: knightRetaliationEffect,
+      [knightWarcryEffect.id]: knightWarcryEffect,
     },
     talents: {
       [basicAttackTalent.id]: basicAttackTalent,
       [knightPowerStrike.id]: knightPowerStrike,
       [knightFortitude.id]: knightFortitude,
+      [knightWarcry.id]: knightWarcry,
       [knightRetaliation.id]: knightRetaliation,
     },
     starting: {
@@ -55,7 +61,7 @@ function knightTestContent(): ContentDb {
         name: "Knight",
         xpCurve: { kind: "char_xp_curve_v1", a: 8, p: 1.8, c: 8, base: 1.25, cap: 0.18, d: 0.22, e: 80, offset: 8 },
         knownTalents: [basicAttackTalent.id],
-        availableTalents: [knightPowerStrike.id, knightFortitude.id, knightRetaliation.id],
+        availableTalents: [knightPowerStrike.id, knightFortitude.id, knightWarcry.id, knightRetaliation.id],
       }],
       initialLocationId: "location.forest.test" as any,
     },
@@ -63,8 +69,6 @@ function knightTestContent(): ContentDb {
   setContent(db);
   return db;
 }
-
-// ---------- Test: Passive effects are visible after allocation ----------
 
 describe("knight integration / passive effects", () => {
   let content: ContentDb;
@@ -87,21 +91,20 @@ describe("knight integration / passive effects", () => {
     expect(fortEffects[0]!.effectId).toBe(knightFortitudeEffect.id as string);
   });
 
-  test("retaliation appears in activeEffects after allocation", () => {
+  test("retaliation appears in activeEffects after allocation when Warcry prereq is met", () => {
     const pc = makePlayer({ id: "hero.knight", talents: [basicAttackTalent.id as string] });
     pc.level = 10;
     pc.heroConfigId = "hero.knight";
-    pc.talentLevels[knightFortitude.id as string] = 1; // prereq
+    pc.talentLevels[knightWarcry.id as string] = 5;
 
     allocateTalentPoint(pc, knightRetaliation.id, content);
     const retEffects = pc.activeEffects.filter(ae => ae.sourceTalentId === (knightRetaliation.id as string));
     expect(retEffects.length).toBe(1);
     expect(retEffects[0]!.effectId).toBe(knightRetaliationEffect.id as string);
     expect(retEffects[0]!.state.chance).toBeDefined();
+    expect(retEffects[0]!.state.dmgRatio).toBeDefined();
   });
 });
-
-// ---------- Test: Retaliation reaction fires on after_damage_taken ----------
 
 describe("knight integration / retaliation reaction", () => {
   let content: ContentDb;
@@ -115,7 +118,7 @@ describe("knight integration / retaliation reaction", () => {
     pc.level = 10;
     pc.heroConfigId = "hero.knight";
     pc.side = "player";
-    pc.talentLevels[knightFortitude.id as string] = 1;
+    pc.talentLevels[knightWarcry.id as string] = 5;
     allocateTalentPoint(pc, knightRetaliation.id, content);
 
     const enemy = makeSlime("e1");
@@ -154,7 +157,7 @@ describe("knight integration / retaliation reaction", () => {
     pc.level = 10;
     pc.heroConfigId = "hero.knight";
     pc.side = "player";
-    pc.talentLevels[knightFortitude.id as string] = 1;
+    pc.talentLevels[knightWarcry.id as string] = 5;
     allocateTalentPoint(pc, knightRetaliation.id, content);
 
     const enemy = makeSlime("e1");
@@ -171,7 +174,7 @@ describe("knight integration / retaliation reaction", () => {
       dealMagicDamage() {
         throw new Error("retaliation should not fire on magical damage");
       },
-      dealDamage(source, target, amount) {
+      dealDamage(_source, target, amount) {
         target.currentHp = Math.max(0, target.currentHp - Math.floor(amount));
       },
       healTarget() {},
@@ -187,7 +190,6 @@ describe("knight integration / retaliation reaction", () => {
       participants: [pc, enemy],
     };
 
-    // Dispatch 20 magical damage events — retaliation should never fire.
     for (let i = 0; i < 20; i++) {
       dispatchReaction(pc, {
         kind: "after_damage_taken",
@@ -200,13 +202,57 @@ describe("knight integration / retaliation reaction", () => {
     expect(enemy.currentHp).toBe(initialEnemyHp);
   });
 
+  test("retaliation does NOT trigger when physical damage is fully blocked", () => {
+    const pc = makePlayer({ id: "hero.knight", talents: [basicAttackTalent.id as string], maxHp: 200, atk: 20 });
+    pc.level = 10;
+    pc.heroConfigId = "hero.knight";
+    pc.side = "player";
+    pc.talentLevels[knightWarcry.id as string] = 5;
+    allocateTalentPoint(pc, knightRetaliation.id, content);
+
+    const enemy = makeSlime("e1");
+    const initialEnemyHp = enemy.currentHp;
+
+    const reactionCtx: ReactionContext = {
+      dealPhysicalDamage() {
+        throw new Error("retaliation should not fire when no damage was taken");
+      },
+      dealMagicDamage() {
+        throw new Error("retaliation should not fire when no damage was taken");
+      },
+      dealDamage() {},
+      healTarget() {},
+      applyEffect() {},
+      removeEffect() {},
+      activeReactionKeys: new Set(),
+      reactionDepth: 0,
+      rng: createRng(1),
+      attrDefs,
+      bus: createGameEventBus(),
+      state: createEmptyState(1, SAVE_VERSION),
+      battle: {} as any,
+      participants: [pc, enemy],
+    };
+
+    for (let i = 0; i < 20; i++) {
+      dispatchReaction(pc, {
+        kind: "after_damage_taken",
+        attacker: enemy,
+        damage: 0,
+        damageType: "physical",
+      }, reactionCtx);
+    }
+
+    expect(enemy.currentHp).toBe(initialEnemyHp);
+  });
+
   test("retaliation is mitigated by the attacker's PDEF", () => {
     const makeKnight = () => {
       const knight = makePlayer({ id: "hero.knight", talents: [basicAttackTalent.id as string], maxHp: 200, atk: 20 });
       knight.level = 10;
       knight.heroConfigId = "hero.knight";
       knight.side = "player";
-      knight.talentLevels[knightFortitude.id as string] = 1;
+      knight.talentLevels[knightWarcry.id as string] = 5;
       allocateTalentPoint(knight, knightRetaliation.id, content);
       return knight;
     };
@@ -249,8 +295,6 @@ describe("knight integration / retaliation reaction", () => {
   });
 });
 
-// ---------- Test: Basic attack triggers reaction dispatch ----------
-
 describe("knight integration / basic attack reaction dispatch", () => {
   let content: ContentDb;
 
@@ -259,17 +303,11 @@ describe("knight integration / basic attack reaction dispatch", () => {
   });
 
   test("basic attack (effects[] fallback) triggers after_damage_taken on target", () => {
-    // This test will FAIL if effects[] fallback bypasses reaction dispatch.
-    // It documents the expected behavior: ALL damage should go through reactions.
     const pc = makePlayer({ id: "hero.knight", talents: [basicAttackTalent.id as string], atk: 20 });
     pc.side = "player";
 
-    // Give the enemy a retaliation-like effect to detect if reactions fire.
     const enemy = makeSlime("e1");
 
-    // Track whether after_damage_taken was dispatched on the enemy.
-    // We can check this by installing an effect with a reaction on the enemy.
-    // For simplicity, just verify the damage path works.
     const rng = createRng(42);
     const bus = createGameEventBus();
     const state = createEmptyState(42, SAVE_VERSION);
@@ -286,12 +324,9 @@ describe("knight integration / basic attack reaction dispatch", () => {
 
     const result = tryUseTalent(pc, basicAttackTalent.id as string, [enemy], ctx);
     expect(result.ok).toBe(true);
-    // Basic attack should deal some damage.
     expect(enemy.currentHp).toBeLessThan(30);
   });
 });
-
-// ---------- Test: PriorityListIntent picks Power Strike ----------
 
 describe("knight integration / PriorityListIntent", () => {
   beforeEach(() => {
@@ -340,7 +375,6 @@ describe("knight integration / PriorityListIntent", () => {
     const action = intent(pc, { participants: [pc, enemy], rng, attrDefs });
 
     expect(action).not.toBeNull();
-    // Should fall back to basic attack (first knownTalentId).
     expect(action!.talentId).toBe(basicAttackTalent.id);
   });
 });

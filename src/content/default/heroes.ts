@@ -51,10 +51,10 @@ const authoredHeroes = {
     availableTalents: [
       knightPowerStrike.id,
       knightFortitude.id,
-      knightRetaliation.id,
       knightRage.id,
       knightGuard.id,
       knightWarcry.id,
+      knightRetaliation.id,
     ],
     startingItems: [{ itemId: trainingSword.id, qty: 1 }],
     baseAttrs: {

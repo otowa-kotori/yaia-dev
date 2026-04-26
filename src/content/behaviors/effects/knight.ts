@@ -13,19 +13,19 @@ import { ATTR } from "../../../core/entity/attribute";
 
 // ---------- Fortitude ----------
 //
-// Passive buff: +HP% and +PDEF% from state.hpPct / state.defPct.
+// Passive buff: +HP% and +HP_REGEN from state.hpPct / state.hpRegen.
 
 export const knightFortitudeEffect: EffectDef = {
   id: "effect.knight.fortitude" as EffectId,
-  name: "坚守",
+  name: "坚韧",
   kind: "duration",
   durationActions: 1, // overridden to -1 (infinite) at install
   computeModifiers: (state) => {
     const hpPct = (state.hpPct as number) ?? 0.05;
-    const defPct = (state.defPct as number) ?? 0.03;
+    const hpRegen = (state.hpRegen as number) ?? 1.0;
     return [
       { stat: ATTR.MAX_HP, op: "pct_add", value: hpPct, sourceId: "" },
-      { stat: ATTR.PDEF,   op: "pct_add", value: defPct, sourceId: "" },
+      { stat: ATTR.HP_REGEN, op: "flat", value: hpRegen, sourceId: "" },
     ];
   },
   tags: ["passive", "knight"],
@@ -45,9 +45,10 @@ export const knightRetaliationEffect: EffectDef = {
   reactions: {
     after_damage_taken: (owner, event, state, ctx) => {
       if (event.damageType !== "physical") return;
+      if (event.damage <= 0) return;
       if (event.attacker.currentHp <= 0) return;
 
-      const chance = (state.chance as number) ?? 0.2;
+      const chance = (state.chance as number) ?? 0.25;
       if (ctx.rng.next() >= chance) return;
 
       const dmgRatio = (state.dmgRatio as number) ?? 0.5;
@@ -70,7 +71,7 @@ export const knightRageEffect: EffectDef = {
     const defPct = (state.defPct as number) ?? -0.05;
     return [
       { stat: ATTR.PATK, op: "pct_add", value: atkPct, sourceId: "" },
-      { stat: ATTR.PDEF,  op: "pct_add", value: defPct, sourceId: "" },
+      { stat: ATTR.PDEF, op: "pct_add", value: defPct, sourceId: "" },
     ];
   },
   tags: ["sustain", "knight"],
@@ -90,7 +91,7 @@ export const knightGuardEffect: EffectDef = {
     const defPct = (state.defPct as number) ?? 0.08;
     const atkPct = (state.atkPct as number) ?? -0.05;
     return [
-      { stat: ATTR.PDEF,  op: "pct_add", value: defPct, sourceId: "" },
+      { stat: ATTR.PDEF, op: "pct_add", value: defPct, sourceId: "" },
       { stat: ATTR.PATK, op: "pct_add", value: atkPct, sourceId: "" },
     ];
   },
@@ -115,7 +116,7 @@ export const knightGuardEffect: EffectDef = {
 
 // ---------- Warcry ----------
 //
-// Active skill buff: single duration effect, modifiers from state.aggroPct / state.defPct.
+// Active skill buff: single duration effect, modifiers from state.aggroPct / state.defFlat.
 // Duration: 3 action counts.
 
 export const knightWarcryEffect: EffectDef = {
@@ -125,10 +126,10 @@ export const knightWarcryEffect: EffectDef = {
   durationActions: 3,
   computeModifiers: (state) => {
     const aggroPct = (state.aggroPct as number) ?? 2.0;
-    const defPct = (state.defPct as number) ?? 0.08;
+    const defFlat = (state.defFlat as number) ?? 1.0;
     return [
       { stat: ATTR.AGGRO_WEIGHT, op: "pct_add", value: aggroPct, sourceId: "" },
-      { stat: ATTR.PDEF, op: "pct_add", value: defPct, sourceId: "" },
+      { stat: ATTR.PDEF, op: "flat", value: defFlat, sourceId: "" },
     ];
   },
   tags: ["active", "knight", "buff"],

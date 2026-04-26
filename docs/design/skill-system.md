@@ -178,12 +178,12 @@ EffectInstance.remainingActions = -1
 
 当前内容里，骑士 6 个 talent 都已经存在：
 
-- `重击`：单体高系数物理伤害
-- `坚守`：长期 +HP% / +PDEF%
-- `反击`：受击后概率反击
+- `重击`：单体高系数物理伤害，MP 消耗随等级提升
+- `坚韧`（id 仍为 `fortitude`）：长期 +HP% / +HP_REGEN
+- `反击`：受击且实际掉血后概率反击
 - `狂怒`：sustain，+PATK% / -PDEF%
 - `守护`：sustain，+PDEF% / -PATK%，并带代伤逻辑
-- `战吼`：**当前实现是给自己上 buff**，提高 `AGGRO_WEIGHT` 与 `PDEF`，不是“给所有敌人挂 taunt debuff”
+- `战吼`：**当前实现是给自己上 buff**，提高 `AGGRO_WEIGHT` 与 flat `PDEF`，不是“给所有敌人挂 taunt debuff”
 
 这个 `战吼` 行为是旧文档最容易误导人的点之一。
 
