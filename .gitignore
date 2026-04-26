@@ -9,3 +9,5 @@ bun.lockb
 .claude/settings.local.json
 .playwright-cli
 .codebuddy/plans
+external-assets/game-icons/
+

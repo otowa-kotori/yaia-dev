@@ -13,6 +13,7 @@ import { computeAvailableTp, computeTotalTp } from "../core/growth/talent";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
 import { T, fmt } from "./text";
+import { TalentIcon } from "./TalentIcon";
 
 export function TalentsView({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
@@ -29,8 +30,9 @@ export function TalentsView({ store }: { store: GameStore }) {
   const availableTalentIds = heroCfg?.availableTalents ?? [];
   const totalTp = computeTotalTp(hero.level);
   const availableTp = computeAvailableTp(hero.level, hero.talentLevels, content.talents);
-  const maxSlots = getAttr(hero, ATTR.TALENT_SLOTS, content.attributes);
+  const talentSlots = Math.max(0, Math.floor(getAttr(hero, ATTR.TALENT_SLOTS, content.attributes)));
   const equippedCount = hero.equippedTalents.length;
+  const equippedSlots = Array.from({ length: talentSlots }, (_, index) => hero.equippedTalents[index] ?? null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -75,10 +77,98 @@ export function TalentsView({ store }: { store: GameStore }) {
         </div>
         <span style={{
           fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
-          color: equippedCount >= maxSlots ? "#c97" : "#9bd",
+          color: equippedCount >= talentSlots ? "#c97" : "#9bd",
         }}>
-          {equippedCount} / {maxSlots}
+          {equippedCount} / {talentSlots}
         </span>
+      </div>
+
+      <div style={{
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        padding: "8px 2px 2px",
+      }}>
+        {equippedSlots.map((talentId, index) => {
+          if (!talentId) {
+            return (
+              <div
+                key={`empty-${index}`}
+                title={`${T.talentEquipEmptySlot} ${index + 1}`}
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: 8,
+                  border: "1px dashed #3d4b63",
+                  background: "#14191f",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#5f6d84",
+                  gap: 2,
+                }}
+              >
+                <span style={{ fontSize: 11, fontWeight: 700 }}>{index + 1}</span>
+                <span style={{ fontSize: 9, opacity: 0.72 }}>{T.talentEquipEmptySlot}</span>
+              </div>
+            );
+          }
+
+          const equippedDef = content.talents[talentId];
+          if (!equippedDef) return null;
+          const equippedLevel = hero.talentLevels[talentId] ?? 0;
+
+          return (
+            <div
+              key={`${talentId}-${index}`}
+              title={`${equippedDef.name} · Lv ${equippedLevel}`}
+              style={{
+                width: 50,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <div style={{ position: "relative" }}>
+                <TalentIcon talentId={talentId} alt={equippedDef.name} size={50} />
+                <div style={{
+                  position: "absolute",
+                  left: -4,
+                  top: -4,
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 4px",
+                  borderRadius: 999,
+                  background: "#203a57",
+                  color: "#bfe2ff",
+                  border: "1px solid #31577d",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontVariantNumeric: "tabular-nums",
+                }}>
+                  {index + 1}
+                </div>
+              </div>
+              <div style={{
+                fontSize: 9,
+                lineHeight: 1.15,
+                color: "#95a7c7",
+                textAlign: "center",
+                width: "100%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}>
+                {equippedDef.name}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Error banner */}
@@ -121,7 +211,7 @@ export function TalentsView({ store }: { store: GameStore }) {
             const canAllocate = !maxed && prereqMet && availableTp >= def.tpCost;
             const isEquipped = hero.equippedTalents.includes(id as string);
             const isEquippable = def.type === "active" || def.type === "sustain";
-            const canEquip = isEquippable && currentLevel > 0 && !isEquipped && equippedCount < maxSlots;
+            const canEquip = isEquippable && currentLevel > 0 && !isEquipped && equippedCount < talentSlots;
 
             return (
               <TalentCard
@@ -219,27 +309,38 @@ function TalentCard({
       border: isEquipped ? "1px solid #59c" : maxed ? "1px solid #3a6" : "1px solid #333",
     }}>
       {/* Header: name + type badge + level + equip indicator */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-          <span style={{ fontWeight: 600, fontSize: 13, color: maxed ? "#4a9" : "#eee" }}>
-            {def.name}
-          </span>
-          <span style={{
-            fontSize: 10, padding: "1px 5px", borderRadius: 3,
-            border: `1px solid ${typeColor}`, color: typeColor,
-          }}>
-            {typeLabel}
-          </span>
-          {isEquipped && (
-            <span style={{
-              fontSize: 9, padding: "1px 4px", borderRadius: 3,
-              background: "#2a4a5a", color: "#9bd",
-            }}>
-              {T.talentEquipped}
-            </span>
-          )}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", minWidth: 0 }}>
+          <TalentIcon
+            talentId={def.id as string}
+            alt={def.name}
+            size={36}
+            dimmed={currentLevel <= 0}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: maxed ? "#4a9" : "#eee" }}>
+                {def.name}
+              </span>
+              <span style={{
+                fontSize: 10, padding: "1px 5px", borderRadius: 3,
+                border: `1px solid ${typeColor}`, color: typeColor,
+              }}>
+                {typeLabel}
+              </span>
+              {isEquipped && (
+                <span style={{
+                  fontSize: 9, padding: "1px 4px", borderRadius: 3,
+                  background: "#2a4a5a", color: "#9bd",
+                }}>
+                  {T.talentEquipped}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 10, opacity: 0.48 }}>{def.id}</div>
+          </div>
         </div>
-        <span style={{ fontSize: 11, opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ fontSize: 11, opacity: 0.6, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
           Lv {currentLevel} / {def.maxLevel}
         </span>
       </div>

@@ -203,7 +203,9 @@ export const T = {
   talentEquipTitle: "技能装备",
   talentEquipHint: "只有装备的主动/姿态技能才能在战斗中使用。被动技能始终生效。",
   talentSlotsFull: "槽位已满",
+  talentEquipEmptySlot: "空槽",
   talentEquipped: "已装备",
+
   btn_equipTalent: "装备",
   btn_unequipTalent: "卸下",
   talentEquipFailed: "技能装备失败",
