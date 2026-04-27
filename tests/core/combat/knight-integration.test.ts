@@ -338,16 +338,19 @@ describe("knight integration / PriorityListIntent", () => {
     pc.talentLevels[knightPowerStrike.id as string] = 1;
 
     const enemy = makeSlime("e1");
+    const enemy2 = makeSlime("e2");
+    const enemy3 = makeSlime("e3");
     const rng = createRng(42);
 
     const rules: PriorityRule[] = [
       { talentId: knightPowerStrike.id as string },
     ];
     const intent = createPriorityListIntent(rules);
-    const action = intent(pc, { participants: [pc, enemy], rng });
+    const action = intent(pc, { participants: [pc, enemy, enemy2, enemy3], rng });
 
     expect(action).not.toBeNull();
     expect(action!.talentId).toBe(knightPowerStrike.id);
+    expect(action!.targets.length).toBe(2);
   });
 
   test("priority list falls back to basic attack when Power Strike on cooldown", () => {

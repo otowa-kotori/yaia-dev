@@ -129,7 +129,7 @@ function tryRule(
   const policy = rule.targetPolicy
     ?? talentDef.intentTargetPolicy
     ?? inferTargetPolicy(activeParams.targetKind);
-  const targets = resolveTargets(policy, actor, ctx);
+  const targets = resolveTargets(policy, activeParams.maxTargets, actor, ctx);
   if (!targets || targets.length === 0) return null;
 
   return { talentId, targets };
@@ -167,38 +167,46 @@ function checkCondition(
 
 function resolveTargets(
   policy: TargetPolicy,
+  maxTargets: number,
   actor: Character,
   ctx: IntentContext,
 ): Character[] | null {
+  const clampTargets = (targets: Character[]): Character[] => {
+    if (!Number.isFinite(maxTargets)) return targets;
+    const limit = Math.max(0, Math.floor(maxTargets));
+    return targets.slice(0, limit);
+  };
+
   switch (policy) {
     case "random_enemy": {
       const enemies = enemiesOf(actor, ctx.participants);
       if (enemies.length === 0) return null;
-      return [pickWeightedTarget(enemies, ctx)];
+      return clampTargets([pickWeightedTarget(enemies, ctx)]);
     }
     case "lowest_hp_enemy": {
       const enemies = enemiesOf(actor, ctx.participants);
       if (enemies.length === 0) return null;
       enemies.sort((a, b) => a.currentHp - b.currentHp);
-      return [enemies[0]!];
+      return clampTargets([enemies[0]!]);
     }
-    case "self":
-      return [actor];
+    case "self": {
+      return clampTargets([actor]);
+    }
     case "all_enemies": {
       const enemies = enemiesOf(actor, ctx.participants);
       if (enemies.length === 0) return null;
-      return enemies;
+      return clampTargets(enemies);
     }
     case "random_ally": {
       const allies = alliesOf(actor, ctx.participants);
       if (allies.length === 0) return null;
-      return [ctx.rng.pick(allies)];
+      return clampTargets([ctx.rng.pick(allies)]);
     }
     case "lowest_hp_ally": {
       const allies = alliesOf(actor, ctx.participants);
       if (allies.length === 0) return null;
       allies.sort((a, b) => a.currentHp - b.currentHp);
-      return [allies[0]!];
+      return clampTargets([allies[0]!]);
     }
   }
 }

@@ -3,11 +3,13 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { createPriorityListIntent, type PriorityRule } from "../../../src/core/combat/intent/priority";
 import type { IntentContext } from "../../../src/core/combat/intent";
+import { patchContent } from "../../../src/core/content";
+import type { TalentDef, TalentId } from "../../../src/core/content/types";
 import {
+  basicStrikeEffect,
   loadFixtureContent,
   makePlayer,
   makeSlime,
-  attrDefs,
   basicAttackTalent,
   fireballTalent,
 } from "../../fixtures/content";
@@ -153,6 +155,41 @@ describe("PriorityListIntent", () => {
     const action = intent(player, makeCtx([player]));
 
     expect(action).toBeNull();
+  });
+
+  test("all_enemies rule respects maxTargets", () => {
+    const cleave: TalentDef = {
+      id: "talent.test.cleave" as TalentId,
+      name: "Cleave",
+      type: "active",
+      maxLevel: 1,
+      tpCost: 0,
+      getActiveParams: () => ({
+        targetKind: "all_enemies" as const,
+        maxTargets: 2,
+      }),
+      effects: [basicStrikeEffect.id],
+    };
+    patchContent({
+      talents: { [cleave.id]: cleave },
+    });
+
+    const player = makePlayer({
+      id: "p",
+      talents: [cleave.id as string],
+      mp: 20,
+    });
+    player.side = "player";
+    const e1 = makeSlime("e1");
+    const e2 = makeSlime("e2");
+    const e3 = makeSlime("e3");
+
+    const rules: PriorityRule[] = [{ talentId: cleave.id as string }];
+    const intent = createPriorityListIntent(rules);
+    const action = intent(player, makeCtx([player, e1, e2, e3]));
+
+    expect(action).not.toBeNull();
+    expect(action!.targets.length).toBe(2);
   });
 
   test("skips unknown talent gracefully", () => {

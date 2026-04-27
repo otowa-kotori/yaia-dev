@@ -115,7 +115,12 @@ export function tryUseTalent(
     return fail("insufficient_mp");
   }
 
-  const targetCheck = validateTargets(activeParams.targetKind, caster, targets);
+  const targetCheck = validateTargets(
+    activeParams.targetKind,
+    activeParams.maxTargets,
+    caster,
+    targets,
+  );
   if (!targetCheck.ok) return targetCheck;
 
   // Commit: pay cost, set cooldown (remaining action count).
@@ -215,6 +220,7 @@ export function tryUseTalent(
 
 function validateTargets(
   targetKind: TargetKind,
+  maxTargets: number,
   caster: Character,
   targets: Character[],
 ): { ok: true } | CastFailure {
@@ -241,6 +247,7 @@ function validateTargets(
 
     case "all_enemies":
       if (targets.length === 0) return fail("no_valid_targets");
+      if (targets.length > maxTargets) return fail("wrong_target_count");
       if (targets.some((t) => t.side === caster.side)) {
         return fail("target_wrong_side");
       }
@@ -248,6 +255,7 @@ function validateTargets(
 
     case "all_allies":
       if (targets.length === 0) return fail("no_valid_targets");
+      if (targets.length > maxTargets) return fail("wrong_target_count");
       if (targets.some((t) => t.side !== caster.side)) {
         return fail("target_wrong_side");
       }

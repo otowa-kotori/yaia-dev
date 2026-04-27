@@ -1,7 +1,9 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { tryUseTalent } from "../../../src/core/behavior/ability";
-import { resetContent } from "../../../src/core/content";
+import { patchContent, resetContent } from "../../../src/core/content";
+import type { TalentDef, TalentId } from "../../../src/core/content/types";
 import {
+  basicStrikeEffect,
   basicAttackTalent,
   fireballTalent,
   makeHarness,
@@ -124,5 +126,32 @@ describe("talent: tryUseTalent", () => {
     const r2 = tryUseTalent(caster, shieldSelfTalent.id, [other], { ...h });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe("wrong_target_count");
+  });
+
+  test("all_enemies + maxTargets rejects too many targets", () => {
+    const sweepingStrike: TalentDef = {
+      id: "talent.test.sweeping_strike" as TalentId,
+      name: "Sweeping Strike",
+      type: "active",
+      maxLevel: 1,
+      tpCost: 0,
+      getActiveParams: () => ({
+        targetKind: "all_enemies" as const,
+        maxTargets: 2,
+      }),
+      effects: [basicStrikeEffect.id],
+    };
+    const h = makeHarness();
+    patchContent({
+      talents: { [sweepingStrike.id]: sweepingStrike },
+    });
+    const caster = makePlayer({ id: "p", talents: [sweepingStrike.id as string], atk: 10 });
+    const e1 = makeSlime("e1");
+    const e2 = makeSlime("e2");
+    const e3 = makeSlime("e3");
+
+    const r = tryUseTalent(caster, sweepingStrike.id as string, [e1, e2, e3], { ...h });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("wrong_target_count");
   });
 });

@@ -20,6 +20,7 @@ export interface ResolvedTalentActiveParams {
   mpCost: number;
   cooldownActions: number;
   actionCostRatio: number;
+  maxTargets: number;
 }
 
 export interface CreateTalentExecutionContextArgs {
@@ -88,14 +89,42 @@ export function resolveTalentActiveParams(
     throw new Error(`talent ${def.id}: invalid actionCostRatio ${actionCostRatio}`);
   }
 
+  const defaultMaxTargets = defaultMaxTargetsByKind(activeParams.targetKind);
+  const maxTargets = activeParams.maxTargets ?? defaultMaxTargets;
+  if (!Number.isInteger(maxTargets) || maxTargets < 0) {
+    throw new Error(`talent ${def.id}: invalid maxTargets ${maxTargets}`);
+  }
+  if (maxTargets > defaultMaxTargets) {
+    throw new Error(
+      `talent ${def.id}: maxTargets ${maxTargets} violates targetKind "${activeParams.targetKind}" upper bound ${defaultMaxTargets}`,
+    );
+  }
+
   return {
     targetKind: activeParams.targetKind,
     mpCost,
     cooldownActions,
     actionCostRatio,
+    maxTargets,
   };
 }
 
 export function getTalentLevel(actor: Character, talentId: string): number {
   return isPlayer(actor) ? actor.talentLevels[talentId] ?? 1 : 1;
+}
+
+function defaultMaxTargetsByKind(
+  targetKind: TalentActiveParams["targetKind"],
+): number {
+  switch (targetKind) {
+    case "none":
+      return 0;
+    case "self":
+    case "single_enemy":
+    case "single_ally":
+      return 1;
+    case "all_enemies":
+    case "all_allies":
+      return Number.POSITIVE_INFINITY;
+  }
 }

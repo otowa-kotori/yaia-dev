@@ -286,6 +286,8 @@ export type TalentActiveParams = {
   cooldownActions: number;
   /** Relative to the scheduler's standard action cost. 1 = default action. */
   actionCostRatio: number;
+  /** Optional upper bound for selected targets. */
+  maxTargets: number;
 }>;
 
 

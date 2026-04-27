@@ -42,7 +42,7 @@ function powerStrikeParams(ctx: TalentStaticContext) {
 export const knightPowerStrike: TalentDef = {
   id: "talent.knight.power_strike" as TalentId,
   name: "重击",
-  description: "高系数单体物理攻击。",
+  description: "高系数物理攻击，最多命中 2 名敌人。",
   type: "active",
   maxLevel: 10,
   tpCost: 1,
@@ -50,10 +50,14 @@ export const knightPowerStrike: TalentDef = {
   getActiveParams: (ctx) => ({
     mpCost: powerStrikeParams(ctx).mpCost,
     cooldownActions: 2,
-    targetKind: "single_enemy" as const,
+    targetKind: "all_enemies" as const,
+    maxTargets: 2,
   }),
   execute: (ctx: TalentExecutionContext) => {
-    ctx.dealPhysicalDamage(ctx.targets[0]!, powerStrikeParams(ctx).coeff);
+    const coeff = powerStrikeParams(ctx).coeff;
+    for (const target of ctx.targets) {
+      ctx.dealPhysicalDamage(target, coeff);
+    }
   },
   describe: (ctx: TalentStaticContext) => {
     const p = powerStrikeParams(ctx);
