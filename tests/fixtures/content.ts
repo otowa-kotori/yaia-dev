@@ -304,8 +304,6 @@ export const forestCombatZone: CombatZoneDef = {
   waves: [
 
     {
-      id: "wave.forest.test_slimes",
-      name: "Twin Slimes",
       monsters: [slimeMonster.id, slimeMonster.id],
       rewards: {
         drops: [
@@ -314,8 +312,6 @@ export const forestCombatZone: CombatZoneDef = {
       },
     },
     {
-      id: "wave.forest.test_mix",
-      name: "Slime and Goblin",
       monsters: [slimeMonster.id, goblinMonster.id],
       rewards: {
         drops: [
