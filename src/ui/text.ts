@@ -205,8 +205,12 @@ export const T = {
   talentSlotsFull: "槽位已满",
   talentEquipEmptySlot: "空槽",
   talentEquipped: "已装备",
+  talentMetaMp: "MP {amount}",
+  talentMetaCooldown: "冷却 {count} 行动",
+  talentMetaActionCostRatio: "行动耗时 ×{ratio}",
 
   btn_equipTalent: "装备",
+
   btn_unequipTalent: "卸下",
   talentEquipFailed: "技能装备失败",
   talentUnequipFailed: "技能卸下失败",

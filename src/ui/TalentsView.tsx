@@ -5,7 +5,13 @@
 // description, prereqs, equip state, and action buttons.
 
 import { useState } from "react";
-import { getContent } from "../core/content";
+import {
+  createTalentStaticContext,
+  DEFAULT_TALENT_ACTION_COST_RATIO,
+  getContent,
+  resolveTalentActiveParams,
+  type ResolvedTalentActiveParams,
+} from "../core/content";
 import type { TalentDef } from "../core/content/types";
 import { getAttr } from "../core/entity/actor";
 import { ATTR } from "../core/entity/attribute";
@@ -189,6 +195,20 @@ export function TalentsView({ store }: { store: GameStore }) {
             if (!def) return null;
             const currentLevel = hero.talentLevels[id as string] ?? 0;
             const maxed = currentLevel >= def.maxLevel;
+            const currentStaticCtx = createTalentStaticContext(currentLevel, hero);
+            const nextStaticCtx = createTalentStaticContext(currentLevel + 1, hero);
+            const currentDescription = currentLevel > 0 && def.describe
+              ? def.describe(currentStaticCtx)
+              : null;
+            const nextDescription = !maxed && def.describe
+              ? def.describe(nextStaticCtx)
+              : null;
+            const currentActiveMeta = currentLevel > 0
+              ? formatActiveMeta(resolveTalentActiveParams(def, currentStaticCtx))
+              : null;
+            const nextActiveMeta = !maxed
+              ? formatActiveMeta(resolveTalentActiveParams(def, nextStaticCtx))
+              : null;
 
             // Check prereqs for disable state.
             let prereqMet = true;
@@ -218,6 +238,10 @@ export function TalentsView({ store }: { store: GameStore }) {
                 key={id}
                 def={def}
                 currentLevel={currentLevel}
+                currentDescription={currentDescription}
+                nextDescription={nextDescription}
+                currentActiveMeta={currentActiveMeta}
+                nextActiveMeta={nextActiveMeta}
                 maxed={maxed}
                 canAllocate={canAllocate}
                 prereqHint={prereqHint}
@@ -273,9 +297,34 @@ const TYPE_COLORS: Record<string, string> = {
   sustain: "#c9a",
 };
 
+function formatActionCostRatio(ratio: number): string {
+  return Number.isInteger(ratio)
+    ? String(ratio)
+    : ratio.toFixed(2).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+}
+
+function formatActiveMeta(activeParams: ResolvedTalentActiveParams | null): string | null {
+  if (!activeParams) return null;
+  const parts: string[] = [];
+  if (activeParams.mpCost > 0) {
+    parts.push(fmt(T.talentMetaMp, { amount: activeParams.mpCost }));
+  }
+  if (activeParams.cooldownActions > 0) {
+    parts.push(fmt(T.talentMetaCooldown, { count: activeParams.cooldownActions }));
+  }
+  if (activeParams.actionCostRatio !== DEFAULT_TALENT_ACTION_COST_RATIO) {
+    parts.push(fmt(T.talentMetaActionCostRatio, { ratio: formatActionCostRatio(activeParams.actionCostRatio) }));
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function TalentCard({
   def,
   currentLevel,
+  currentDescription,
+  nextDescription,
+  currentActiveMeta,
+  nextActiveMeta,
   maxed,
   canAllocate,
   prereqHint,
@@ -288,6 +337,10 @@ function TalentCard({
 }: {
   def: TalentDef;
   currentLevel: number;
+  currentDescription: string | null;
+  nextDescription: string | null;
+  currentActiveMeta: string | null;
+  nextActiveMeta: string | null;
   maxed: boolean;
   canAllocate: boolean;
   prereqHint: string;
@@ -361,15 +414,21 @@ function TalentCard({
       )}
 
       {/* Level-specific description from describe */}
-      {def.describe && (
-        <div style={{ fontSize: 11, opacity: 0.55, marginTop: -2 }}>
-          {currentLevel > 0 && (
-            <div>Lv{currentLevel}: {def.describe({ level: currentLevel })}</div>
+      {(currentDescription || nextDescription || currentActiveMeta || nextActiveMeta) && (
+        <div style={{ fontSize: 11, opacity: 0.55, marginTop: -2, display: "flex", flexDirection: "column", gap: 2 }}>
+          {currentDescription && (
+            <div>Lv{currentLevel}: {currentDescription}</div>
           )}
-          {!maxed && (
-            <div style={{ color: "#9bd" }}>
-              {currentLevel > 0 ? "→ " : ""}Lv{currentLevel + 1}: {def.describe({ level: currentLevel + 1 })}
+          {currentActiveMeta && (
+            <div style={{ marginTop: currentDescription ? -1 : 0, opacity: 0.78 }}>↳ {currentActiveMeta}</div>
+          )}
+          {nextDescription && (
+            <div style={{ color: "#9bd", marginTop: currentActiveMeta ? 2 : 0 }}>
+              {currentLevel > 0 ? "→ " : ""}Lv{currentLevel + 1}: {nextDescription}
             </div>
+          )}
+          {nextActiveMeta && (
+            <div style={{ color: "#9bd", opacity: 0.88 }}>↳ {nextActiveMeta}</div>
           )}
         </div>
       )}

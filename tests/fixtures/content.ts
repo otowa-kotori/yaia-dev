@@ -149,13 +149,11 @@ export const basicAttackTalent: TalentDef = {
   maxLevel: 1,
   tpCost: 0,
   getActiveParams: () => ({
-    mpCost: 0,
-    cooldownActions: 0,
-    energyCost: 1000,
     targetKind: "single_enemy" as const,
   }),
   effects: [basicStrikeEffect.id],
 };
+
 
 export const fireballTalent: TalentDef = {
   id: "talent.fire.fireball" as TalentId,
@@ -166,9 +164,9 @@ export const fireballTalent: TalentDef = {
   getActiveParams: () => ({
     mpCost: 5,
     cooldownActions: 3,
-    energyCost: 1000,
     targetKind: "single_enemy" as const,
   }),
+
   effects: [basicStrikeEffect.id, burnDotEffect.id],
 };
 
@@ -179,13 +177,11 @@ export const shieldSelfTalent: TalentDef = {
   maxLevel: 1,
   tpCost: 0,
   getActiveParams: () => ({
-    mpCost: 0,
-    cooldownActions: 0,
-    energyCost: 1000,
     targetKind: "self" as const,
   }),
   effects: [shieldBuffEffect.id],
 };
+
 
 // ---------- Common fixture monsters ----------
 

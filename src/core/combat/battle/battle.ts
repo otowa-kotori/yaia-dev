@@ -17,6 +17,12 @@ import type { AttrDef } from "../../content/types";
 /** Battle mode: solo (1 player) or party (future multi-character). */
 export type BattleMode = "solo" | "party";
 import { getTalent } from "../../content/registry";
+import {
+  createTalentStaticContext,
+  getTalentLevel,
+  resolveTalentActiveParams,
+} from "../../content/talent";
+
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
@@ -211,8 +217,9 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
 }
 
 interface PlannedAction extends IntentAction {
-  energyCost: number;
+  actionCost: number;
 }
+
 
 function runActorActionWindow(
   battle: Battle,
@@ -220,10 +227,10 @@ function runActorActionWindow(
   participants: readonly Character[],
   ctx: TickBattleContext,
 ): void {
-  const defaultEnergyCost = getDefaultEnergyCost(battle.scheduler);
+  const defaultActionCost = getDefaultActionCost(battle.scheduler);
 
   processPreActionEffects(actor, ctx);
-  if (consumeWindowIfActorDied(battle, actor, defaultEnergyCost)) {
+  if (consumeWindowIfActorDied(battle, actor, defaultActionCost)) {
     return;
   }
 
@@ -232,16 +239,16 @@ function runActorActionWindow(
     actor,
     participants,
     ctx,
-    defaultEnergyCost,
+    defaultActionCost,
   );
   if (!plannedAction) {
-    schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
+    schedulerOnActionResolved(battle.scheduler, actor, defaultActionCost);
     emitSkippedAction(battle, actor, "no valid plan", ctx);
     decrementCooldowns(actor);
     return;
   }
 
-  schedulerOnActionResolved(battle.scheduler, actor, plannedAction.energyCost);
+  schedulerOnActionResolved(battle.scheduler, actor, plannedAction.actionCost);
   const result = executePlannedAction(
     battle,
     actor,
@@ -251,10 +258,10 @@ function runActorActionWindow(
   );
   emitPlannedActionResult(battle, actor, result, ctx);
 
-
   // Decrement all cooldowns by 1 after the actor's action resolves.
   decrementCooldowns(actor);
 }
+
 
 function processPreActionEffects(
   actor: Character,
@@ -273,15 +280,17 @@ function processPreActionEffects(
 function consumeWindowIfActorDied(
   battle: Battle,
   actor: Character,
-  defaultEnergyCost: number,
+  defaultActionCost: number,
 ): boolean {
+
   // If the actor died before acting (e.g. its own DoT tick), still consume the
   // served action window so the same ready slot cannot loop forever this tick.
   if (!isAlive(actor)) {
-    schedulerOnActionResolved(battle.scheduler, actor, defaultEnergyCost);
+    schedulerOnActionResolved(battle.scheduler, actor, defaultActionCost);
     decrementCooldowns(actor);
     return true;
   }
+
   return false;
 }
 
@@ -295,7 +304,7 @@ function resolvePlannedAction(
   actor: Character,
   participants: readonly Character[],
   ctx: TickBattleContext,
-  defaultEnergyCost: number,
+  defaultActionCost: number,
 ): PlannedAction | null {
 
   // Decide intent → validate + dispatch.
@@ -308,19 +317,28 @@ function resolvePlannedAction(
   if (!plan) return null;
 
   const talent = getTalent(plan.talentId);
-  const activeParams = talent.getActiveParams?.(1);
-  const energyCost = activeParams?.energyCost ?? defaultEnergyCost;
-  if (!Number.isFinite(energyCost) || energyCost <= 0) {
+  const level = getTalentLevel(actor, plan.talentId);
+  const activeParams = resolveTalentActiveParams(
+    talent,
+    createTalentStaticContext(level, isPlayer(actor) ? actor : null),
+  );
+  if (!activeParams) {
+    throw new Error(`battle: talent ${talent.id} is not active`);
+  }
+
+  const actionCost = defaultActionCost * activeParams.actionCostRatio;
+  if (!Number.isFinite(actionCost) || actionCost <= 0) {
     throw new Error(
-      `battle: invalid energyCost ${energyCost} on talent ${talent.id}`,
+      `battle: invalid actionCost ${actionCost} on talent ${talent.id}`,
     );
   }
 
   return {
     ...plan,
-    energyCost,
+    actionCost,
   };
 }
+
 
 function executePlannedAction(
   battle: Battle,
@@ -399,15 +417,16 @@ function decrementCooldowns(actor: Character): void {
   }
 }
 
-function getDefaultEnergyCost(state: SchedulerState): number {
+function getDefaultActionCost(state: SchedulerState): number {
   switch (state.kind) {
     case "atb":
       return state.actionThreshold;
     case "turn":
-      // 回合制当前不消费 energyCost，但战斗计划阶段仍要求一个正数占位。
+      // 回合制当前不消费行动成本，但战斗计划阶段仍要求一个正数占位。
       return 1;
   }
 }
+
 
 function applyPassiveBattleRegen(
   scheduler: SchedulerState,

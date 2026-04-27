@@ -8,14 +8,16 @@
 //   5. 守护 (Guard)         — sustain, +PDEF% -PATK%, proxy damage
 //   6. 战吼 (Warcry)        — active, self-buff +AGGRO_WEIGHT +flat PDEF
 
-import type {
-  TalentDef,
-  TalentId,
-  CastContext,
-  EffectApplication,
-  TalentDescribeContext,
-} from "../../../core/content/types";
+import {
+  createTalentStaticContext,
+  type TalentDef,
+  type TalentExecutionContext,
+  type TalentId,
+  type TalentStaticContext,
+  type EffectApplication,
+} from "../../../core/content";
 import type { Character } from "../../../core/entity/actor/types";
+import { isPlayer } from "../../../core/entity/actor/types";
 import { fromToLinear, fromToSqrt, pctStr, fmtNum } from "../scaling";
 import {
   knightFortitudeEffect,
@@ -27,13 +29,13 @@ import {
 
 // ---------- 1. Power Strike ----------
 
-const powerStrikeCoeff = fromToSqrt(1.34, 1.70);
-const powerStrikeMpCost = fromToSqrt(8, 12);
+const powerStrikeCoeff = fromToSqrt(1.5, 2.0);
+const powerStrikeMpCost = fromToLinear(4, 8);
 
-function powerStrikeParams(level: number) {
+function powerStrikeParams(ctx: TalentStaticContext) {
   return {
-    coeff: powerStrikeCoeff(level),
-    mpCost: Math.round(powerStrikeMpCost(level)),
+    coeff: powerStrikeCoeff(ctx.level),
+    mpCost: Math.round(powerStrikeMpCost(ctx.level)),
   };
 }
 
@@ -45,17 +47,16 @@ export const knightPowerStrike: TalentDef = {
   maxLevel: 10,
   tpCost: 1,
   intentPriority: 20,
-  getActiveParams: (level: number) => ({
-    mpCost: powerStrikeParams(level).mpCost,
-    cooldownActions: 0,
-    energyCost: 1000,
+  getActiveParams: (ctx) => ({
+    mpCost: powerStrikeParams(ctx).mpCost,
+    cooldownActions: 2,
     targetKind: "single_enemy" as const,
   }),
-  execute: (level: number, caster: Character, targets: Character[], ctx: CastContext) => {
-    ctx.dealPhysicalDamage(caster, targets[0]!, powerStrikeParams(level).coeff);
+  execute: (ctx: TalentExecutionContext) => {
+    ctx.dealPhysicalDamage(ctx.targets[0]!, powerStrikeParams(ctx).coeff);
   },
-  describe: (ctx: TalentDescribeContext) => {
-    const p = powerStrikeParams(ctx.level);
+  describe: (ctx: TalentStaticContext) => {
+    const p = powerStrikeParams(ctx);
     return `伤害系数 ${fmtNum(p.coeff)}x，MP 消耗 ${p.mpCost}`;
   },
 };
@@ -65,8 +66,8 @@ export const knightPowerStrike: TalentDef = {
 const fortitudeHpPct = fromToSqrt(0.05, 0.45);
 const fortitudeHpRegen = fromToLinear(4.0, 40.0);
 
-function fortitudeParams(level: number) {
-  return { hpPct: fortitudeHpPct(level), hpRegen: fortitudeHpRegen(level) };
+function fortitudeParams(ctx: TalentStaticContext) {
+  return { hpPct: fortitudeHpPct(ctx.level), hpRegen: fortitudeHpRegen(ctx.level) };
 }
 
 export const knightFortitude: TalentDef = {
@@ -76,13 +77,13 @@ export const knightFortitude: TalentDef = {
   type: "passive",
   maxLevel: 10,
   tpCost: 1,
-  getEffectParams: (level) => fortitudeParams(level),
-  grantEffects: (level: number, _owner: Character): EffectApplication[] => [{
+  getEffectParams: (ctx) => fortitudeParams(ctx),
+  grantEffects: (level: number, owner: Character): EffectApplication[] => [{
     effectId: knightFortitudeEffect.id,
-    state: fortitudeParams(level),
+    state: fortitudeParams(createTalentStaticContext(level, isPlayer(owner) ? owner : null)),
   }],
-  describe: (ctx: TalentDescribeContext) => {
-    const p = fortitudeParams(ctx.level);
+  describe: (ctx: TalentStaticContext) => {
+    const p = fortitudeParams(ctx);
     return `生命 +${pctStr(p.hpPct)}，生命回复 +${fmtNum(p.hpRegen, 1)}`;
   },
 };
@@ -92,8 +93,8 @@ export const knightFortitude: TalentDef = {
 const retaliationChance = 0.25;
 const retaliationDmgRatio = fromToSqrt(0.50, 0.90);
 
-function retaliationParams(level: number) {
-  return { chance: retaliationChance, dmgRatio: retaliationDmgRatio(level) };
+function retaliationParams(ctx: TalentStaticContext) {
+  return { chance: retaliationChance, dmgRatio: retaliationDmgRatio(ctx.level) };
 }
 
 export const knightRetaliation: TalentDef = {
@@ -104,13 +105,13 @@ export const knightRetaliation: TalentDef = {
   maxLevel: 10,
   tpCost: 1,
   prereqs: [{ talentId: "talent.knight.warcry" as TalentId, minLevel: 5 }],
-  getEffectParams: (level) => retaliationParams(level),
-  grantEffects: (level: number, _owner: Character): EffectApplication[] => [{
+  getEffectParams: (ctx) => retaliationParams(ctx),
+  grantEffects: (level: number, owner: Character): EffectApplication[] => [{
     effectId: knightRetaliationEffect.id,
-    state: retaliationParams(level),
+    state: retaliationParams(createTalentStaticContext(level, isPlayer(owner) ? owner : null)),
   }],
-  describe: (ctx: TalentDescribeContext) => {
-    const p = retaliationParams(ctx.level);
+  describe: (ctx: TalentStaticContext) => {
+    const p = retaliationParams(ctx);
     return `反击概率 ${pctStr(p.chance)}，反击伤害 ${pctStr(p.dmgRatio)} PATK`;
   },
 };
@@ -120,8 +121,8 @@ export const knightRetaliation: TalentDef = {
 const rageAtkPct = fromToSqrt(0.08, 0.40);
 const rageDefPct = fromToSqrt(-0.05, -0.25);
 
-function rageParams(level: number) {
-  return { atkPct: rageAtkPct(level), defPct: rageDefPct(level) };
+function rageParams(ctx: TalentStaticContext) {
+  return { atkPct: rageAtkPct(ctx.level), defPct: rageDefPct(ctx.level) };
 }
 
 export const knightRage: TalentDef = {
@@ -133,13 +134,13 @@ export const knightRage: TalentDef = {
   tpCost: 1,
   prereqs: [{ talentId: "talent.knight.power_strike" as TalentId, minLevel: 5 }],
   exclusiveGroup: "knight.stance",
-  getEffectParams: (level) => rageParams(level),
-  grantEffects: (level: number, _owner: Character): EffectApplication[] => [{
+  getEffectParams: (ctx) => rageParams(ctx),
+  grantEffects: (level: number, owner: Character): EffectApplication[] => [{
     effectId: knightRageEffect.id,
-    state: rageParams(level),
+    state: rageParams(createTalentStaticContext(level, isPlayer(owner) ? owner : null)),
   }],
-  describe: (ctx: TalentDescribeContext) => {
-    const p = rageParams(ctx.level);
+  describe: (ctx: TalentStaticContext) => {
+    const p = rageParams(ctx);
     return `物攻 +${pctStr(p.atkPct)}，物防 ${pctStr(p.defPct)}`;
   },
 };
@@ -150,8 +151,8 @@ const guardDefPct = fromToSqrt(0.08, 0.40);
 const guardAtkPct = fromToSqrt(-0.05, -0.25);
 const guardProxyChance = fromToSqrt(0.20, 0.45);
 
-function guardParams(level: number) {
-  return { defPct: guardDefPct(level), atkPct: guardAtkPct(level), proxyChance: guardProxyChance(level) };
+function guardParams(ctx: TalentStaticContext) {
+  return { defPct: guardDefPct(ctx.level), atkPct: guardAtkPct(ctx.level), proxyChance: guardProxyChance(ctx.level) };
 }
 
 export const knightGuard: TalentDef = {
@@ -163,13 +164,13 @@ export const knightGuard: TalentDef = {
   tpCost: 1,
   prereqs: [{ talentId: "talent.knight.fortitude" as TalentId, minLevel: 5 }],
   exclusiveGroup: "knight.stance",
-  getEffectParams: (level) => guardParams(level),
-  grantEffects: (level: number, _owner: Character): EffectApplication[] => [{
+  getEffectParams: (ctx) => guardParams(ctx),
+  grantEffects: (level: number, owner: Character): EffectApplication[] => [{
     effectId: knightGuardEffect.id,
-    state: guardParams(level),
+    state: guardParams(createTalentStaticContext(level, isPlayer(owner) ? owner : null)),
   }],
-  describe: (ctx: TalentDescribeContext) => {
-    const p = guardParams(ctx.level);
+  describe: (ctx: TalentStaticContext) => {
+    const p = guardParams(ctx);
     return `物防 +${pctStr(p.defPct)}，物攻 ${pctStr(p.atkPct)}，代伤概率 ${pctStr(p.proxyChance)}`;
   },
 };
@@ -179,8 +180,8 @@ export const knightGuard: TalentDef = {
 const warcryAggroPct = fromToSqrt(2.0, 10.0);
 const warcryDefFlat = fromToSqrt(1.0, 6.0);
 
-function warcryParams(level: number) {
-  return { aggroPct: warcryAggroPct(level), defFlat: warcryDefFlat(level) };
+function warcryParams(ctx: TalentStaticContext) {
+  return { aggroPct: warcryAggroPct(ctx.level), defFlat: warcryDefFlat(ctx.level) };
 }
 
 export const knightWarcry: TalentDef = {
@@ -192,19 +193,19 @@ export const knightWarcry: TalentDef = {
   tpCost: 1,
   prereqs: [{ talentId: "talent.knight.fortitude" as TalentId, minLevel: 5 }],
   intentPriority: 10,
-  getActiveParams: (_level: number) => ({
+  getActiveParams: () => ({
     mpCost: 12,
     cooldownActions: 4,
-    energyCost: 800,
+    actionCostRatio: 0.8,
     targetKind: "self" as const,
   }),
-  getEffectParams: (level) => warcryParams(level),
-  execute: (level: number, caster: Character, _targets: Character[], ctx: CastContext) => {
-    ctx.applyEffect(knightWarcryEffect.id, caster, caster, warcryParams(level));
+  getEffectParams: (ctx) => warcryParams(ctx),
+  execute: (ctx: TalentExecutionContext) => {
+    ctx.applyEffect(knightWarcryEffect.id, ctx.caster, warcryParams(ctx));
   },
-  describe: (ctx: TalentDescribeContext) => {
-    const p = warcryParams(ctx.level);
+  describe: (ctx: TalentStaticContext) => {
+    const p = warcryParams(ctx);
     const aggroStr = `${Math.round(p.aggroPct * 100)}%`;
-    return `仇恨 +${aggroStr}，物防 +${fmtNum(p.defFlat, 1)}，持续 3 回合，CD 4`;
+    return `仇恨 +${aggroStr}，物防 +${fmtNum(p.defFlat, 1)}，持续 3 回合`;
   },
 };

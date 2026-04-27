@@ -18,9 +18,15 @@
 //     { talentId: "talent.knight.power_strike" },
 //   ]);
 
-import type { Character, PlayerCharacter } from "../../entity/actor/types";
+import type { Character } from "../../entity/actor/types";
 import { isPlayer } from "../../entity/actor/types";
 import { getTalent } from "../../content/registry";
+import {
+  createTalentStaticContext,
+  getTalentLevel,
+  resolveTalentActiveParams,
+  type ResolvedTalentActiveParams,
+} from "../../content/talent";
 import type { Intent, IntentAction, IntentContext } from "./index";
 import { enemiesOf, alliesOf, pickWeightedTarget } from "./index";
 
@@ -100,10 +106,11 @@ function tryRule(
   // Resolve talent def for condition checks.
   let talentDef;
   try { talentDef = getTalent(talentId); } catch { return null; }
-  const level = isPlayer(actor)
-    ? ((actor as PlayerCharacter).talentLevels[talentId] ?? 1)
-    : 1;
-  const activeParams = talentDef.getActiveParams?.(level);
+  const level = getTalentLevel(actor, talentId);
+  const activeParams = resolveTalentActiveParams(
+    talentDef,
+    createTalentStaticContext(level, isPlayer(actor) ? actor : null),
+  );
   if (!activeParams) return null; // not an active talent
 
   // Implicit checks: off_cooldown + has_mp are ALWAYS required.
@@ -144,7 +151,7 @@ function checkCondition(
   cond: UseCondition,
   talentId: string,
   actor: Character,
-  activeParams: { mpCost: number; cooldownActions: number; energyCost: number; targetKind: string },
+  activeParams: ResolvedTalentActiveParams,
 ): boolean {
   switch (cond) {
     case "off_cooldown": {

@@ -17,13 +17,11 @@ export const basicAttackTalent: TalentDef = {
   maxLevel: 1,
   tpCost: 0,
   getActiveParams: () => ({
-    mpCost: 0,
-    cooldownActions: 0,
-    energyCost: 1000,
     targetKind: "single_enemy" as const,
   }),
   effects: [strikeEffect.id],
 };
+
 
 /** 魔法基础攻击——法师/圣女平A使用。 */
 export const magicBasicAttackTalent: TalentDef = {
@@ -33,13 +31,11 @@ export const magicBasicAttackTalent: TalentDef = {
   maxLevel: 1,
   tpCost: 0,
   getActiveParams: () => ({
-    mpCost: 0,
-    cooldownActions: 0,
-    energyCost: 1000,
     targetKind: "single_enemy" as const,
   }),
   effects: [magicStrikeEffect.id],
 };
+
 
 const authoredTalents = {
   [basicAttackTalent.id]: basicAttackTalent,

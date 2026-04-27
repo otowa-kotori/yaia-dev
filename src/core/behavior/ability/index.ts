@@ -12,9 +12,21 @@
 // rule violations — returns { ok: false, reason } instead — so UI code and
 // intent code can branch on failure modes without try/catch.
 
-import type { TalentDef, AttrDef, TargetKind, CastContext } from "../../content/types";
+import type {
+  TalentDef,
+  AttrDef,
+  TargetKind,
+  TalentExecutionContext,
+} from "../../content/types";
 
 import { getTalent, getEffect } from "../../content/registry";
+import {
+  createTalentExecutionContext,
+  createTalentStaticContext,
+  getTalentLevel,
+  resolveTalentActiveParams,
+} from "../../content/talent";
+
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
@@ -87,11 +99,15 @@ export function tryUseTalent(
 
   const def = safeGetTalent(talentId);
   if (!def) return fail("unknown_talent");
-  const activeParams = def.getActiveParams?.(1);
+
+  const level = getTalentLevel(caster, talentId);
+  const staticCtx = createTalentStaticContext(level, isPlayer(caster) ? caster : null);
+  const activeParams = resolveTalentActiveParams(def, staticCtx);
   if (!activeParams) return fail("unknown_talent");
 
   // Cooldown check: value > 0 means still on cooldown (remaining action count).
   const cdRemaining = caster.cooldowns[talentId];
+
   if (cdRemaining !== undefined && cdRemaining > 0) {
     return fail("on_cooldown", `${cdRemaining} actions remaining`);
   }
@@ -110,19 +126,21 @@ export function tryUseTalent(
     caster.cooldowns[talentId] = activeParams.cooldownActions;
   }
 
-  // Determine talent level.
-  const level = isPlayer(caster)
-    ? ((caster as PlayerCharacter).talentLevels[talentId] ?? 1)
-    : 1;
-
   if (def.execute) {
-    // Build CastContext and call execute.
     const participants = ctx.participants ?? [];
     const reactionCtx = createReactionContext(ctx, participants);
-    const castCtx = buildCastContext(caster, participants, ctx, reactionCtx);
-    def.execute(level, caster, targets, castCtx);
-    return { ok: true, talentId, targets};
+    const execCtx = buildTalentExecutionContext(
+      level,
+      caster,
+      targets,
+      participants,
+      ctx,
+      reactionCtx,
+    );
+    def.execute(execCtx);
+    return { ok: true, talentId, targets };
   }
+
 
   // Fallback: apply effects[] declaratively.
   // Also constructs a ReactionContext so damage effects trigger reactions
@@ -260,7 +278,8 @@ function safeGetEffect(id: string) {
   }
 }
 
-// ---------- CastContext + damage pipeline ----------
+// ---------- TalentExecutionContext + damage pipeline ----------
+
 
 function buildFormulaContext(
   source: Character,
@@ -344,22 +363,32 @@ function dealDamageWithReactions(
   return finalDamage;
 }
 
-function buildCastContext(
+function buildTalentExecutionContext(
+  level: number,
   caster: Character,
+  targets: Character[],
   participants: readonly Character[],
   ctx: AbilityContext,
   reactionCtx: ReactionContext,
-): CastContext {
-  return {
-    dealPhysicalDamage(c, target, coefficient) {
-      return dealDamageWithReactions(c, target, coefficient, "physical", ctx, reactionCtx);
+): TalentExecutionContext {
+  return createTalentExecutionContext({
+    level,
+    caster,
+    targets,
+    participants,
+    state: ctx.state,
+    bus: ctx.bus,
+    rng: ctx.rng,
+    currentTick: ctx.currentTick,
+    dealPhysicalDamage(target, coefficient) {
+      return dealDamageWithReactions(caster, target, coefficient, "physical", ctx, reactionCtx);
     },
-    dealMagicDamage(c, target, coefficient) {
-      return dealDamageWithReactions(c, target, coefficient, "magical", ctx, reactionCtx);
+    dealMagicDamage(target, coefficient) {
+      return dealDamageWithReactions(caster, target, coefficient, "magical", ctx, reactionCtx);
     },
-    applyEffect(effectId, source, target, state) {
+    applyEffect(effectId, target, state) {
       const eff = getEffect(effectId as string);
-      applyEffect(eff, source, target, { ...ctx, currentTick: ctx.currentTick }, state);
+      applyEffect(eff, caster, target, { ...ctx, currentTick: ctx.currentTick }, state);
     },
     aliveEnemies() {
       return participants.filter(p => p.side !== caster.side && isAlive(p)) as Character[];
@@ -367,8 +396,9 @@ function buildCastContext(
     aliveAllies() {
       return participants.filter(p => p.side === caster.side && p !== caster && isAlive(p)) as Character[];
     },
-  };
+  });
 }
+
 
 function createReactionContext(
   ctx: AbilityContext,

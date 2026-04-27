@@ -25,9 +25,6 @@ const talentA: TalentDef = {
   maxLevel: 5,
   tpCost: 2,
   getActiveParams: () => ({
-    mpCost: 0,
-    cooldownActions: 0,
-    energyCost: 1000,
     targetKind: "single_enemy" as const,
   }),
 };

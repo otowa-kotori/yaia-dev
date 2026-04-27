@@ -313,16 +313,14 @@ describe("Battle: tick loop", () => {
       maxLevel: 1,
       tpCost: 0,
       getActiveParams: () => ({
-        mpCost: 0,
-        cooldownActions: 0,
-        energyCost: 1000,
         targetKind: "single_enemy" as const,
       }),
-      execute: (_level, caster, targets, castCtx) => {
-        castCtx.dealPhysicalDamage(caster, targets[0]!, 1);
+      execute: (ctx) => {
+        ctx.dealPhysicalDamage(ctx.targets[0]!, 1);
         throw new Error("boom");
       },
     };
+
     patchContent({
       talents: {
         [explodingTalent.id]: explodingTalent,

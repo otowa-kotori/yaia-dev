@@ -12,6 +12,11 @@
 import type { FormulaRef } from "../infra/formula/types";
 import type { ReactionHooks } from "../combat/reaction/types";
 import type { PriorityRule, TargetPolicy } from "../combat/intent/priority";
+import type { GameEventBus } from "../infra/events";
+import type { Rng } from "../infra/rng";
+import type { GameState } from "../infra/state/types";
+import type { Character, PlayerCharacter } from "../entity/actor/types";
+
 
 // ---------- Branded ID types ----------
 // Brands are compile-time only; at runtime they're plain strings.
@@ -240,38 +245,52 @@ export interface EffectApplication {
 }
 
 /**
- * CastContext is the toolkit passed to TalentDef.execute(). Defined as an
- * interface here for typing; the concrete implementation lives in
- * src/core/behavior/talent/. Forward-declared to avoid circular imports.
+ * Static talent context used by authoring hooks that only need deterministic
+ * read-only information, such as UI preview and scaling calculation.
  */
-export interface CastContext {
-  dealPhysicalDamage(caster: Character, target: Character, coefficient: number): number;
-  dealMagicDamage(caster: Character, target: Character, coefficient: number): number;
-  applyEffect(effectId: EffectId, source: Character, target: Character, state: Record<string, unknown>): void;
+export interface TalentStaticContext {
+  /** Talent level being described / queried. */
+  level: number;
+  /** Owning player character when available; null in non-player preview paths. */
+  owner: PlayerCharacter | null;
+}
+
+/**
+ * Runtime talent context used by execute().
+ *
+ * It extends the static context with concrete battle state and mutation
+ * helpers, so authoring code can clearly distinguish preview-only hooks from
+ * actual execution.
+ */
+export interface TalentExecutionContext extends TalentStaticContext {
+  caster: Character;
+  targets: Character[];
+  participants: readonly Character[];
+  state: GameState;
+  bus: GameEventBus;
+  rng: Rng;
+  currentTick: number;
+  dealPhysicalDamage(target: Character, coefficient: number): number;
+  dealMagicDamage(target: Character, coefficient: number): number;
+  applyEffect(effectId: EffectId, target: Character, state: Record<string, unknown>): void;
   aliveEnemies(): Character[];
   aliveAllies(): Character[];
 }
 
-// Forward-declare Character to break the circular dep between content/types
-// and entity/actor/types. At runtime both live in the same TS project; the
-// branded import is purely for type-checking the execute signature.
-// Actual Character type is defined in entity/actor/types.ts.
-import type { Character, PlayerCharacter } from "../entity/actor/types";
+export type TalentActiveParams = {
+  targetKind: TargetKind;
+} & Partial<{
+  /** Default 0. */
+  mpCost: number;
+  /** Cooldown in owner action counts. Default 0. */
+  cooldownActions: number;
+  /** Relative to the scheduler's standard action cost. 1 = default action. */
+  actionCostRatio: number;
+}>;
 
-/**
- * Context passed to TalentDef.describe(). Allows description text to scale
- * with both talent level and (optionally) the owning character's stats.
- */
-export interface TalentDescribeContext {
-  /** Talent level being described (0 = preview before first allocation). */
-  level: number;
-  /** The owning player character, if available (e.g. in talent UI). */
-  owner?: PlayerCharacter;
-  /** Attribute definitions for reading derived stats. */
-  attrDefs?: Readonly<Record<string, AttrDef>>;
-}
 
 export interface TalentDef {
+
   id: TalentId;
   name: string;
   description?: string;
@@ -285,12 +304,14 @@ export interface TalentDef {
   tags?: string[];
   /**
    * Returns a human-readable description of what this talent does at the given
-   * context (level + optional player state). Shown in the talent allocation UI
-   * so the player can see what each level provides. Level 0 describes the
-   * talent before any points are spent (i.e. "next level preview"). Omit for
-   * talents whose description field suffices (e.g. basic attack with no scaling).
+   * context. Shown in the talent allocation UI so the player can see what each
+   * level provides. Level 0 describes the talent before any points are spent
+   * (i.e. "next level preview"). Omit for talents whose description field
+   * suffices (e.g. basic attack with no scaling).
    */
-  describe?: (ctx: TalentDescribeContext) => string;
+  describe?: (ctx: TalentStaticContext) => string;
+
+
 
   // ---- intent AI fields ----
 
@@ -308,33 +329,29 @@ export interface TalentDef {
   // ---- effect parameter getter ----
 
   /**
-   * Compute concrete effect values for a given talent level. Single source of
+   * Compute concrete effect values for a given talent context. Single source of
    * truth: grantEffects passes these into EffectInstance.state, describe()
    * reads them for UI text, and execute() uses them for runtime logic.
    * Eliminates the need to duplicate scaling formulas in both talent and
    * effect definitions.
    */
-  getEffectParams?: (level: number) => Record<string, number>;
+  getEffectParams?: (ctx: TalentStaticContext) => Record<string, number>;
 
   // ---- active skill fields ----
 
-  /** Returns parameters for the active skill at a given level.
-   *  Omit for non-active talents. */
-  getActiveParams?: (level: number) => {
-    mpCost: number;
-    /** Cooldown in owner action counts (0 = no cooldown). */
-    cooldownActions: number;
-    /** ATB energy cost. */
-    energyCost: number;
-    targetKind: TargetKind;
-  };
+  /** Returns active-skill parameters for the given context.
+   *  Omit for non-active talents. Most fields are optional defaults:
+   *  mpCost = 0, cooldownActions = 0, actionCostRatio = 1. */
+  getActiveParams?: (ctx: TalentStaticContext) => TalentActiveParams;
 
   /**
    * Active skill execution logic. The generic pipeline completes validation +
    * resource deduction, then calls this. This IS the action — freely
    * orchestrate multi-hit, conditional branching, effect application inside.
    */
-  execute?: (level: number, caster: Character, targets: Character[], ctx: CastContext) => void;
+  execute?: (ctx: TalentExecutionContext) => void;
+
+
 
   /**
    * Declarative shortcut: if no execute is provided, the pipeline applies

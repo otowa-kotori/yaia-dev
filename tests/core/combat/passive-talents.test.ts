@@ -7,7 +7,7 @@ import {
   basicAttackTalent,
   makePlayer,
 } from "../../fixtures/content";
-import { emptyContentDb, setContent } from "../../../src/core/content";
+import { createTalentStaticContext, emptyContentDb, setContent } from "../../../src/core/content";
 import type { ContentDb } from "../../../src/core/content/types";
 import { ATTR, getAttr as getAttrFromSet } from "../../../src/core/entity/attribute";
 import {
@@ -193,20 +193,22 @@ describe("passive talent / Retaliation", () => {
 
 describe("talent / describe", () => {
   test("power strike describe changes across levels and includes mp cost", () => {
-    const lv1 = knightPowerStrike.describe!({ level: 1 });
-    const lv3 = knightPowerStrike.describe!({ level: 3 });
+    const lv1Ctx = createTalentStaticContext(1, null);
+    const lv3Ctx = createTalentStaticContext(3, null);
+    const lv1 = knightPowerStrike.describe!(lv1Ctx);
+    const lv3 = knightPowerStrike.describe!(lv3Ctx);
 
     expect(lv1).toContain("伤害系数");
     expect(lv1).toContain("MP 消耗");
     expect(lv3).toContain("伤害系数");
     expect(lv3).toContain("MP 消耗");
     expect(lv3).not.toBe(lv1);
-    expect(knightPowerStrike.getActiveParams!(3).mpCost).toBeGreaterThan(knightPowerStrike.getActiveParams!(1).mpCost);
+    expect(knightPowerStrike.getActiveParams!(lv3Ctx).mpCost).toBeGreaterThan(knightPowerStrike.getActiveParams!(lv1Ctx).mpCost ?? 0);
   });
 
   test("fortitude describe reflects hp and regen identity", () => {
-    const lv1 = knightFortitude.describe!({ level: 1 });
-    const lv3 = knightFortitude.describe!({ level: 3 });
+    const lv1 = knightFortitude.describe!(createTalentStaticContext(1, null));
+    const lv3 = knightFortitude.describe!(createTalentStaticContext(3, null));
 
     expect(lv1).toContain("生命 +");
     expect(lv1).toContain("生命回复 +");
@@ -216,8 +218,8 @@ describe("talent / describe", () => {
   });
 
   test("retaliation describe keeps identity while higher levels improve payoff", () => {
-    const lv1 = knightRetaliation.describe!({ level: 1 });
-    const lv3 = knightRetaliation.describe!({ level: 3 });
+    const lv1 = knightRetaliation.describe!(createTalentStaticContext(1, null));
+    const lv3 = knightRetaliation.describe!(createTalentStaticContext(3, null));
 
     expect(lv1).toContain("反击概率");
     expect(lv1).toContain("PATK");
