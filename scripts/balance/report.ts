@@ -1,8 +1,11 @@
-// Output formatting: terminal tables and JSON export.
+// Output formatting: terminal tables, JSON export, and HTML report export.
 //
-// Renders SimStats arrays as either a human-readable comparison table
-// or structured JSON for downstream analysis.
+// Renders SimStats arrays as either a human-readable comparison table,
+// structured JSON for downstream analysis, or a self-contained HTML report.
 
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { renderBalanceHtmlReport, type HtmlReportOptions } from "./report-html";
 import type { SimStats } from "./stats";
 
 // ---------- Public API ----------
@@ -32,7 +35,6 @@ export function printScenarioTable(
     ? shortCurrencyName(primaryCurrency)
     : "-";
 
-  // Column definitions.
   const cols: Column[] = [
     { header: "Profile", width: 24, align: "left" },
     { header: "胜率", width: 8, align: "right" },
@@ -46,14 +48,12 @@ export function printScenarioTable(
     { header: "等级", width: 6, align: "right" },
   ];
 
-  // Print header.
   printRow(
     cols,
     cols.map((c) => c.header),
   );
   printSeparator(cols);
 
-  // Print data rows.
   for (const r of results) {
     const currPerMin = primaryCurrency
       ? r.currencyPerMinute[primaryCurrency] ?? 0
@@ -82,7 +82,6 @@ export function printDetailedResult(result: SimStats): void {
   console.log(`  ${result.profileKey} vs ${result.combatZoneId}`);
   console.log("=".repeat(60));
 
-  const TICKS_PER_SECOND = 10;
   const minutes = result.minutesElapsed;
 
   console.log(`  英雄: ${result.heroId} (最终等级 ${result.finalLevel})`);
@@ -121,6 +120,21 @@ export function printJson(results: SimStats[]): void {
   console.log(JSON.stringify(results, null, 2));
 }
 
+/** Write an interactive standalone HTML report and return its absolute path. */
+export async function writeHtmlReport(
+  results: SimStats[],
+  outputPath: string,
+  options: HtmlReportOptions = {},
+): Promise<string> {
+  const fullOutputPath = resolve(outputPath);
+  mkdirSync(dirname(fullOutputPath), { recursive: true });
+
+  const html = renderBalanceHtmlReport(results, options);
+  await Bun.write(fullOutputPath, html);
+
+  return fullOutputPath;
+}
+
 // ---------- Table helpers ----------
 
 interface Column {
@@ -150,7 +164,6 @@ function truncate(s: string, max: number): string {
 }
 
 function shortCurrencyName(currId: string): string {
-  // "currency.gold" -> "gold"
   const parts = currId.split(".");
   return parts[parts.length - 1] ?? currId;
 }

@@ -263,10 +263,10 @@ function stepFighting(
       stageId: activity.stageId,
       battleId: battle.id,
       combatZoneId: session.currentWave.combatZoneId,
-      waveId: session.currentWave.waveId,
       waveIndex: session.currentWave.waveIndex,
       outcome: resolvedOutcome,
     });
+
 
   }
 
@@ -368,10 +368,10 @@ function openBattle(
       stageId: activity.stageId,
       locationId: session.locationId,
       combatZoneId: session.currentWave.combatZoneId,
-      waveId: session.currentWave.waveId,
       waveIndex: session.currentWave.waveIndex,
       partyCharIds: activity.partyCharIds.slice(),
     },
+
   });
   ctx.state.battles.push(battle);
   activity.currentBattleId = battle.id;
@@ -385,9 +385,9 @@ function openBattle(
     participantIds: battle.participantIds.slice(),
     partyCharIds: activity.partyCharIds.slice(),
     combatZoneId: session.currentWave.combatZoneId,
-    waveId: session.currentWave.waveId,
     waveIndex: session.currentWave.waveIndex,
   });
+
 }
 
 
@@ -484,7 +484,8 @@ function grantWaveRewards(
   if (!activeWave || activeWave.rewardGranted) return;
 
   const zone = getCombatZone(activeWave.combatZoneId);
-  const wave = lookupWave(zone, activeWave.waveId);
+  const wave = lookupWave(zone, activeWave.waveDefIndex);
+
   activeWave.rewardGranted = true;
   if (!wave.rewards) return;
 

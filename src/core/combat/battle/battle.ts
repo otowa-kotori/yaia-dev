@@ -55,10 +55,10 @@ export interface BattleMetadata {
   dungeonSessionId?: string;
   dungeonId?: string;
   combatZoneId?: string;
-  waveId?: string;
   waveIndex?: number;
   partyCharIds?: string[];
 }
+
 
 export interface Battle {
   id: string;

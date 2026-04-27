@@ -139,11 +139,11 @@ export type GameEvents = {
     participantIds: string[];
     partyCharIds: string[];
     combatZoneId: string;
-    waveId: string;
     waveIndex: number;
     dungeonSessionId?: string;
     dungeonId?: string;
   };
+
   /** Fired just before a talent is cast (before damage/effects resolve). */
   battleActionStarted: {
     battleId: string;
@@ -188,10 +188,10 @@ export type GameEvents = {
     stageId?: string;
     battleId?: string;
     combatZoneId: string;
-    waveId: string;
     waveIndex: number;
     outcome: "players_won" | "enemies_won";
   };
+
   activityComplete: {
     charId: string | null;
     kind: string;

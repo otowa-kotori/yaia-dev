@@ -215,12 +215,13 @@ function spawnResourceNodes(
 }
 
 function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageControllerContext): void {
-  const wave = pickCombatZoneWave(zone, ctx.rng);
+  const { wave, waveDefIndex } = pickCombatZoneWave(zone, ctx.rng);
 
   session.combatWaveIndex += 1;
   const enemyIds: string[] = [];
   for (let i = 0; i < wave.monsters.length; i++) {
     const monsterId = wave.monsters[i]!;
+
     const mdef = getMonster(monsterId);
     const instanceId = mintMonsterInstanceId(ctx.state, mdef.id);
     const enemy = createEnemy({
@@ -234,12 +235,13 @@ function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageC
 
   session.currentWave = {
     combatZoneId: zone.id,
-    waveId: wave.id,
+    waveDefIndex,
     waveIndex: session.combatWaveIndex,
     enemyIds,
     status: "active",
     rewardGranted: false,
   };
+
   session.pendingCombatWaveSearch = null;
 }
 
@@ -267,28 +269,35 @@ export function stageResourceNodes(
 
 export function lookupWave(
   zone: CombatZoneDef,
-  waveId: string,
+  waveDefIndex: number,
 ): WaveDef {
-  const wave = zone.waves.find((x) => x.id === waveId);
+  const wave = zone.waves[waveDefIndex];
   if (!wave) {
     throw new Error(
-      `stage: combatZone "${zone.id}" has no wave "${waveId}"`,
+      `stage: combatZone "${zone.id}" has no wave at index ${waveDefIndex}`,
     );
   }
   return wave;
 }
 
+
 // ---------- Internal ----------
 
-function pickCombatZoneWave(zone: CombatZoneDef, rng: Rng): WaveDef {
+function pickCombatZoneWave(
+  zone: CombatZoneDef,
+  rng: Rng,
+): { wave: WaveDef; waveDefIndex: number } {
   if (zone.waves.length === 0) {
     throw new Error(`stage: combatZone "${zone.id}" has no waves`);
   }
   switch (zone.waveSelection ?? "random") {
-    case "random":
-      return rng.pick(zone.waves);
+    case "random": {
+      const waveDefIndex = rng.int(0, zone.waves.length - 1);
+      return { wave: zone.waves[waveDefIndex]!, waveDefIndex };
+    }
   }
 }
+
 
 function clearResolvedWaveActors(
   session: StageSession,

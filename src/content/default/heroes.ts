@@ -47,7 +47,7 @@ const authoredHeroes = {
   "hero.knight": {
     id: "hero.knight",
     extends: "hero.template.physical",
-    name: "骑士",
+    name: "战士",
     availableTalents: [
       knightPowerStrike.id,
       knightFortitude.id,
@@ -118,7 +118,7 @@ const authoredHeroes = {
   "hero.cleric": {
     id: "hero.cleric",
     extends: "hero.template.magic",
-    name: "圣女",
+    name: "牧师",
     startingItems: [{ itemId: trainingScepter.id, qty: 1 }],
     baseAttrs: {
       [ATTR.MAX_HP]: 110,

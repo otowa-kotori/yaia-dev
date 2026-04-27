@@ -420,12 +420,13 @@ function spawnDungeonWave(
   session.currentWave = {
     combatZoneId: ds.dungeonId, // overloaded: stores dungeonId for dungeon waves
     dungeonId: ds.dungeonId,
-    waveId: waveDef.id,
+    waveDefIndex: ds.currentWaveIndex,
     waveIndex: ds.currentWaveIndex,
     enemyIds,
     status: "active",
     rewardGranted: false,
   };
+
   session.pendingCombatWaveSearch = null;
 }
 
@@ -476,9 +477,9 @@ function openPartyBattle(
       dungeonSessionId: activity.dungeonSessionId,
       dungeonId: ds.dungeonId,
       combatZoneId: session.currentWave.combatZoneId,
-      waveId: session.currentWave.waveId,
       waveIndex: session.currentWave.waveIndex,
       partyCharIds: ds.partyCharIds.slice(),
+
     },
   });
   ctx.state.battles.push(battle);
@@ -493,11 +494,11 @@ function openPartyBattle(
     participantIds: battle.participantIds.slice(),
     partyCharIds: ds.partyCharIds.slice(),
     combatZoneId: session.currentWave.combatZoneId,
-    waveId: session.currentWave.waveId,
     waveIndex: session.currentWave.waveIndex,
     dungeonSessionId: activity.dungeonSessionId,
     dungeonId: ds.dungeonId,
   });
+
 }
 
 

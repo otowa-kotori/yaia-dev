@@ -332,12 +332,11 @@ export const dropCombatZone: CombatZoneDef = {
   waveSelection: "random",
   waves: [
     {
-      id: "wave.forest.kill_drop",
-      name: "Single Drop Slime",
       monsters: [dropSlimeMonster.id],
     },
   ],
 };
+
 
 // ---------- Dungeons ----------
 

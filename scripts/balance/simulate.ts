@@ -8,6 +8,7 @@
 
 import type { ContentDb } from "../../src/core/content";
 import { createGameSession } from "../../src/core/session";
+import { xpProgressToNextLevel } from "../../src/core/growth/leveling/xp";
 import type { HeroProfile } from "./config";
 import { setupHero, findLocationForCombatZone } from "./setup";
 import { isPlayer, isEnemy } from "../../src/core/entity/actor";
@@ -39,6 +40,10 @@ export interface SimCollector {
   waveResults: Array<{ outcome: string; ticks: number }>;
   /** Final hero level after simulation. */
   finalLevel: number;
+  /** Carried XP currently sitting inside the final level. */
+  finalExp: number;
+  /** Total XP required to go from current level to the next level. */
+  nextLevelXpCost: number;
 }
 
 // ---------- Public API ----------
@@ -183,6 +188,12 @@ export function runSimulation(opts: SimulationOptions): SimCollector {
   // 6) Finalize.
   collector.ticksElapsed = ticksRun;
   collector.finalLevel = cc.hero.level;
+  collector.finalExp = cc.hero.exp;
+  collector.nextLevelXpCost = xpProgressToNextLevel(
+    cc.hero.level,
+    cc.hero.exp,
+    cc.hero.xpCurve,
+  ).cost;
   collector.totalXpGained = cc.hero.exp - startingXp;
 
   // Clean up event listeners.
@@ -217,5 +228,7 @@ function createCollector(
     battleTicks: 0,
     waveResults: [],
     finalLevel: 1,
+    finalExp: 0,
+    nextLevelXpCost: 0,
   };
 }

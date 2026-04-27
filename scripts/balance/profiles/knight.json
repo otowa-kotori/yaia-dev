@@ -6,16 +6,22 @@
     },
     "knight_lv3": {
       "heroId": "hero.knight",
-      "level": 3
+      "talents": { "talent.knight.power_strike": 1, "talent.knight.fortitude": 1 },
+      "level": 3,
+      "equippedTalents": ["talent.knight.power_strike"]
     },
     "knight_lv5": {
       "heroId": "hero.knight",
-      "level": 5
+      "talents": { "talent.knight.power_strike": 2, "talent.knight.fortitude": 1 },
+      "level": 5,
+      "equippedTalents": ["talent.knight.power_strike"]
     },
     "knight_lv5_copper": {
       "heroId": "hero.knight",
       "level": 5,
-      "equipment": ["item.weapon.copper_sword"]
+      "talents": { "talent.knight.power_strike": 3, "talent.knight.fortitude": 2 },
+      "equipment": ["item.weapon.copper_sword"],
+      "equippedTalents": ["talent.knight.power_strike"]
     },
     "knight_lv8_copper": {
       "heroId": "hero.knight",

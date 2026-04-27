@@ -103,7 +103,7 @@ export async function loadConfigFile(path: string): Promise<BalanceConfig> {
 /**
  * Simple glob: * matches any substring within the full string.
  * "knight_lv*" matches "knight_lv1", "knight_lv5_copper", etc.
- * "combatzone.prairie.*" matches "combatzone.prairie.1_1_green_slime".
+ * "combatzone.prairie.*" matches "combatzone.prairie.1_1".
  */
 export function globMatch(pattern: string, value: string): boolean {
   if (!pattern.includes("*")) return pattern === value;

@@ -16,7 +16,6 @@ import {
   resolveScenarios,
   buildQuickConfig,
   buildCliConfig,
-  TICKS_PER_MINUTE,
   type BalanceConfig,
 } from "./config";
 import { runSimulation } from "./simulate";
@@ -25,6 +24,7 @@ import {
   printScenarioTable,
   printDetailedResult,
   printJson,
+  writeHtmlReport,
 } from "./report";
 
 // ---------- Program ----------
@@ -35,6 +35,63 @@ const program = new Command()
   .name("balance")
   .description("Game balance testing CLI — headless combat simulation")
   .version("0.1.0");
+
+interface RunCommandOptions {
+  profile?: string[];
+  zone?: string[];
+  scenario?: string;
+  duration?: number;
+  seed?: number;
+  json?: boolean;
+  html?: string;
+}
+
+interface QuickCommandOptions {
+  level: number;
+  weapon?: string;
+  duration: number;
+  seed: number;
+  json?: boolean;
+  html?: string;
+}
+
+function quotePowerShellArg(arg: string): string {
+  if (/^[A-Za-z0-9_./:-]+$/.test(arg)) {
+    return arg;
+  }
+  return `'${arg.replace(/'/g, "''")}'`;
+}
+
+function joinCommand(parts: string[]): string {
+  return parts.map(quotePowerShellArg).join(" ");
+}
+
+function buildRunCommand(file: string, opts: RunCommandOptions): string {
+  const parts = ["bun", "run", "scripts/balance/cli.ts", "run", file];
+  if (opts.profile?.length) parts.push("-p", ...opts.profile);
+  if (opts.zone?.length) parts.push("-z", ...opts.zone);
+  if (opts.scenario) parts.push("-s", opts.scenario);
+  if (typeof opts.duration === "number") parts.push("-d", String(opts.duration));
+  if (typeof opts.seed === "number") parts.push("--seed", String(opts.seed));
+  if (opts.json) parts.push("--json");
+  if (opts.html) parts.push("--html", opts.html);
+  return joinCommand(parts);
+}
+
+function buildQuickCommand(
+  heroId: string,
+  zoneId: string,
+  opts: QuickCommandOptions,
+): string {
+  const parts = ["bun", "run", "scripts/balance/cli.ts", "quick", heroId, zoneId];
+  if (typeof opts.level === "number") parts.push("-l", String(opts.level));
+  if (opts.weapon) parts.push("--weapon", opts.weapon);
+  if (typeof opts.duration === "number") parts.push("-d", String(opts.duration));
+  if (typeof opts.seed === "number") parts.push("--seed", String(opts.seed));
+  if (opts.json) parts.push("--json");
+  if (opts.html) parts.push("--html", opts.html);
+  return joinCommand(parts);
+}
 
 // ---------- run ----------
 
@@ -47,7 +104,8 @@ program
   .option("-d, --duration <minutes>", "simulated duration in minutes (default 60)", parseIntArg)
   .option("--seed <n>", "RNG seed", parseIntArg)
   .option("--json", "output raw JSON instead of tables")
-  .action(async (file: string, opts) => {
+  .option("--html <path>", "write an interactive standalone HTML report")
+  .action(async (file: string, opts: RunCommandOptions) => {
     const content = buildDefaultContent();
     let config: BalanceConfig;
 
@@ -79,10 +137,11 @@ program
     }
 
     let scenarios = resolveScenarios(config, content);
-    if (opts.scenario) {
-      scenarios = scenarios.filter((s) => s.name.includes(opts.scenario));
+    const scenarioFilter = opts.scenario;
+    if (scenarioFilter) {
+      scenarios = scenarios.filter((s) => s.name.includes(scenarioFilter));
       if (scenarios.length === 0) {
-        console.error(`No scenarios matched filter "${opts.scenario}"`);
+        console.error(`No scenarios matched filter "${scenarioFilter}"`);
         process.exit(1);
       }
     }
@@ -91,13 +150,10 @@ program
 
     for (const scenario of scenarios) {
       const scenarioResults: SimStats[] = [];
-      const durationLabel = `${(scenario.totalTicks / TICKS_PER_MINUTE).toFixed(0)}m`;
 
       for (let pi = 0; pi < scenario.profiles.length; pi++) {
         const { key, profile } = scenario.profiles[pi]!;
         const simSeed = scenario.seed + pi;
-
-        process.stdout.write(`  ${scenario.name} / ${key} (${durationLabel}) ...`);
 
         const collector = runSimulation({
           content,
@@ -111,10 +167,6 @@ program
         const stats = computeStats(collector);
         scenarioResults.push(stats);
         allResults.push(stats);
-
-        process.stdout.write(
-          ` ${stats.wavesWon}W/${stats.wavesLost}L\n`,
-        );
       }
 
       if (!opts.json) {
@@ -124,6 +176,17 @@ program
 
     if (opts.json) {
       printJson(allResults);
+    }
+
+    if (opts.html) {
+      const outputPath = await writeHtmlReport(allResults, opts.html, {
+        title: `Balance Report · ${file}`,
+        zoneNames: Object.fromEntries(
+          Object.entries(content.combatZones).map(([zoneId, zone]) => [zoneId, zone.name]),
+        ),
+        rerunCommand: buildRunCommand(file, opts),
+      });
+      console.log(`HTML report written to ${outputPath}`);
     }
   });
 
@@ -137,7 +200,8 @@ program
   .option("-d, --duration <minutes>", "simulated duration in minutes", parseIntArg, 60)
   .option("--seed <n>", "RNG seed", parseIntArg, 42)
   .option("--json", "output raw JSON")
-  .action((heroId: string, zoneId: string, opts) => {
+  .option("--html <path>", "write an interactive standalone HTML report")
+  .action(async (heroId: string, zoneId: string, opts: QuickCommandOptions) => {
     const content = buildDefaultContent();
     const config = buildQuickConfig({
       heroId,
@@ -159,10 +223,6 @@ program
     const scenario = scenarios[0]!;
     const { key, profile } = scenario.profiles[0]!;
 
-    console.log(
-      `  Running: ${heroId} Lv${opts.level} vs ${zoneId} (${opts.duration}m)...`,
-    );
-
     const collector = runSimulation({
       content,
       profileKey: key,
@@ -178,6 +238,17 @@ program
       printJson([stats]);
     } else {
       printDetailedResult(stats);
+    }
+
+    if (opts.html) {
+      const outputPath = await writeHtmlReport([stats], opts.html, {
+        title: `${heroId} vs ${zoneId}`,
+        zoneNames: Object.fromEntries(
+          Object.entries(content.combatZones).map(([combatZoneId, zone]) => [combatZoneId, zone.name]),
+        ),
+        rerunCommand: buildQuickCommand(heroId, zoneId, opts),
+      });
+      console.log(`HTML report written to ${outputPath}`);
     }
   });
 

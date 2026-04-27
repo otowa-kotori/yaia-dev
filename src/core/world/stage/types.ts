@@ -48,9 +48,12 @@ export interface ActiveCombatWaveSession {
   combatZoneId: string;
   /** Set only for dungeon waves. */
   dungeonId?: string;
-  waveId: string;
+  /** Definition index inside the owning combat zone / dungeon wave array. */
+  waveDefIndex: number;
+  /** Encounter counter inside the current stage session. */
   waveIndex: number;
   enemyIds: string[];
+
   /** active = unresolved, victory/defeat = battle resolved and awaiting cleanup. */
   status: "active" | "victory" | "defeat";
   rewardGranted: boolean;

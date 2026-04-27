@@ -9,14 +9,14 @@ import { TICK_MS } from "../../infra/tick";
 export const LOGIC_TICKS_PER_SECOND = Math.round(1000 / TICK_MS);
 
 export const COMBAT_ZONE_RECOVERY_RULES = {
-  /** 固定 5 秒搜索 / 休整时间。 */
-  searchTicks: 5 * LOGIC_TICKS_PER_SECOND,
+  /** 固定 10 秒搜索 / 休整时间。 */
+  searchTicks: 10 * LOGIC_TICKS_PER_SECOND,
   /** 搜索阶段总计恢复的 HP 比例。 */
-  interWaveRecoverHpPct: 0.3,
+  interWaveRecoverHpPct: 0.2,
   /** 搜索阶段总计恢复的 MP 比例。 */
-  interWaveRecoverMpPct: 0.3,
+  interWaveRecoverMpPct: 0.2,
   /** 角色死亡后，全队需要额外等待的复活时间。 */
-  deathRespawnTicks: 8 * LOGIC_TICKS_PER_SECOND,
+  deathRespawnTicks: 60 * LOGIC_TICKS_PER_SECOND,
 } as const;
 
 export const DUNGEON_RECOVERY_RULES = {

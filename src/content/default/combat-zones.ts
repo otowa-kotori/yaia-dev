@@ -15,52 +15,94 @@ import {
   wildBoar,
 } from "./monsters";
 
-export const prairieGreenSlime: CombatZoneDef = {
-  id: "combatzone.prairie.1_1_green_slime" as CombatZoneId,
-  name: "翠风草原 1-1：绿史莱姆",
+export const prairieApproach: CombatZoneDef = {
+  id: "combatzone.prairie.1_1" as CombatZoneId,
+  name: "翠风草原 1-1",
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 1,
-  waves: [
-    { id: "wave.prairie.1_1.single", name: "教学靶子", monsters: [greenSlime.id] },
-    { id: "wave.prairie.1_1.pair", name: "慢吞吞两只", monsters: [greenSlime.id, greenSlime.id] },
-  ],
+  waves: [{ monsters: [greenSlime.id] }],
 };
 
-export const prairieSlime: CombatZoneDef = {
-  id: "combatzone.prairie.1_2_slime" as CombatZoneId,
-  name: "翠风草原 1-2：史莱姆",
+export const prairieCreek: CombatZoneDef = {
+  id: "combatzone.prairie.1_2" as CombatZoneId,
+  name: "翠风草原 1-2",
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 1,
-  waves: [{ id: "wave.prairie.1_2", name: "正式挂机点", monsters: [slime.id, slime.id] }],
+  waves: [{ monsters: [slime.id] }],
 };
 
-export const prairieWildBoar: CombatZoneDef = {
-  id: "combatzone.prairie.1_3_boar" as CombatZoneId,
-  name: "翠风草原 1-3：野猪",
+export const prairieGrove: CombatZoneDef = {
+  id: "combatzone.prairie.1_3" as CombatZoneId,
+  name: "翠风草原 1-3",
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 1,
-  waves: [{ id: "wave.prairie.1_3", name: "冲撞野猪", monsters: [wildBoar.id, wildBoar.id] }],
+  waves: [{ monsters: [slime.id, greenSlime.id] }],
 };
 
-export const prairieHornedRabbit: CombatZoneDef = {
-  id: "combatzone.prairie.1_4_rabbit" as CombatZoneId,
-  name: "翠风草原 1-4：角兔",
+export const prairieRidge: CombatZoneDef = {
+  id: "combatzone.prairie.1_4" as CombatZoneId,
+  name: "翠风草原 1-4",
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 1,
-  waves: [{ id: "wave.prairie.1_4", name: "抢先扑击", monsters: [hornedRabbit.id, hornedRabbit.id] }],
+  waves: [{ monsters: [wildBoar.id] }],
 };
 
-export const prairieBigSlime: CombatZoneDef = {
-  id: "combatzone.prairie.1_5_big_slime" as CombatZoneId,
-  name: "翠风草原 1-5：大史莱姆",
+export const prairieCrossroad: CombatZoneDef = {
+  id: "combatzone.prairie.1_5" as CombatZoneId,
+  name: "翠风草原 1-5",
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 1,
-  waves: [{ id: "wave.prairie.1_5", name: "毕业史莱姆", monsters: [bigSlime.id] }],
+  waves: [{ monsters: [slime.id, slime.id] }],
+};
+
+export const prairiePasture: CombatZoneDef = {
+  id: "combatzone.prairie.1_6" as CombatZoneId,
+  name: "翠风草原 1-6",
+  waveSelection: "random",
+  minPartySize: 1,
+  maxPartySize: 1,
+  waves: [{ monsters: [wildBoar.id, slime.id] }],
+};
+
+export const prairieDustway: CombatZoneDef = {
+  id: "combatzone.prairie.1_7" as CombatZoneId,
+  name: "翠风草原 1-7",
+  waveSelection: "random",
+  minPartySize: 1,
+  maxPartySize: 1,
+  waves: [{ monsters: [hornedRabbit.id, wildBoar.id] }],
+};
+
+export const prairieBramble: CombatZoneDef = {
+  id: "combatzone.prairie.1_8" as CombatZoneId,
+  name: "翠风草原 1-8",
+  waveSelection: "random",
+  minPartySize: 1,
+  maxPartySize: 1,
+  waves: [{ monsters: [hornedRabbit.id, hornedRabbit.id] }],
+};
+
+export const prairieMarsh: CombatZoneDef = {
+  id: "combatzone.prairie.1_9" as CombatZoneId,
+  name: "翠风草原 1-9",
+  waveSelection: "random",
+  minPartySize: 1,
+  maxPartySize: 1,
+  waves: [{ monsters: [bigSlime.id] }],
+};
+
+export const prairieHeartland: CombatZoneDef = {
+  id: "combatzone.prairie.1_10" as CombatZoneId,
+  name: "翠风草原 1-10",
+  waveSelection: "random",
+  minPartySize: 1,
+  maxPartySize: 1,
+  waves: [{ monsters: [bigSlime.id, bigSlime.id] }],
 };
 
 export const twilightPoisonMushroom: CombatZoneDef = {
@@ -69,7 +111,7 @@ export const twilightPoisonMushroom: CombatZoneDef = {
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 2,
-  waves: [{ id: "wave.twilight.2_1", name: "毒孢林地", monsters: [poisonMushroom.id, poisonMushroom.id] }],
+  waves: [{ monsters: [poisonMushroom.id, poisonMushroom.id] }],
 };
 
 export const twilightDuskWolf: CombatZoneDef = {
@@ -79,8 +121,8 @@ export const twilightDuskWolf: CombatZoneDef = {
   minPartySize: 1,
   maxPartySize: 2,
   waves: [
-    { id: "wave.twilight.2_2.duo", name: "双狼巡行", monsters: [duskWolf.id, duskWolf.id] },
-    { id: "wave.twilight.2_2.pack", name: "三狼包夹", monsters: [duskWolf.id, duskWolf.id, duskWolf.id] },
+    { monsters: [duskWolf.id, duskWolf.id] },
+    { monsters: [duskWolf.id, duskWolf.id, duskWolf.id] },
   ],
 };
 
@@ -90,7 +132,7 @@ export const twilightSkeletonSoldier: CombatZoneDef = {
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 2,
-  waves: [{ id: "wave.twilight.2_3", name: "重甲亡骨", monsters: [skeletonSoldier.id, skeletonSoldier.id] }],
+  waves: [{ monsters: [skeletonSoldier.id, skeletonSoldier.id] }],
 };
 
 export const mineCaveBat: CombatZoneDef = {
@@ -100,8 +142,8 @@ export const mineCaveBat: CombatZoneDef = {
   minPartySize: 1,
   maxPartySize: 2,
   waves: [
-    { id: "wave.mine.3_1.full", name: "四翼压制", monsters: [caveBat.id, caveBat.id, caveBat.id, caveBat.id] },
-    { id: "wave.mine.3_1.trim", name: "三翼先遣", monsters: [caveBat.id, caveBat.id, caveBat.id] },
+    { monsters: [caveBat.id, caveBat.id, caveBat.id, caveBat.id] },
+    { monsters: [caveBat.id, caveBat.id, caveBat.id] },
   ],
 };
 
@@ -111,7 +153,7 @@ export const mineShadowFiend: CombatZoneDef = {
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 2,
-  waves: [{ id: "wave.mine.3_2", name: "暗影双子", monsters: [shadowFiend.id, shadowFiend.id] }],
+  waves: [{ monsters: [shadowFiend.id, shadowFiend.id] }],
 };
 
 export const mineOreCrab: CombatZoneDef = {
@@ -120,7 +162,7 @@ export const mineOreCrab: CombatZoneDef = {
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 2,
-  waves: [{ id: "wave.mine.3_3", name: "裂甲横行", monsters: [oreCrab.id, oreCrab.id] }],
+  waves: [{ monsters: [oreCrab.id, oreCrab.id] }],
 };
 
 export const mineBatShadowMix: CombatZoneDef = {
@@ -130,8 +172,8 @@ export const mineBatShadowMix: CombatZoneDef = {
   minPartySize: 1,
   maxPartySize: 4,
   waves: [
-    { id: "wave.mine.3_4.full", name: "暗影蝠群", monsters: [caveBat.id, caveBat.id, caveBat.id, shadowFiend.id] },
-    { id: "wave.mine.3_4.alt", name: "暗影先遣", monsters: [caveBat.id, caveBat.id, shadowFiend.id] },
+    { monsters: [caveBat.id, caveBat.id, caveBat.id, shadowFiend.id] },
+    { monsters: [caveBat.id, caveBat.id, shadowFiend.id] },
   ],
 };
 
@@ -142,8 +184,8 @@ export const mineBatCrabMix: CombatZoneDef = {
   minPartySize: 1,
   maxPartySize: 4,
   waves: [
-    { id: "wave.mine.3_5.full", name: "矿坑夹击", monsters: [caveBat.id, caveBat.id, oreCrab.id] },
-    { id: "wave.mine.3_5.alt", name: "甲壳蝠潮", monsters: [caveBat.id, caveBat.id, caveBat.id, oreCrab.id] },
+    { monsters: [caveBat.id, caveBat.id, oreCrab.id] },
+    { monsters: [caveBat.id, caveBat.id, caveBat.id, oreCrab.id] },
   ],
 };
 
@@ -153,15 +195,20 @@ export const trainingGroundCombat: CombatZoneDef = {
   waveSelection: "random",
   minPartySize: 1,
   maxPartySize: 4,
-  waves: [{ id: "wave.training.dummy", name: "训练木人", monsters: [trainingDummy.id] }],
+  waves: [{ monsters: [trainingDummy.id] }],
 };
 
 const authoredCombatZones = {
-  [prairieGreenSlime.id]: prairieGreenSlime,
-  [prairieSlime.id]: prairieSlime,
-  [prairieWildBoar.id]: prairieWildBoar,
-  [prairieHornedRabbit.id]: prairieHornedRabbit,
-  [prairieBigSlime.id]: prairieBigSlime,
+  [prairieApproach.id]: prairieApproach,
+  [prairieCreek.id]: prairieCreek,
+  [prairieGrove.id]: prairieGrove,
+  [prairieRidge.id]: prairieRidge,
+  [prairieCrossroad.id]: prairieCrossroad,
+  [prairiePasture.id]: prairiePasture,
+  [prairieDustway.id]: prairieDustway,
+  [prairieBramble.id]: prairieBramble,
+  [prairieMarsh.id]: prairieMarsh,
+  [prairieHeartland.id]: prairieHeartland,
   [twilightPoisonMushroom.id]: twilightPoisonMushroom,
   [twilightDuskWolf.id]: twilightDuskWolf,
   [twilightSkeletonSoldier.id]: twilightSkeletonSoldier,

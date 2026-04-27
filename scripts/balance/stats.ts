@@ -43,6 +43,12 @@ export interface SimStats {
   minutesElapsed: number;
   /** Final hero level. */
   finalLevel: number;
+  /** Carried XP inside the current level at simulation end. */
+  finalExp: number;
+  /** Total XP required to reach the next level from this level. */
+  nextLevelXpCost: number;
+  /** Estimated minutes to gain one full level at the current XP/min rate. */
+  minutesToNextLevel: number | null;
 }
 
 // ---------- Public API ----------
@@ -73,6 +79,12 @@ export function computeStats(collector: SimCollector): SimStats {
     }
   }
 
+  const xpPerMinute =
+    minutesElapsed > 0 ? collector.totalXpGained / minutesElapsed : 0;
+  const minutesToNextLevel = xpPerMinute > 0
+    ? collector.nextLevelXpCost / xpPerMinute
+    : null;
+
   return {
     profileKey: collector.profileKey,
     heroId: collector.heroId,
@@ -93,12 +105,15 @@ export function computeStats(collector: SimCollector): SimStats {
     deathRate: totalWaves > 0 ? collector.deaths / totalWaves : 0,
     kills: collector.kills,
 
-    xpPerMinute: minutesElapsed > 0 ? collector.totalXpGained / minutesElapsed : 0,
+    xpPerMinute,
     currencyPerMinute,
     itemsDropped: { ...collector.itemsDropped },
 
     ticksElapsed: collector.ticksElapsed,
     minutesElapsed,
     finalLevel: collector.finalLevel,
+    finalExp: collector.finalExp,
+    nextLevelXpCost: collector.nextLevelXpCost,
+    minutesToNextLevel,
   };
 }

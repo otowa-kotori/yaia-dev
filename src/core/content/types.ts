@@ -414,13 +414,12 @@ export interface WaveRewardDef {
 }
 
 export interface WaveDef {
-  id: string;
-  name: string;
   /** Exact enemy lineup for this wave. */
   monsters: MonsterId[];
   /** Rewards granted only when the wave is cleared (not on player wipe). */
   rewards?: WaveRewardDef;
 }
+
 
 export interface CombatZoneDef {
   id: CombatZoneId;
