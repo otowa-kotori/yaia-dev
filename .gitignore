@@ -10,4 +10,5 @@ bun.lockb
 .playwright-cli
 .codebuddy/plans
 external-assets/game-icons/
+balance-report.html
 
