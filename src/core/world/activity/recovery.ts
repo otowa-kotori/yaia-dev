@@ -9,8 +9,8 @@ import { TICK_MS } from "../../infra/tick";
 export const LOGIC_TICKS_PER_SECOND = Math.round(1000 / TICK_MS);
 
 export const COMBAT_ZONE_ACTIVITY_RULES = {
-  /** 搜怪阶段固定 10 秒窗口。 */
-  searchTicks: 10 * LOGIC_TICKS_PER_SECOND,
+  /** 搜怪阶段固定 5 秒窗口。 */
+  searchTicks: 5 * LOGIC_TICKS_PER_SECOND,
   /** 角色死亡后，全队需要额外等待的复活时间。 */
   deathRespawnTicks: 60 * LOGIC_TICKS_PER_SECOND,
 } as const;

@@ -244,6 +244,7 @@ function runActorActionWindow(
   }
 
   schedulerOnActionResolved(battle.scheduler, actor, plannedAction.actionCost);
+  emitPlannedActionStart(battle, actor, plannedAction, ctx);
   const result = executePlannedAction(
     battle,
     actor,
@@ -251,7 +252,7 @@ function runActorActionWindow(
     participants,
     ctx,
   );
-  emitPlannedActionResult(battle, actor, plannedAction, result, ctx);
+  emitPlannedActionResult(battle, actor, result, ctx);
 
   // Decrement all cooldowns by 1 after the actor's action resolves.
   decrementCooldowns(actor);
@@ -358,19 +359,12 @@ function executePlannedAction(
 function emitPlannedActionResult(
   battle: Battle,
   actor: Character,
-  plannedAction: PlannedAction,
   result: CastResult,
   ctx: TickBattleContext,
 ): void {
 
 
   if (result.ok) {
-    ctx.bus.emit("battleActionStarted", {
-      battleId: battle.id,
-      actorId: actor.id,
-      targetIds: plannedAction.targets.map((t) => t.id),
-      abilityId: result.talentId,
-    });
     ctx.bus.emit("battleActionResolved", {
       battleId: battle.id,
       actorId: actor.id,
@@ -383,6 +377,20 @@ function emitPlannedActionResult(
   // Cast failed (e.g. on cooldown, insufficient mp) — the action window was
   // already consumed above, so we only log the skip here.
   emitSkippedAction(battle, actor, result.reason, ctx);
+}
+
+function emitPlannedActionStart(
+  battle: Battle,
+  actor: Character,
+  plannedAction: PlannedAction,
+  ctx: TickBattleContext,
+): void {
+  ctx.bus.emit("battleActionStarted", {
+    battleId: battle.id,
+    actorId: actor.id,
+    targetIds: plannedAction.targets.map((t) => t.id),
+    abilityId: plannedAction.talentId,
+  });
 }
 
 function emitSkippedAction(

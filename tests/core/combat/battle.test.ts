@@ -115,6 +115,45 @@ describe("Battle: tick loop", () => {
     expect(runOnce()).toEqual(runOnce());
   });
 
+  test("emits battleActionStarted before same-action damage events", () => {
+    const state = freshState();
+    const bus = createGameEventBus();
+    const rng = createRng(77);
+    const hero = makePlayer({
+      id: "p1",
+      talents: [basicAttackTalent.id],
+      atk: 12,
+      speed: 20,
+      maxHp: 50,
+    });
+    const slime = makeSlime("s1");
+    state.actors = [hero, slime];
+
+    const battle = createBattle({
+      id: "b.order",
+      mode: "solo",
+      participantIds: [hero.id, slime.id],
+      startedAtTick: 0,
+      intents: testIntents(hero.id, slime.id),
+    });
+
+    const trace: string[] = [];
+    bus.on("battleActionStarted", (ev) => trace.push(`action:${ev.actorId}:${ev.abilityId}`));
+    bus.on("damage", (ev) => trace.push(`damage:${ev.attackerId}:${ev.targetId}:${ev.amount}`));
+
+    for (let t = 1; t <= 100; t += 1) {
+      tickBattle(battle, { state, bus, rng, currentTick: t });
+      const actionIdx = trace.findIndex((line) => line.startsWith("action:"));
+      const damageIdx = trace.findIndex((line) => line.startsWith("damage:"));
+      if (actionIdx >= 0 && damageIdx >= 0) {
+        expect(actionIdx).toBeLessThan(damageIdx);
+        return;
+      }
+    }
+
+    throw new Error("expected battle to emit both action and damage events");
+  });
+
   test("enemies_won when hero dies", () => {
     const state = freshState();
     const bus = createGameEventBus();
