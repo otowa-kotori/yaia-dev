@@ -251,7 +251,7 @@ function runActorActionWindow(
     participants,
     ctx,
   );
-  emitPlannedActionResult(battle, actor, result, ctx);
+  emitPlannedActionResult(battle, actor, plannedAction, result, ctx);
 
   // Decrement all cooldowns by 1 after the actor's action resolves.
   decrementCooldowns(actor);
@@ -341,15 +341,6 @@ function executePlannedAction(
   participants: readonly Character[],
   ctx: TickBattleContext,
 ): CastResult {
-  // Announce intention before effects resolve, so the game log reads
-  // "X uses Y → X deals N damage" in the correct order.
-  ctx.bus.emit("battleActionStarted", {
-    battleId: battle.id,
-    actorId: actor.id,
-    targetIds: plannedAction.targets.map((t) => t.id),
-    abilityId: plannedAction.talentId,
-  });
-
   return tryUseTalent(actor, plannedAction.talentId, plannedAction.targets, {
     state: ctx.state,
     bus: ctx.bus,
@@ -367,12 +358,19 @@ function executePlannedAction(
 function emitPlannedActionResult(
   battle: Battle,
   actor: Character,
+  plannedAction: PlannedAction,
   result: CastResult,
   ctx: TickBattleContext,
 ): void {
 
 
   if (result.ok) {
+    ctx.bus.emit("battleActionStarted", {
+      battleId: battle.id,
+      actorId: actor.id,
+      targetIds: plannedAction.targets.map((t) => t.id),
+      abilityId: result.talentId,
+    });
     ctx.bus.emit("battleActionResolved", {
       battleId: battle.id,
       actorId: actor.id,

@@ -375,4 +375,35 @@ describe("knight integration / PriorityListIntent", () => {
     expect(action).not.toBeNull();
     expect(action!.talentId).toBe(basicAttackTalent.id);
   });
+
+  test("power strike cooldown blocks next 2 actions and does not drain MP while blocked", () => {
+    const pc = makePlayer({
+      id: "hero.knight",
+      talents: [basicAttackTalent.id as string, knightPowerStrike.id as string],
+      mp: 30,
+      atk: 20,
+    });
+    pc.side = "player";
+    pc.talentLevels[knightPowerStrike.id as string] = 1;
+    pc.equippedTalents = [knightPowerStrike.id as string];
+    const e1 = makeSlime("e1");
+    const e2 = makeSlime("e2");
+
+    const ctx: AbilityContext = {
+      state: createEmptyState(7, SAVE_VERSION),
+      bus: createGameEventBus(),
+      rng: createRng(7),
+      currentTick: 0,
+      participants: [pc, e1, e2],
+    };
+
+    const r1 = tryUseTalent(pc, knightPowerStrike.id as string, [e1, e2], ctx);
+    expect(r1.ok).toBe(true);
+    const mpAfterFirstCast = pc.currentMp;
+
+    const r2 = tryUseTalent(pc, knightPowerStrike.id as string, [e1, e2], ctx);
+    expect(r2.ok).toBe(false);
+    if (!r2.ok) expect(r2.reason).toBe("on_cooldown");
+    expect(pc.currentMp).toBe(mpAfterFirstCast);
+  });
 });

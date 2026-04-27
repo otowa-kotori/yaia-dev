@@ -126,7 +126,9 @@ export function tryUseTalent(
   // Commit: pay cost, set cooldown (remaining action count).
   if (mpCost > 0) caster.currentMp -= mpCost;
   if (activeParams.cooldownActions && activeParams.cooldownActions > 0) {
-    caster.cooldowns[talentId] = activeParams.cooldownActions;
+    // Cooldowns are decremented at the end of each owner action window.
+    // Store +1 so "cooldownActions = N" means waiting N full future actions.
+    caster.cooldowns[talentId] = activeParams.cooldownActions + 1;
   }
 
   if (def.execute) {

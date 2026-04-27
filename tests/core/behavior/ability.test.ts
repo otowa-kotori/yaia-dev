@@ -77,8 +77,9 @@ describe("talent: tryUseTalent", () => {
     const r = tryUseTalent(caster, fireballTalent.id, [target], { ...h });
     expect(r.ok).toBe(true);
     expect(caster.currentMp).toBe(5);
-    // cooldownActions: 3 → sets remaining action count to 3
-    expect(caster.cooldowns[fireballTalent.id]).toBe(3);
+    // cooldownActions: 3 → stores remaining count as 4 so that
+    // there are 3 full future owner actions before reuse.
+    expect(caster.cooldowns[fireballTalent.id]).toBe(4);
   });
 
   test("on_cooldown rejects a cast while cd is active", () => {
