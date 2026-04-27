@@ -62,7 +62,14 @@ import {
   type DungeonPhase,
 } from "../world/activity";
 import {
+  OUT_OF_COMBAT_RECOVERY_EFFECT_ID,
+  ensureRecoveryEffect,
+  removePhaseRecoveryEffect,
+  applyActorOutOfCombatRecovery,
+} from "../world/activity/recovery";
+import {
   createPlayerCharacter,
+  isCharacter,
   isPlayer,
   isResourceNode,
   rebuildCharacterDerived,
@@ -283,6 +290,49 @@ export function createGameSession(
     };
 
   }
+
+  const OUT_OF_COMBAT_RECOVERY_SOURCE_PREFIX = "activity.phase_recovery:session.out_of_combat:";
+
+  function outOfCombatRecoverySourceId(actorId: string): string {
+    return `${OUT_OF_COMBAT_RECOVERY_SOURCE_PREFIX}${actorId}`;
+  }
+
+  function applyOutOfCombatRecoveryTick(): void {
+    const ongoingBattleParticipants = new Set<string>();
+    for (const battle of state.battles) {
+      if (battle.outcome !== "ongoing") continue;
+      for (const actorId of battle.participantIds) {
+        ongoingBattleParticipants.add(actorId);
+      }
+    }
+
+    const ctx = buildCtx();
+    for (const actor of state.actors) {
+      if (!isCharacter(actor) || !isPlayer(actor)) continue;
+      const sourceId = outOfCombatRecoverySourceId(actor.id);
+      const inBattle = ongoingBattleParticipants.has(actor.id);
+      const inCombatActivity =
+        actor.activity?.kind === ACTIVITY_COMBAT_KIND;
+      if (inBattle || inCombatActivity || actor.currentHp <= 0) {
+        removePhaseRecoveryEffect(actor, sourceId);
+        continue;
+      }
+      ensureRecoveryEffect(
+        actor,
+        ctx,
+        sourceId,
+        OUT_OF_COMBAT_RECOVERY_EFFECT_ID,
+      );
+      applyActorOutOfCombatRecovery(actor, ctx);
+    }
+  }
+
+  engine.register({
+    id: "session:out_of_combat_recovery",
+    tick() {
+      applyOutOfCombatRecoveryTick();
+    },
+  });
 
   // ---------- Shared helpers ----------
 

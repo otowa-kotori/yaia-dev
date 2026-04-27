@@ -68,6 +68,18 @@ export const attrDefs: Record<string, AttrDef> = {
     defaultBase: 0,
     clampMin: 0,
   },
+  [ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND]: {
+    id: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
+    name: "Out-of-combat HP pct/sec",
+    defaultBase: 0,
+    clampMin: 0,
+  },
+  [ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND]: {
+    id: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
+    name: "Out-of-combat MP pct/sec",
+    defaultBase: 0,
+    clampMin: 0,
+  },
   [ATTR.PATK]: {
 
     id: ATTR.PATK,
@@ -137,6 +149,49 @@ export const phaseRecoveryEffect: EffectDef = {
       { stat: ATTR.MP_REGEN, op: "flat" as const, value: mpRegen, sourceId: "" },
     ].filter((modifier) => modifier.value > 0);
   },
+};
+
+export const outOfCombatRecoveryEffect: EffectDef = {
+  id: "effect.system.out_of_combat_recovery" as EffectId,
+  kind: "duration",
+  modifiers: [
+    {
+      stat: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.02,
+      sourceId: "",
+    },
+    {
+      stat: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.02,
+      sourceId: "",
+    },
+  ],
+};
+
+export const combatSearchRecoveryEffect: EffectDef = {
+  ...outOfCombatRecoveryEffect,
+  id: "effect.system.combat_search_recovery" as EffectId,
+};
+
+export const dungeonWaveRestRecoveryEffect: EffectDef = {
+  ...outOfCombatRecoveryEffect,
+  id: "effect.system.dungeon_wave_rest_recovery" as EffectId,
+  modifiers: [
+    {
+      stat: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.075,
+      sourceId: "",
+    },
+    {
+      stat: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.075,
+      sourceId: "",
+    },
+  ],
 };
 
 // ---------- Common fixture talents ----------
@@ -396,6 +451,9 @@ export function loadFixtureContent(): ContentDb {
       [burnDotEffect.id]: burnDotEffect,
       [shieldBuffEffect.id]: shieldBuffEffect,
       [phaseRecoveryEffect.id]: phaseRecoveryEffect,
+      [outOfCombatRecoveryEffect.id]: outOfCombatRecoveryEffect,
+      [combatSearchRecoveryEffect.id]: combatSearchRecoveryEffect,
+      [dungeonWaveRestRecoveryEffect.id]: dungeonWaveRestRecoveryEffect,
     },
     talents: {
       [basicAttackTalent.id]: basicAttackTalent,

@@ -61,10 +61,11 @@ import type {
 } from "../../infra/state/types";
 import {
   DUNGEON_RECOVERY_RULES,
+  DUNGEON_WAVE_REST_RECOVERY_EFFECT_ID,
   PHASE_RECOVERY_SOURCE_PREFIX,
-  applyActorResourceRegen,
+  applyActorOutOfCombatRecovery,
   clearPhaseRecoveryEffects,
-  ensurePhaseRecoveryEffect,
+  ensureRecoveryEffect,
 } from "./recovery";
 
 export const ACTIVITY_DUNGEON_KIND = "activity.dungeon";
@@ -307,13 +308,13 @@ function stepWaveResting(
   }
 
   for (const hero of heroes) {
-    ensurePhaseRecoveryEffect(hero, ctx, {
-      sourceId: waveRestRecoverySourceId(activity, hero.id),
-      totalTicks: DUNGEON_RECOVERY_RULES.waveRestTicks,
-      hpPct: DUNGEON_RECOVERY_RULES.interWaveRecoverHpPct,
-      mpPct: DUNGEON_RECOVERY_RULES.interWaveRecoverMpPct,
-    });
-    applyActorResourceRegen(hero, ctx);
+    ensureRecoveryEffect(
+      hero,
+      ctx,
+      waveRestRecoverySourceId(activity, hero.id),
+      DUNGEON_WAVE_REST_RECOVERY_EFFECT_ID,
+    );
+    applyActorOutOfCombatRecovery(hero, ctx);
   }
 
   const elapsed = Math.max(0, ctx.currentTick - activity.transitionTick);

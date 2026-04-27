@@ -1,20 +1,16 @@
 import { getEffect } from "../../content/registry";
 import { getAttr, type Character } from "../../entity/actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../../entity/attribute";
-import { applyTickResourceRegen } from "../../entity/resource";
+import { applyOutOfCombatPctRecovery } from "../../entity/resource";
 import type { EffectInstance } from "../../infra/state/types";
 import type { ActivityContext } from "./types";
 import { TICK_MS } from "../../infra/tick";
 
 export const LOGIC_TICKS_PER_SECOND = Math.round(1000 / TICK_MS);
 
-export const COMBAT_ZONE_RECOVERY_RULES = {
-  /** 固定 10 秒搜索 / 休整时间。 */
+export const COMBAT_ZONE_ACTIVITY_RULES = {
+  /** 搜怪阶段固定 10 秒窗口。 */
   searchTicks: 10 * LOGIC_TICKS_PER_SECOND,
-  /** 搜索阶段总计恢复的 HP 比例。 */
-  interWaveRecoverHpPct: 0.2,
-  /** 搜索阶段总计恢复的 MP 比例。 */
-  interWaveRecoverMpPct: 0.2,
   /** 角色死亡后，全队需要额外等待的复活时间。 */
   deathRespawnTicks: 60 * LOGIC_TICKS_PER_SECOND,
 } as const;
@@ -22,64 +18,58 @@ export const COMBAT_ZONE_RECOVERY_RULES = {
 export const DUNGEON_RECOVERY_RULES = {
   /** 副本波间固定短休整。 */
   waveRestTicks: 2 * LOGIC_TICKS_PER_SECOND,
-  /** 波间总计恢复的 HP 比例。 */
-  interWaveRecoverHpPct: 0.15,
-  /** 波间总计恢复的 MP 比例。 */
-  interWaveRecoverMpPct: 0.15,
 } as const;
 
-export const PHASE_RECOVERY_EFFECT_ID = "effect.system.phase_recovery";
 export const PHASE_RECOVERY_SOURCE_PREFIX = "activity.phase_recovery:";
+export const OUT_OF_COMBAT_RECOVERY_EFFECT_ID =
+  "effect.system.out_of_combat_recovery";
+export const COMBAT_SEARCH_RECOVERY_EFFECT_ID =
+  "effect.system.combat_search_recovery";
+export const DUNGEON_WAVE_REST_RECOVERY_EFFECT_ID =
+  "effect.system.dungeon_wave_rest_recovery";
 
-export interface PhaseRecoveryEffectOptions {
-  sourceId: string;
-  totalTicks: number;
-  hpPct: number;
-  mpPct: number;
-}
-
-export function applyActorResourceRegen(
+export function applyActorOutOfCombatRecovery(
   actor: Character,
   ctx: ActivityContext,
 ): void {
-  applyTickResourceRegen(actor);
+  applyOutOfCombatPctRecovery(actor);
 }
 
-export function ensurePhaseRecoveryEffect(
+export function ensureRecoveryEffect(
   actor: Character,
   ctx: ActivityContext,
-  opts: PhaseRecoveryEffectOptions,
+  sourceId: string,
+  effectId: string,
 ): void {
   if (actor.currentHp <= 0) {
-    removePhaseRecoveryEffect(actor, opts.sourceId);
+    removePhaseRecoveryEffect(actor, sourceId);
     return;
   }
 
-  const nextState = buildPhaseRecoveryState(actor, ctx, opts);
-  const existing = actor.activeEffects.find((ae) => ae.sourceId === opts.sourceId);
-  if (existing && isSameRecoveryState(existing, nextState)) {
+  const existing = actor.activeEffects.find((ae) => ae.sourceId === sourceId);
+  if (existing?.effectId === effectId) {
     return;
   }
 
-  removePhaseRecoveryEffect(actor, opts.sourceId);
+  removePhaseRecoveryEffect(actor, sourceId);
 
-  const effect = getEffect(PHASE_RECOVERY_EFFECT_ID);
+  const effect = getEffect(effectId);
   const modifiers = (effect.computeModifiers
-    ? effect.computeModifiers(nextState)
+    ? effect.computeModifiers({})
     : (effect.modifiers ?? [])).map((modifier) => ({
       ...modifier,
-      sourceId: opts.sourceId,
+      sourceId,
     }));
 
   if (modifiers.length === 0) return;
 
   const instance: EffectInstance = {
     effectId: effect.id as string,
-    sourceId: opts.sourceId,
+    sourceId,
     sourceActorId: actor.id,
     remainingActions: -1,
     stacks: 1,
-    state: nextState,
+    state: {},
   };
   actor.activeEffects.push(instance);
   addModifiers(actor.attrs, modifiers);
@@ -108,30 +98,4 @@ export function clearPhaseRecoveryEffects(actor: Character): void {
 export function restoreActorToFull(actor: Character, ctx: ActivityContext): void {
   actor.currentHp = getAttr(actor, ATTR.MAX_HP);
   actor.currentMp = getAttr(actor, ATTR.MAX_MP);
-}
-
-function buildPhaseRecoveryState(
-  actor: Character,
-  ctx: ActivityContext,
-  opts: PhaseRecoveryEffectOptions,
-): Record<string, number> {
-  const totalTicks = Math.max(1, opts.totalTicks);
-  return {
-    hpRegen:
-      Math.max(0, getAttr(actor, ATTR.MAX_HP)) *
-      Math.max(0, opts.hpPct) /
-      totalTicks,
-    mpRegen:
-      Math.max(0, getAttr(actor, ATTR.MAX_MP)) *
-      Math.max(0, opts.mpPct) /
-      totalTicks,
-  };
-}
-
-function isSameRecoveryState(
-  effect: EffectInstance,
-  nextState: Record<string, number>,
-): boolean {
-  return Number(effect.state.hpRegen ?? 0) === nextState.hpRegen
-    && Number(effect.state.mpRegen ?? 0) === nextState.mpRegen;
 }

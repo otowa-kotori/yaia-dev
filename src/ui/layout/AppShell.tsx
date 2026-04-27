@@ -119,7 +119,7 @@ export function AppShell({ store }: { store: GameStore }) {
 
           {/* ── Right: log sidebar (desktop only) ── */}
           {isDesktop && (
-            <aside className="w-64 bg-surface border-l border-border flex flex-col shrink-0">
+            <aside className="w-80 bg-surface border-l border-border flex flex-col shrink-0">
               <div className="p-3 border-b border-border">
                 <div className="text-[11px] uppercase tracking-wider text-gray-500">
                   {T.tab_log}

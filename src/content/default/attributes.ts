@@ -42,6 +42,18 @@ const authoredAttributes = {
     defaultBase: 0,
     clampMin: 0,
   },
+  [ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND]: {
+    id: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
+    name: "脱战每秒生命恢复比例",
+    defaultBase: 0,
+    clampMin: 0,
+  },
+  [ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND]: {
+    id: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
+    name: "脱战每秒法力恢复比例",
+    defaultBase: 0,
+    clampMin: 0,
+  },
   [ATTR.STR]: { id: ATTR.STR, name: "力量", defaultBase: 5, integer: true },
 
   [ATTR.DEX]: { id: ATTR.DEX, name: "敏捷", defaultBase: 5, integer: true },

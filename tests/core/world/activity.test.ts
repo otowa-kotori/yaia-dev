@@ -4,7 +4,7 @@ import {
   createCombatActivity,
   ACTIVITY_COMBAT_KIND,
 } from "../../../src/core/world/activity";
-import { COMBAT_ZONE_RECOVERY_RULES } from "../../../src/core/world/activity/recovery";
+import { COMBAT_ZONE_ACTIVITY_RULES } from "../../../src/core/world/activity/recovery";
 import { enterStage, leaveStage } from "../../../src/core/world/stage";
 
 import { resetContent } from "../../../src/core/content";
@@ -368,7 +368,7 @@ describe("CombatActivity + Stage integration", () => {
     expect(activity.phase).toBe("deathRecovering");
     expect(hero.currentHp).toBe(0);
 
-    engine.step(COMBAT_ZONE_RECOVERY_RULES.deathRespawnTicks - 1);
+    engine.step(COMBAT_ZONE_ACTIVITY_RULES.deathRespawnTicks - 1);
     expect(activity.phase).toBe("deathRecovering");
     expect(hero.currentHp).toBe(0);
 
@@ -411,7 +411,7 @@ describe("CombatActivity + Stage integration", () => {
     engine.register(activity);
     for (
       let i = 0;
-      i < COMBAT_ZONE_RECOVERY_RULES.searchTicks + 20 && state.actors.length <= 1;
+      i < COMBAT_ZONE_ACTIVITY_RULES.searchTicks + 20 && state.actors.length <= 1;
       i++
     ) {
       engine.step(1);

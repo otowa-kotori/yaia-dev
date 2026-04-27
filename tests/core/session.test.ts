@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ACTIVITY_GATHER_KIND } from "../../src/core/world/activity";
-import { COMBAT_ZONE_RECOVERY_RULES } from "../../src/core/world/activity/recovery";
+import { COMBAT_ZONE_ACTIVITY_RULES } from "../../src/core/world/activity/recovery";
 
 import { getAttr, isResourceNode } from "../../src/core/entity/actor";
 import { ATTR } from "../../src/core/entity/attribute";
@@ -83,7 +83,7 @@ describe("GameSession location flow", () => {
     expect(session.getBattleSchedulerMode()).toBe("turn");
 
     cc.startFight(forestCombatZone.id);
-    session.engine.step(COMBAT_ZONE_RECOVERY_RULES.searchTicks + 1);
+    session.engine.step(COMBAT_ZONE_ACTIVITY_RULES.searchTicks + 1);
 
     expect(session.state.battles.length).toBeGreaterThan(0);
     expect(session.state.battles[0]!.scheduler.kind).toBe("turn");
@@ -100,6 +100,20 @@ describe("GameSession location flow", () => {
     expect(session.getBattleSchedulerMode()).toBe("turn");
   });
 
+  test("heroes recover each tick while out of combat even when idle", () => {
+    const session = createSession(forestLocation.id);
+    const cc = session.getFocusedCharacter();
+    cc.hero.currentHp = 1;
+    cc.hero.currentMp = 0;
+    const hpBefore = cc.hero.currentHp;
+    const mpBefore = cc.hero.currentMp;
+
+    session.engine.step(1);
+
+    expect(cc.hero.currentHp).toBeGreaterThan(hpBefore);
+    expect(cc.hero.currentMp).toBeGreaterThan(mpBefore);
+  });
+
   test("stopActivity tears down the current instance but keeps the chosen location", () => {
     const session = createSession(forestLocation.id);
     const cc = session.getFocusedCharacter();
@@ -110,7 +124,7 @@ describe("GameSession location flow", () => {
     const stageId = cc.hero.stageId!;
     for (
       let i = 0;
-      i < COMBAT_ZONE_RECOVERY_RULES.searchTicks + 20
+      i < COMBAT_ZONE_ACTIVITY_RULES.searchTicks + 20
         && (session.state.stages[stageId]?.spawnedActorIds.length ?? 0) === 0;
       i++
     ) {
@@ -167,7 +181,7 @@ describe("GameSession location flow", () => {
     const cc = session.getFocusedCharacter();
 
     cc.startFight(forestCombatZone.id);
-    session.engine.step(COMBAT_ZONE_RECOVERY_RULES.searchTicks + 1);
+    session.engine.step(COMBAT_ZONE_ACTIVITY_RULES.searchTicks + 1);
 
 
     const firstStageId = cc.hero.stageId!;
@@ -188,7 +202,7 @@ describe("GameSession location flow", () => {
     const rehydrated = session.getFocusedCharacter();
     rehydrated.stopActivity();
     rehydrated.startFight(forestCombatZone.id);
-    session.engine.step(COMBAT_ZONE_RECOVERY_RULES.searchTicks + 1);
+    session.engine.step(COMBAT_ZONE_ACTIVITY_RULES.searchTicks + 1);
 
 
     const secondStageId = rehydrated.hero.stageId!;

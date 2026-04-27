@@ -14,7 +14,7 @@
 //
 // State machine:
 //
-//   searchingEnemies — fixed 5s search / rest window between waves.
+//   searchingEnemies — fixed search / rest window between waves.
 //     | enemies appear -> fighting
 //     | stopRequested   -> stopped
 //   fighting          — a Battle is active; delegate ticks to tickBattle.
@@ -69,11 +69,12 @@ import { mintBattleId } from "../../runtime-ids";
 import type { StageSession } from "../stage/types";
 import type { WorldActivity, ActivityContext } from "./types";
 import {
-  COMBAT_ZONE_RECOVERY_RULES,
+  COMBAT_ZONE_ACTIVITY_RULES,
+  COMBAT_SEARCH_RECOVERY_EFFECT_ID,
   PHASE_RECOVERY_SOURCE_PREFIX,
-  applyActorResourceRegen,
+  applyActorOutOfCombatRecovery,
   clearPhaseRecoveryEffects,
-  ensurePhaseRecoveryEffect,
+  ensureRecoveryEffect,
   restoreActorToFull,
 } from "./recovery";
 
@@ -305,18 +306,8 @@ function stepDeathRecovering(
     return;
   }
 
-  for (const hero of heroes) {
-    ensurePhaseRecoveryEffect(hero, ctx, {
-      sourceId: deathRecoverySourceId(activity, hero.id),
-      totalTicks: COMBAT_ZONE_RECOVERY_RULES.deathRespawnTicks,
-      hpPct: 1,
-      mpPct: 1,
-    });
-    applyActorResourceRegen(hero, ctx);
-  }
-
   const elapsed = Math.max(0, ctx.currentTick - activity.lastTransitionTick);
-  if (elapsed < COMBAT_ZONE_RECOVERY_RULES.deathRespawnTicks) {
+  if (elapsed < COMBAT_ZONE_ACTIVITY_RULES.deathRespawnTicks) {
     syncCombatToHeroes(activity, ctx.state);
     return;
   }
@@ -570,13 +561,13 @@ function applyCombatZoneInterWaveRecovery(
   ctx: ActivityContext,
 ): void {
   for (const hero of heroes) {
-    ensurePhaseRecoveryEffect(hero, ctx, {
-      sourceId: searchRecoverySourceId(activity, hero.id),
-      totalTicks: COMBAT_ZONE_RECOVERY_RULES.searchTicks,
-      hpPct: COMBAT_ZONE_RECOVERY_RULES.interWaveRecoverHpPct,
-      mpPct: COMBAT_ZONE_RECOVERY_RULES.interWaveRecoverMpPct,
-    });
-    applyActorResourceRegen(hero, ctx);
+    ensureRecoveryEffect(
+      hero,
+      ctx,
+      searchRecoverySourceId(activity, hero.id),
+      COMBAT_SEARCH_RECOVERY_EFFECT_ID,
+    );
+    applyActorOutOfCombatRecovery(hero, ctx);
   }
 
   syncCombatToHeroes(activity, ctx.state);
@@ -587,13 +578,6 @@ function searchRecoverySourceId(
   actorId: string,
 ): string {
   return `${PHASE_RECOVERY_SOURCE_PREFIX}combat.search:${activity.id}:${actorId}`;
-}
-
-function deathRecoverySourceId(
-  activity: CombatActivity,
-  actorId: string,
-): string {
-  return `${PHASE_RECOVERY_SOURCE_PREFIX}combat.death:${activity.id}:${actorId}`;
 }
 
 function clearCombatRecoveryEffects(

@@ -61,6 +61,9 @@ export const T = {
   pickLocation: "选择一个地点开始冒险。",
   deathRecovering: "死亡恢复中...",
   searchingEnemies: "搜索敌人中（休整）...",
+  searchProgress: "搜怪进度",
+  respawnProgress: "复活进度",
+  progressTicks: "{done} / {total} tick",
 
   inCombat: "战斗中",
   stopped: "已停止",

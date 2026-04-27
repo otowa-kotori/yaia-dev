@@ -312,6 +312,8 @@ export const ATTR = {
   MAX_MP:  "attr.max_mp"  as AttrId,
   HP_REGEN: "attr.hp_regen" as AttrId,
   MP_REGEN: "attr.mp_regen" as AttrId,
+  OUT_OF_COMBAT_HP_PCT_PER_SECOND: "attr.out_of_combat_hp_pct_per_second" as AttrId,
+  OUT_OF_COMBAT_MP_PCT_PER_SECOND: "attr.out_of_combat_mp_pct_per_second" as AttrId,
   STR:     "attr.str"     as AttrId,
 
   DEX:     "attr.dex"     as AttrId,

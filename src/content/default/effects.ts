@@ -25,32 +25,60 @@ export const magicStrikeEffect: EffectDef = {
   formula: { kind: "magic_damage_v1" },
 };
 
-/**
- * 活动层临时挂载的阶段恢复 effect。
- *
- * 它不依赖 action 过期，而是由 CombatActivity / DungeonActivity 在 phase
- * 进入时安装、离开时移除。effect 只是统一承载“临时加回复”的 modifier 形态；
- * 活动层会在每个 logic tick 读取 HP_REGEN / MP_REGEN，而战斗内自然回复则由
- * scheduler 专用时间基单独缩放，不复用这里的 tick 语义。
- */
-
-export const phaseRecoveryEffect: EffectDef = {
-  id: "effect.system.phase_recovery" as EffectId,
+/** 全局脱战恢复模板：按最大生命/法力百分比每秒恢复。 */
+export const outOfCombatRecoveryEffect: EffectDef = {
+  id: "effect.system.out_of_combat_recovery" as EffectId,
   kind: "duration",
-  computeModifiers: (state) => {
-    const hpRegen = Math.max(0, Number(state.hpRegen ?? 0));
-    const mpRegen = Math.max(0, Number(state.mpRegen ?? 0));
-    return [
-      { stat: ATTR.HP_REGEN, op: "flat" as const, value: hpRegen, sourceId: "" },
-      { stat: ATTR.MP_REGEN, op: "flat" as const, value: mpRegen, sourceId: "" },
-    ].filter((modifier) => modifier.value > 0);
-  },
+  modifiers: [
+    {
+      stat: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.02,
+      sourceId: "",
+    },
+    {
+      stat: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.02,
+      sourceId: "",
+    },
+  ],
 };
+
+/** 战斗区搜怪恢复：继承全局脱战模板。 */
+export const combatSearchRecoveryEffect = {
+  extends: outOfCombatRecoveryEffect.id,
+  id: "effect.system.combat_search_recovery" as EffectId,
+  kind: "duration",
+} satisfies AuthoringDef<EffectDef>;
+
+/** 副本波间恢复：继承全局脱战模板并覆盖幅度。 */
+export const dungeonWaveRestRecoveryEffect = {
+  extends: outOfCombatRecoveryEffect.id,
+  id: "effect.system.dungeon_wave_rest_recovery" as EffectId,
+  kind: "duration",
+  modifiers: [
+    {
+      stat: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.075,
+      sourceId: "",
+    },
+    {
+      stat: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
+      op: "flat",
+      value: 0.075,
+      sourceId: "",
+    },
+  ],
+} satisfies AuthoringDef<EffectDef>;
 
 const authoredEffects = {
   [strikeEffect.id]: strikeEffect,
   [magicStrikeEffect.id]: magicStrikeEffect,
-  [phaseRecoveryEffect.id]: phaseRecoveryEffect,
+  [outOfCombatRecoveryEffect.id]: outOfCombatRecoveryEffect,
+  [combatSearchRecoveryEffect.id]: combatSearchRecoveryEffect,
+  [dungeonWaveRestRecoveryEffect.id]: dungeonWaveRestRecoveryEffect,
   [knightFortitudeEffect.id]: knightFortitudeEffect,
   [knightRetaliationEffect.id]: knightRetaliationEffect,
   [knightRageEffect.id]: knightRageEffect,

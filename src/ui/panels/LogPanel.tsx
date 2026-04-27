@@ -3,6 +3,7 @@
 // Renders a scrollable list of game log entries using the LogEntry component.
 // Exported as `ActivityLogPanel` for backward compatibility with existing imports.
 
+import { useEffect, useRef } from "react";
 import type { GameLogCategory, GameLogEntry } from "../../core/infra/game-log";
 import { LogEntry } from "../components/LogEntry";
 import { T } from "../text";
@@ -22,18 +23,38 @@ export function ActivityLogPanel({
   emptyMessage = T.activityLogEmpty,
   limit = 8,
 }: LogPanelProps) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
   const tail = entries.slice(-limit);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (!shouldStickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [tail.length]);
+
+  function handleScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldStickToBottomRef.current = distanceToBottom <= 24;
+  }
 
   if (tail.length === 0) {
     return (
-      <div className="mt-3 p-2.5 bg-surface-lighter rounded-md text-xs opacity-70">
+      <div className="h-full p-2.5 bg-surface-lighter rounded-md text-xs opacity-70">
         {emptyMessage}
       </div>
     );
   }
 
   return (
-    <div className="mt-3 p-2 bg-black/40 rounded-md text-xs max-h-[220px] overflow-auto flex flex-col gap-1.5">
+    <div
+      ref={listRef}
+      onScroll={handleScroll}
+      className="h-full p-2 bg-black/40 rounded-md text-xs overflow-y-auto flex flex-col gap-1.5"
+    >
       {tail.map((entry, index) => (
         <LogEntry key={`${entry.tick}:${index}:${entry.text}`} entry={entry} />
       ))}

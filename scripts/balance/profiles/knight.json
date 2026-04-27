@@ -10,117 +10,13 @@
       "level": 3,
       "equippedTalents": ["talent.knight.power_strike"]
     },
-    "knight_lv5": {
+    "knight_lv3_noskill": {
       "heroId": "hero.knight",
-      "talents": { "talent.knight.power_strike": 2, "talent.knight.fortitude": 1 },
-      "level": 5,
-      "equippedTalents": ["talent.knight.power_strike"]
-    },
-    "knight_lv5_copper": {
-      "heroId": "hero.knight",
-      "level": 5,
-      "talents": { "talent.knight.power_strike": 3, "talent.knight.fortitude": 2 },
-      "equipment": ["item.weapon.copper_sword"],
-      "equippedTalents": ["talent.knight.power_strike"]
-    },
-    "knight_lv8_copper": {
-      "heroId": "hero.knight",
-      "level": 8,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 3, "talent.knight.fortitude": 2 },
-      "equippedTalents": ["talent.knight.power_strike"]
-    },
-    "knight_lv10_copper_ps": {
-      "heroId": "hero.knight",
-      "level": 10,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 5, "talent.knight.fortitude": 3 },
-      "equippedTalents": ["talent.knight.power_strike"]
-    },
-    "knight_lv10_copper_rage": {
-      "heroId": "hero.knight",
-      "level": 10,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 5, "talent.knight.rage": 3 },
-      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
-    },
-    "knight_lv10_copper_guard": {
-      "heroId": "hero.knight",
-      "level": 10,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.fortitude": 5, "talent.knight.guard": 3 },
-      "equippedTalents": ["talent.knight.guard"]
-    },
-    "knight_lv10_copper_warcry": {
-      "heroId": "hero.knight",
-      "level": 10,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.fortitude": 5, "talent.knight.warcry": 3 },
-      "equippedTalents": ["talent.knight.warcry"]
-    },
-    "knight_lv10_copper_retal": {
-      "heroId": "hero.knight",
-      "level": 10,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.fortitude": 5, "talent.knight.warcry": 5, "talent.knight.retaliation": 2 },
-      "equippedTalents": ["talent.knight.warcry"]
-    },
-    "knight_lv15_copper": {
-      "heroId": "hero.knight",
-      "level": 15,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 5, "talent.knight.fortitude": 5, "talent.knight.rage": 3, "talent.knight.warcry": 1 },
-      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
-    },
-    "knight_lv20_copper": {
-      "heroId": "hero.knight",
-      "level": 20,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 8, "talent.knight.fortitude": 5, "talent.knight.rage": 5, "talent.knight.warcry": 5, "talent.knight.retaliation": 3 },
-      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
-    },
-    "knight_lv25_copper": {
-      "heroId": "hero.knight",
-      "level": 25,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 10, "talent.knight.fortitude": 8, "talent.knight.rage": 8, "talent.knight.warcry": 5, "talent.knight.retaliation": 5 },
-      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
-    },
-    "ranger_lv1": {
-      "heroId": "hero.ranger",
-      "level": 1
-    },
-    "ranger_lv5": {
-      "heroId": "hero.ranger",
-      "level": 5
-    },
-    "ranger_lv10": {
-      "heroId": "hero.ranger",
-      "level": 10
-    },
-    "mage_lv1": {
-      "heroId": "hero.mage",
-      "level": 1
-    },
-    "mage_lv5": {
-      "heroId": "hero.mage",
-      "level": 5
-    },
-    "mage_lv10": {
-      "heroId": "hero.mage",
-      "level": 10
-    },
-    "cleric_lv1": {
-      "heroId": "hero.cleric",
-      "level": 1
-    },
-    "cleric_lv5": {
-      "heroId": "hero.cleric",
-      "level": 5
-    },
-    "cleric_lv10": {
-      "heroId": "hero.cleric",
-      "level": 10
+      "talents": { "talent.knight.fortitude": 1 },
+      "level": 3,
+      "equippedTalents": []
     }
-  }
+  },
+  "scenarios": [
+  ]
 }

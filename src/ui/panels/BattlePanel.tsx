@@ -27,6 +27,7 @@ import { getContent } from "../../core/content";
 import type { DungeonSession } from "../../core/infra/state/types";
 import type { GameLogEntry } from "../../core/infra/game-log";
 import type { StageSession } from "../../core/world/stage/types";
+import { COMBAT_ZONE_ACTIVITY_RULES } from "../../core/world/activity/recovery";
 
 
 export function BattlePanel({ store }: { store: GameStore }) {
@@ -113,6 +114,7 @@ function CombatPanel({
   battle: Battle | null;
 }) {
   const phaseLabel = combatPhaseLabel(activity.phase);
+  const phaseProgress = buildCombatPhaseProgress(activity, store);
 
   const partyHeroes = activity.partyCharIds
     .map((id) => store.state.actors.find((a) => a.id === id))
@@ -122,6 +124,18 @@ function CombatPanel({
     return (
       <Card className="p-3">
         <PanelHeader phaseLabel={phaseLabel} />
+        {phaseProgress && (
+          <div className="mb-2">
+            <ProgressBar
+              value={phaseProgress.value}
+              max={phaseProgress.max}
+              color="atb"
+              size="sm"
+              label={phaseProgress.label}
+              valueLabel={phaseProgress.valueLabel}
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           {partyHeroes.map((h) => (
             <HeroCard key={h.id} hero={h} statusOverride={phaseLabel} />
@@ -139,6 +153,18 @@ function CombatPanel({
   return (
     <Card className="p-3">
       <PanelHeader phaseLabel={phaseLabel} />
+      {phaseProgress && (
+        <div className="mb-2">
+          <ProgressBar
+            value={phaseProgress.value}
+            max={phaseProgress.max}
+            color="atb"
+            size="sm"
+            label={phaseProgress.label}
+            valueLabel={phaseProgress.valueLabel}
+          />
+        </div>
+      )}
 
       {/* Left-right battle layout */}
       <div className="flex gap-4">
@@ -467,4 +493,39 @@ function dungeonPhaseLabel(phase: DungeonPhase): string {
     abandoned: T.dungeonPhase_abandoned,
   };
   return map[phase];
+}
+
+function buildCombatPhaseProgress(
+  activity: CombatActivity,
+  store: GameStore,
+): {
+  value: number;
+  max: number;
+  label: string;
+  valueLabel: string;
+} | null {
+  if (activity.phase === "searchingEnemies") {
+    const stage = store.state.stages[activity.stageId];
+    const pending = stage?.pendingCombatWaveSearch;
+    if (!pending) return null;
+    const max = Math.max(1, pending.readyAtTick - pending.startedAtTick);
+    const value = Math.max(0, Math.min(max, store.state.tick - pending.startedAtTick));
+    return {
+      value,
+      max,
+      label: T.searchProgress,
+      valueLabel: fmt(T.progressTicks, { done: value, total: max }),
+    };
+  }
+  if (activity.phase === "deathRecovering") {
+    const max = COMBAT_ZONE_ACTIVITY_RULES.deathRespawnTicks;
+    const value = Math.max(0, Math.min(max, store.state.tick - activity.lastTransitionTick));
+    return {
+      value,
+      max,
+      label: T.respawnProgress,
+      valueLabel: fmt(T.progressTicks, { done: value, total: max }),
+    };
+  }
+  return null;
 }

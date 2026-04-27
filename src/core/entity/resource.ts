@@ -1,5 +1,6 @@
 import { getAttr, type Character } from "./actor";
 import { ATTR } from "./attribute";
+import { TICK_MS } from "../infra/tick";
 
 /**
  * Raw per-logic-tick resource regen.
@@ -34,6 +35,39 @@ export function applyScaledResourceRegen(
 
   actor.currentHp = clamp(actor.currentHp + hpRegen * scale, 0, maxHp);
   actor.currentMp = clamp(actor.currentMp + mpRegen * scale, 0, maxMp);
+}
+
+/**
+ * Out-of-combat recovery that ignores HP_REGEN/MP_REGEN and scales from max
+ * resources directly using "pct per second" attributes.
+ */
+export function applyOutOfCombatPctRecovery(
+  actor: Character,
+): void {
+  if (actor.currentHp <= 0) return;
+
+  const maxHp = Math.max(0, getAttr(actor, ATTR.MAX_HP));
+  const maxMp = Math.max(0, getAttr(actor, ATTR.MAX_MP));
+  const hpPctPerSecond = Math.max(
+    0,
+    getAttr(actor, ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND),
+  );
+  const mpPctPerSecond = Math.max(
+    0,
+    getAttr(actor, ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND),
+  );
+  const tickSeconds = TICK_MS / 1000;
+
+  actor.currentHp = clamp(
+    actor.currentHp + maxHp * hpPctPerSecond * tickSeconds,
+    0,
+    maxHp,
+  );
+  actor.currentMp = clamp(
+    actor.currentMp + maxMp * mpPctPerSecond * tickSeconds,
+    0,
+    maxMp,
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {

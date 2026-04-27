@@ -29,7 +29,7 @@ import {
 } from "../../entity/actor";
 import type { CombatZoneDef, WaveDef } from "../../content/types";
 import { getCombatZone, getMonster, getResourceNode } from "../../content/registry";
-import { COMBAT_ZONE_RECOVERY_RULES } from "../activity/recovery";
+import { COMBAT_ZONE_ACTIVITY_RULES } from "../activity/recovery";
 
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
@@ -136,7 +136,7 @@ export function beginCombatWaveSearch(
   if (session.pendingCombatWaveSearch) return;
   session.pendingCombatWaveSearch = {
     startedAtTick: currentTick,
-    readyAtTick: currentTick + COMBAT_ZONE_RECOVERY_RULES.searchTicks,
+    readyAtTick: currentTick + COMBAT_ZONE_ACTIVITY_RULES.searchTicks,
   };
 }
 
