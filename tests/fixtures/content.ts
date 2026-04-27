@@ -215,7 +215,24 @@ export const goblinMonster: MonsterDef = {
   xpReward: 15,
 };
 
+export const dropSlimeMonster: MonsterDef = {
+  id: "monster.slime.drop" as MonsterId,
+  name: "Drop Slime",
+  level: 1,
+  baseAttrs: {
+    [ATTR.MAX_HP]: 18,
+    [ATTR.PATK]: 2,
+    [ATTR.PDEF]: 0,
+    [ATTR.SPEED]: 10,
+  },
+  talents: [basicAttackTalent.id],
+  drops: [{ itemId: "item.kill.drop" as ItemId, chance: 1, minQty: 1, maxQty: 1 }],
+
+  xpReward: 0,
+};
+
 // ---------- Common fixture skills ----------
+
 
 const testProgressionXpParams = {
   a: 8,
@@ -262,7 +279,14 @@ export const waveTrophyItem: ItemDef = {
   stackable: true,
 };
 
+export const killDropItem: ItemDef = {
+  id: "item.kill.drop" as ItemId,
+  name: "Kill Drop",
+  stackable: true,
+};
+
 export const testVein: ResourceNodeDef = {
+
   id: "node.test_vein" as ResourceNodeId,
   name: "Test Vein",
   skill: miningSkill.id,
@@ -302,7 +326,21 @@ export const forestCombatZone: CombatZoneDef = {
   ],
 };
 
+export const dropCombatZone: CombatZoneDef = {
+  id: "combatzone.forest.kill_drop" as CombatZoneId,
+  name: "Kill Drop Path",
+  waveSelection: "random",
+  waves: [
+    {
+      id: "wave.forest.kill_drop",
+      name: "Single Drop Slime",
+      monsters: [dropSlimeMonster.id],
+    },
+  ],
+};
+
 // ---------- Dungeons ----------
+
 
 export const testDungeon: DungeonDef = {
   id: "dungeon.test.slime_cave" as DungeonId,
@@ -372,14 +410,18 @@ export function loadFixtureContent(): ContentDb {
     monsters: {
       [slimeMonster.id]: slimeMonster,
       [goblinMonster.id]: goblinMonster,
+      [dropSlimeMonster.id]: dropSlimeMonster,
     },
+
     skills: {
       [miningSkill.id]: miningSkill,
     },
     items: {
       [testOreItem.id]: testOreItem,
       [waveTrophyItem.id]: waveTrophyItem,
+      [killDropItem.id]: killDropItem,
     },
+
     resourceNodes: {
       [testVein.id]: testVein,
     },
@@ -389,7 +431,9 @@ export function loadFixtureContent(): ContentDb {
     },
     combatZones: {
       [forestCombatZone.id]: forestCombatZone,
+      [dropCombatZone.id]: dropCombatZone,
     },
+
     dungeons: {
       [testDungeon.id]: testDungeon,
     },

@@ -19,13 +19,16 @@ import {
 } from "../../../src/core/inventory";
 import {
   attrDefs,
-  forestLocation,
+  basicAttackTalent,
+  dropCombatZone,
   forestCombatZone,
+  forestLocation,
+  killDropItem,
   loadFixtureContent,
   makePlayer,
-  basicAttackTalent,
   waveTrophyItem,
 } from "../../fixtures/content";
+
 
 const STAGE_ID = "test-stage";
 
@@ -108,6 +111,55 @@ describe("CombatActivity + Stage integration", () => {
     expect(progressed).toBe(true);
     expect(countItem(state.inventories[hero.id]!, waveTrophyItem.id)).toBeGreaterThan(0);
   });
+
+  test("combat-zone kill rewards include monster drops", () => {
+    const state = createEmptyState(42, SAVE_VERSION);
+    const bus = createGameEventBus();
+    const rng = createRng(42);
+
+    const hero = makePlayer({
+      id: "hero",
+      talents: [basicAttackTalent.id],
+      atk: 50,
+      speed: 30,
+      maxHp: 50,
+    });
+    hero.locationId = forestLocation.id;
+    hero.stageId = STAGE_ID;
+    installHero(state, hero);
+
+    const engine = createTickEngine();
+    const ctxProvider = makeCtxProvider(state, bus, rng, engine);
+
+    const controller = enterStage({
+      stageId: STAGE_ID,
+      locationId: forestLocation.id,
+      mode: { kind: "combatZone", combatZoneId: dropCombatZone.id },
+      ctxProvider,
+    });
+    engine.register(controller);
+
+    const activity = createCombatActivity({
+      stageId: STAGE_ID,
+      partyCharIds: [hero.id],
+      ctxProvider,
+    });
+    engine.register(activity);
+
+    let won = false;
+    bus.on("waveResolved", (payload) => {
+      if (payload.outcome === "players_won") won = true;
+    });
+
+    for (let i = 0; i < 400 && !won; i++) {
+      engine.step(1);
+    }
+
+    expect(won).toBe(true);
+    expect(countItem(state.inventories[hero.id]!, killDropItem.id)).toBeGreaterThan(0);
+    expect(countItem(state.inventories[hero.id]!, waveTrophyItem.id)).toBe(0);
+  });
+
 
   test("stopRequested ends the activity cleanly", () => {
     const state = createEmptyState(42, SAVE_VERSION);
