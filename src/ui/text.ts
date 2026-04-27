@@ -115,9 +115,13 @@ export const T = {
   // ── Inventory ──
   equipFailed: "装备失败",
   unequipFailed: "卸下失败",
+  storeInSharedFailed: "放入共享仓库失败",
+  takeFromSharedFailed: "从共享仓库取出失败",
+  discardFailed: "丢弃失败",
   itemDetails: "物品详情",
   itemDetailsHint: "点击背包中的物品后，这里会显示它的来源、类型、属性和操作入口。",
   missingItemDef: "缺少物品定义：",
+
   label_type: "类型",
   type_material: "材料",
   type_equipment: "装备",
@@ -128,12 +132,17 @@ export const T = {
   modifierEffects: "属性效果",
   noModifiers: "无属性加成",
   equipTo: "装备到{name}",
+  btn_storeInShared: "放入共享仓库",
+  btn_takeFromShared: "取到{name}背包",
+  btn_discard: "丢弃",
+  confirmDiscardItem: "确定要丢弃 {name} 吗？此操作不可撤销。",
   equipPanel: "装备面板",
   unequipped: "未装备",
   btn_unequip: "卸下",
   noBag: "— 无背包 —",
   bagShared: "共享仓库",
   heroBag: "{name}的背包",
+
 
   // ── Pending loot ──
   pendingLoot: "待拾取",

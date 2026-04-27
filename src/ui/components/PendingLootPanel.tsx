@@ -5,7 +5,7 @@
 
 import type { PendingLootEntry } from "../../core/world/stage/types";
 import type { CharacterController } from "../../core/session";
-import { ItemSlotCell, safeItemName, GRID_COLS } from "./ItemSlot";
+import { ItemSlotCell, safeItemName, slotGridStyle } from "./ItemSlot";
 import { T } from "../text";
 
 export function PendingLootPanel({
@@ -34,7 +34,7 @@ export function PendingLootPanel({
       <div className="text-[11px] text-gray-500 mb-2 leading-relaxed">
         {T.pendingLootHint}
       </div>
-      <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${GRID_COLS}, 52px)` }}>
+      <div className="grid gap-1" style={slotGridStyle()}>
         {pendingLoot.map((entry, i) => {
           const itemId = entry.kind === "stack" ? entry.itemId : entry.instance.itemId;
           const name = safeItemName(itemId);

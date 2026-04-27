@@ -22,10 +22,12 @@
 
 ## 装备与合成入口
 
-- **装备**：
+- **装备 / 背包操作**：
   - `equipItem(slotIndex)` 从当前角色的**个人背包槽位**装备一件 gear。
   - 如果目标装备槽已有旧装备，则旧装备回填到原背包槽位。
   - `unequipItem(slot)` 把该槽位装备放回角色个人背包。
+  - `discardInventoryItem(inventoryOwnerId, slotIndex)` 丢弃指定背包槽位的整格内容。
+  - `storeItemInShared(slotIndex)` / `takeItemFromShared(slotIndex)` 在角色个人背包与共享仓库之间转移整格内容；提交前先验证目标背包可容纳，避免失败时吞物品。
 - **合成**：
   - `craftRecipe(recipeId)` 只在角色未运行 battle / gather activity 时允许执行。
   - 制作前会同时校验技能等级、材料是否足够以及产物是否能放回背包。

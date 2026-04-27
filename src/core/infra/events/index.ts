@@ -83,7 +83,16 @@ export type GameEvents = {
     entries: Array<{ itemId: string; qty: number }>;
   };
   inventoryChanged: { charId: string; inventoryId: string };
+  inventoryDiscarded: { charId: string; inventoryId: string; itemId: string; qty: number };
+  inventoryTransferred: {
+    charId: string;
+    itemId: string;
+    qty: number;
+    fromInventoryId: string;
+    toInventoryId: string;
+  };
   equipmentChanged: { charId: string; slot: string };
+
   equipmentUpdated: {
     charId: string;
     slot: string;

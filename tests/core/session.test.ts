@@ -6,7 +6,9 @@ import { getAttr, isResourceNode } from "../../src/core/entity/actor";
 import { ATTR } from "../../src/core/entity/attribute";
 import { resetContent } from "../../src/core/content";
 import { addStack, countItem } from "../../src/core/inventory";
+import { SHARED_INVENTORY_KEY } from "../../src/core/infra/state";
 import { deserialize, serialize } from "../../src/core/save";
+
 import { createGameSession, type GameSession } from "../../src/core/session";
 import {
   buildDefaultContent,
@@ -240,7 +242,75 @@ describe("GameSession location flow", () => {
     expect(getAttr(hero, ATTR.WEAPON_ATK)).toBe(weaponAtkEquipped);
   });
 
+  test("can move gear between hero bag and shared inventory", () => {
+    const { session } = createDefaultSession();
+    const cc = session.getCharacter("hero.knight");
+    const hero = cc.hero;
+    const heroInventory = session.state.inventories[hero.id]!;
+    const sharedInventory = session.state.inventories[SHARED_INVENTORY_KEY]!;
+
+    cc.unequipItem("weapon");
+    const heroSlot = heroInventory.slots.findIndex(
+      (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
+    );
+    expect(heroSlot).toBeGreaterThanOrEqual(0);
+
+    cc.storeItemInShared(heroSlot);
+
+    expect(
+      heroInventory.slots.some(
+        (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
+      ),
+    ).toBe(false);
+    const sharedSlot = sharedInventory.slots.findIndex(
+      (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
+    );
+    expect(sharedSlot).toBeGreaterThanOrEqual(0);
+    expect(
+      session.state.gameLog.some((entry) =>
+        entry.text.includes("放入了共享仓库") && entry.text.includes(trainingSword.name),
+      ),
+    ).toBe(true);
+
+    cc.takeItemFromShared(sharedSlot);
+
+    expect(
+      sharedInventory.slots.some(
+        (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
+      ),
+    ).toBe(false);
+    expect(
+      heroInventory.slots.some(
+        (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
+      ),
+    ).toBe(true);
+    expect(
+      session.state.gameLog.some((entry) =>
+        entry.text.includes("从共享仓库取出了") && entry.text.includes(trainingSword.name),
+      ),
+    ).toBe(true);
+  });
+
+  test("discardInventoryItem removes the slot contents and appends a log", () => {
+    const { session } = createDefaultSession();
+    const cc = session.getCharacter("hero.knight");
+    const hero = cc.hero;
+    const inventory = session.state.inventories[hero.id]!;
+
+    addStack(inventory, slimeGel.id, 2, 99);
+    const slotIndex = inventory.slots.findIndex(
+      (slot) => slot?.kind === "stack" && slot.itemId === slimeGel.id,
+    );
+    expect(slotIndex).toBeGreaterThanOrEqual(0);
+
+    cc.discardInventoryItem(hero.id, slotIndex);
+
+    expect(countItem(inventory, slimeGel.id)).toBe(0);
+    expect(session.state.gameLog.some((entry) => entry.text.includes("丢弃了 史莱姆胶×2"))).toBe(true);
+  });
+
   test("craftRecipe consumes materials, grants smithing XP, and produces the crafted weapon", () => {
+
     const { session } = createDefaultSession();
     const cc = session.getCharacter("hero.knight");
     const hero = cc.hero;

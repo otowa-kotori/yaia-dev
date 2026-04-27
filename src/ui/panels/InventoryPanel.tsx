@@ -1,34 +1,26 @@
-// Inventory panel — bag grids + item details + equipment management.
+// Inventory panel — bag grids + item details + equipment / transfer management.
 //
-// Tailwind v4 rewrite of the original InventoryView. Functionality is identical:
-//   - click a bag slot to inspect the item in a side panel
-//   - equip equippable gear directly from the bag
+// Current interactions:
+//   - click a bag slot to inspect it in the side panel
+//   - equip equippable gear directly from the personal bag
+//   - move whole slots between the personal bag and shared inventory
+//   - discard the selected slot from either inventory
 //   - inspect currently equipped items and unequip them
 //
 // Desktop layout: grid-cols-[1fr_280px] (bags | details + equipment).
-// All sections wrapped in Card for consistent styling.
+// Bag grids auto-wrap based on the available panel width instead of pinning to 5 columns.
 
 import { useState } from "react";
 import type { ItemDef, Modifier } from "../../core/content/types";
 import { getContent } from "../../core/content";
-import type {
-  GearEntry,
-  Inventory,
-  InventorySlot,
-  StackEntry,
-} from "../../core/inventory";
+import type { Inventory, InventorySlot } from "../../core/inventory";
 import { SHARED_INVENTORY_KEY } from "../../core/infra/state";
 import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
 import { T, slotLabel, fmt } from "../text";
 import { Card } from "../components/Card";
-import { Badge } from "../components/Badge";
-import { ItemSlotCell, safeItemName, GRID_COLS } from "../components/ItemSlot";
+import { ItemSlotCell, safeItemName, slotGridStyle } from "../components/ItemSlot";
 import { PendingLootPanel } from "../components/PendingLootPanel";
-
-// ---------- Layout ----------
-
-const COLS = GRID_COLS;
 
 interface SelectionState {
   inventoryOwnerId: string;
@@ -81,6 +73,45 @@ export function InventoryPanel({ store }: { store: GameStore }) {
     }
   }
 
+  function handleStoreInShared(): void {
+    if (!selected) return;
+    try {
+      cc.storeItemInShared(selected.slotIndex);
+      clearError();
+      setSelected(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : T.storeInSharedFailed);
+    }
+  }
+
+  function handleTakeFromShared(): void {
+    if (!selected) return;
+    try {
+      cc.takeItemFromShared(selected.slotIndex);
+      clearError();
+      setSelected(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : T.takeFromSharedFailed);
+    }
+  }
+
+  function handleDiscard(): void {
+    if (!selected || !selectedSlot) return;
+    const itemId = selectedSlot.kind === "stack" ? selectedSlot.itemId : selectedSlot.instance.itemId;
+    const itemName = safeItemName(itemId);
+    if (!confirm(fmt(T.confirmDiscardItem, { name: itemName }))) {
+      return;
+    }
+
+    try {
+      cc.discardInventoryItem(selected.inventoryOwnerId, selected.slotIndex);
+      clearError();
+      setSelected(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : T.discardFailed);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-start">
       {/* Left column — bags + pending loot */}
@@ -90,7 +121,6 @@ export function InventoryPanel({ store }: { store: GameStore }) {
           title={fmt(T.heroBag, { name: hero.name })}
           inventoryOwnerId={hero.id}
           inv={personal}
-          cols={COLS}
           selectedIndex={selected?.inventoryOwnerId === hero.id ? selected.slotIndex : null}
           onSelect={selectSlot}
         />
@@ -99,7 +129,6 @@ export function InventoryPanel({ store }: { store: GameStore }) {
           title={T.bagShared}
           inventoryOwnerId={SHARED_INVENTORY_KEY}
           inv={shared}
-          cols={COLS}
           selectedIndex={selected?.inventoryOwnerId === SHARED_INVENTORY_KEY ? selected.slotIndex : null}
           onSelect={selectSlot}
         />
@@ -113,6 +142,9 @@ export function InventoryPanel({ store }: { store: GameStore }) {
           selected={selected}
           selectedSlot={selectedSlot}
           onEquip={handleEquip}
+          onStoreInShared={handleStoreInShared}
+          onTakeFromShared={handleTakeFromShared}
+          onDiscard={handleDiscard}
         />
         <EquipmentPanel hero={hero} onUnequip={handleUnequip} />
       </div>
@@ -126,14 +158,12 @@ function BagGrid({
   title,
   inventoryOwnerId,
   inv,
-  cols,
   selectedIndex,
   onSelect,
 }: {
   title: string;
   inventoryOwnerId: string;
   inv: Inventory | null;
-  cols: number;
   selectedIndex: number | null;
   onSelect: (inventoryOwnerId: string, inventoryTitle: string, slotIndex: number) => void;
 }) {
@@ -156,10 +186,7 @@ function BagGrid({
           {used} / {inv.capacity}
         </span>
       </div>
-      <div
-        className="grid gap-1 overflow-hidden"
-        style={{ gridTemplateColumns: `repeat(${cols}, 52px)` }}
-      >
+      <div className="grid gap-1 overflow-hidden" style={slotGridStyle()}>
         {inv.slots.map((slot, i) => (
           <ItemSlotCell
             key={i}
@@ -182,12 +209,18 @@ function ItemDetailsPanel({
   selected,
   selectedSlot,
   onEquip,
+  onStoreInShared,
+  onTakeFromShared,
+  onDiscard,
 }: {
   heroName: string;
   heroInventoryOwnerId: string;
   selected: SelectionState | null;
   selectedSlot: InventorySlot;
   onEquip: () => void;
+  onStoreInShared: () => void;
+  onTakeFromShared: () => void;
+  onDiscard: () => void;
 }) {
   if (!selected || !selectedSlot) {
     return (
@@ -214,10 +247,9 @@ function ItemDetailsPanel({
   const isGear = selectedSlot.kind === "gear";
   const rolledMods = isGear ? selectedSlot.instance.rolledMods : [];
   const allMods = [...(def.modifiers ?? []), ...rolledMods];
-  const canEquip =
-    isGear &&
-    Boolean(def.slot) &&
-    selected.inventoryOwnerId === heroInventoryOwnerId;
+  const isInHeroBag = selected.inventoryOwnerId === heroInventoryOwnerId;
+  const isInShared = selected.inventoryOwnerId === SHARED_INVENTORY_KEY;
+  const canEquip = isGear && Boolean(def.slot) && isInHeroBag;
 
   return (
     <Card className="p-3">
@@ -244,14 +276,42 @@ function ItemDetailsPanel({
 
         <ModifierList title={T.modifierEffects} modifiers={allMods} emptyLabel={T.noModifiers} />
 
-        {canEquip && (
+        <div className="flex flex-col gap-2">
+          {canEquip && (
+            <button
+              type="button"
+              onClick={onEquip}
+              className="px-3 py-2 rounded border border-green-700 bg-green-700 text-white text-xs font-inherit cursor-pointer hover:bg-green-600 transition-colors"
+            >
+              {fmt(T.equipTo, { name: heroName })}
+            </button>
+          )}
+          {isInHeroBag && (
+            <button
+              type="button"
+              onClick={onStoreInShared}
+              className="px-3 py-2 rounded border border-border bg-surface-light text-white text-xs font-inherit cursor-pointer hover:bg-surface-lighter transition-colors"
+            >
+              {T.btn_storeInShared}
+            </button>
+          )}
+          {isInShared && (
+            <button
+              type="button"
+              onClick={onTakeFromShared}
+              className="px-3 py-2 rounded border border-border bg-surface-light text-white text-xs font-inherit cursor-pointer hover:bg-surface-lighter transition-colors"
+            >
+              {fmt(T.btn_takeFromShared, { name: heroName })}
+            </button>
+          )}
           <button
-            onClick={onEquip}
-            className="px-3 py-2 rounded border border-green-700 bg-green-700 text-white text-xs font-inherit cursor-pointer hover:bg-green-600 transition-colors"
+            type="button"
+            onClick={onDiscard}
+            className="px-3 py-2 rounded border border-red-700/70 bg-red-900/20 text-red-200 text-xs font-inherit cursor-pointer hover:bg-red-900/35 transition-colors"
           >
-            {fmt(T.equipTo, { name: heroName })}
+            {T.btn_discard}
           </button>
-        )}
+        </div>
       </div>
     </Card>
   );

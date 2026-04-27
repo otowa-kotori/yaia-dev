@@ -1,7 +1,7 @@
 import { isPlayer } from "../../entity/actor";
 import { getContent } from "../../content/registry";
 import type { GameEvents } from "../events";
-import type { GameState } from "../state/types";
+import { SHARED_INVENTORY_KEY, type GameState } from "../state/types";
 import type { GameLogCategory, GameLogEntry } from "./types";
 
 export interface GameLogRuleContext {
@@ -209,6 +209,35 @@ export const gameLogRules = {
       `${actorName(ctx.state, payload.charId)} 制作了 ${recipeName(payload.recipeId)}。`,
       payload.charId,
     ),
+  inventoryDiscarded: (
+    payload: GameEvents["inventoryDiscarded"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(
+      ctx,
+      "inventory",
+      `${actorName(ctx.state, payload.charId)} 丢弃了 ${itemName(payload.itemId)}×${payload.qty}。`,
+      payload.charId,
+    ),
+  inventoryTransferred: (
+    payload: GameEvents["inventoryTransferred"],
+    ctx: GameLogRuleContext,
+  ) => {
+    const heroName = actorName(ctx.state, payload.charId);
+    const item = `${itemName(payload.itemId)}×${payload.qty}`;
+    if (payload.toInventoryId === SHARED_INVENTORY_KEY) {
+      return entry(ctx, "inventory", `${heroName} 把 ${item} 放入了共享仓库。`, payload.charId);
+    }
+    if (payload.fromInventoryId === SHARED_INVENTORY_KEY) {
+      return entry(ctx, "inventory", `${heroName} 从共享仓库取出了 ${item}。`, payload.charId);
+    }
+    return entry(
+      ctx,
+      "inventory",
+      `${heroName} 转移了 ${item}（${payload.fromInventoryId} → ${payload.toInventoryId}）。`,
+      payload.charId,
+    );
+  },
   currencyChanged: (
     payload: GameEvents["currencyChanged"],
     ctx: GameLogRuleContext,

@@ -4,7 +4,7 @@
 // Accepts a unified "display item" shape so it can render both InventorySlot
 // and PendingLootEntry data without knowing the source.
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { getContent } from "../../core/content";
 import type { GearEntry, StackEntry } from "../../core/inventory";
 import type { PendingLootEntry } from "../../core/world/stage/types";
@@ -13,7 +13,13 @@ import type { PendingLootEntry } from "../../core/world/stage/types";
 
 export const CELL_SIZE = 52;
 export const CELL_GAP = 4;
-export const GRID_COLS = 5;
+
+export function slotGridStyle(): CSSProperties {
+  return {
+    gridTemplateColumns: `repeat(auto-fit, ${CELL_SIZE}px)`,
+    justifyContent: "start",
+  };
+}
 
 // ---------- Helpers (exported for tooltip / details) ----------
 

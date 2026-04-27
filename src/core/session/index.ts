@@ -37,10 +37,12 @@ import { createGameEventBus, type GameEventBus } from "../infra/events";
 import { attachGameLogCollector } from "../infra/game-log";
 import { createRng, restoreRng, type Rng } from "../infra/rng";
 import {
+  SHARED_INVENTORY_KEY,
   createEmptyState,
   type GameState,
   type DungeonSession,
 } from "../infra/state";
+
 
 import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
@@ -144,7 +146,11 @@ export interface CharacterController {
   stopActivity(): void;
   equipItem(slotIndex: number): void;
   unequipItem(slot: string): void;
+  discardInventoryItem(inventoryOwnerId: string, slotIndex: number): void;
+  storeItemInShared(slotIndex: number): void;
+  takeItemFromShared(slotIndex: number): void;
   craftRecipe(recipeId: string): void;
+
   /** Try to move a specific pending-loot entry into the hero's inventory.
    *  Returns true if successful, false if inventory is still full. */
   pickUpPendingLoot(index: number): boolean;
@@ -468,7 +474,110 @@ export function createGameSession(
     }
   }
 
+  function simulateAddSlotToInventory(
+    inventoryOwnerId: string,
+    inventory: Inventory,
+    slot: NonNullable<Inventory["slots"][number]>,
+    actionLabel: string,
+  ): void {
+    if (slot.kind === "stack") {
+      const res = addStack(
+        inventory,
+        slot.itemId,
+        slot.qty,
+        getInventoryStackLimit(state, inventoryOwnerId),
+      );
+      if (!res.ok) {
+        throw new Error(
+          `${actionLabel}: inventory full for "${inventoryOwnerId}", cannot fit stack "${slot.itemId}" (remaining=${res.remaining})`,
+        );
+      }
+      return;
+    }
+
+    const res = addGear(inventory, slot.instance);
+    if (!res.ok) {
+      throw new Error(
+        `${actionLabel}: inventory full for "${inventoryOwnerId}", cannot fit gear "${slot.instance.itemId}"`,
+      );
+    }
+  }
+
+  function transferInventorySlot(
+    charId: string,
+    fromInventoryOwnerId: string,
+    toInventoryOwnerId: string,
+    slotIndex: number,
+  ): void {
+    if (fromInventoryOwnerId === toInventoryOwnerId) {
+      throw new Error(
+        `session.transferInventorySlot: source and target inventory are both "${fromInventoryOwnerId}"`,
+      );
+    }
+
+    const sourceInventory = getInventoryByOwner(fromInventoryOwnerId);
+    const targetInventory = getInventoryByOwner(toInventoryOwnerId);
+    const sourceSlot = sourceInventory.slots[slotIndex];
+    if (!sourceSlot) {
+      throw new Error(
+        `session.transferInventorySlot: slot ${slotIndex} is empty in inventory "${fromInventoryOwnerId}"`,
+      );
+    }
+
+    simulateAddSlotToInventory(
+      toInventoryOwnerId,
+      cloneInventory(targetInventory),
+      sourceSlot,
+      "session.transferInventorySlot",
+    );
+
+    const removed = removeAtSlot(sourceInventory, slotIndex);
+    simulateAddSlotToInventory(
+      toInventoryOwnerId,
+      targetInventory,
+      removed,
+      "session.transferInventorySlot(commit)",
+    );
+
+    const itemId = removed.kind === "stack" ? removed.itemId : removed.instance.itemId;
+    const qty = removed.kind === "stack" ? removed.qty : 1;
+
+    bus.emit("inventoryTransferred", {
+      charId,
+      itemId,
+      qty,
+      fromInventoryId: fromInventoryOwnerId,
+      toInventoryId: toInventoryOwnerId,
+    });
+    bus.emit("inventoryChanged", { charId, inventoryId: fromInventoryOwnerId });
+    bus.emit("inventoryChanged", { charId, inventoryId: toInventoryOwnerId });
+  }
+
+  function discardInventorySlot(
+    charId: string,
+    inventoryOwnerId: string,
+    slotIndex: number,
+  ): void {
+    const inventory = getInventoryByOwner(inventoryOwnerId);
+    const slot = inventory.slots[slotIndex];
+    if (!slot) {
+      throw new Error(
+        `session.discardInventorySlot: slot ${slotIndex} is empty in inventory "${inventoryOwnerId}"`,
+      );
+    }
+
+    const removed = removeAtSlot(inventory, slotIndex);
+    bus.emit("inventoryDiscarded", {
+      charId,
+      inventoryId: inventoryOwnerId,
+      itemId: removed.kind === "stack" ? removed.itemId : removed.instance.itemId,
+      qty: removed.kind === "stack" ? removed.qty : 1,
+    });
+    bus.emit("inventoryChanged", { charId, inventoryId: inventoryOwnerId });
+  }
+
   // ---------- Stage lifecycle helpers ----------
+
 
   function pendingLootEntrySummary(entry: StageSession["pendingLoot"][number]) {
     if (entry.kind === "stack") {
@@ -762,8 +871,20 @@ export function createGameSession(
         bus.emit("equipmentChanged", { charId: hero.id, slot });
       },
 
+      discardInventoryItem(inventoryOwnerId: string, slotIndex: number): void {
+        discardInventorySlot(cc.hero.id, inventoryOwnerId, slotIndex);
+      },
+
+      storeItemInShared(slotIndex: number): void {
+        transferInventorySlot(cc.hero.id, cc.hero.id, SHARED_INVENTORY_KEY, slotIndex);
+      },
+
+      takeItemFromShared(slotIndex: number): void {
+        transferInventorySlot(cc.hero.id, SHARED_INVENTORY_KEY, cc.hero.id, slotIndex);
+      },
 
       craftRecipe(recipeId: string): void {
+
         if (cc._activity) {
           throw new Error("session.craftRecipe: stop the current activity before crafting");
         }
