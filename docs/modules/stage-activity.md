@@ -74,7 +74,7 @@ Activity 表示玩家当前在实例中做的事。它本身也是 `Tickable`。
 - `searchingEnemies`
   - 固定的搜敌 / 波间休整窗口
   - 若当前 stage 还没有 `currentWave` 且没有 `pendingCombatWaveSearch`，会调用 `beginCombatWaveSearch()`
-  - 在这一阶段，所有队员会获得临时的波间恢复 effect，并按 tick 回复 HP / MP
+  - 在这一阶段，所有队员会通过 `phase_recovery` effect 获得临时的波间回复加成，每个 logic tick 读取 `HP_REGEN / MP_REGEN` 属性恢复 HP / MP（注意：这是活动层的 tick 回复，与战斗内按 scheduler 时间基缩放的自然回复是两条独立通道）
   - 一旦 stage 里出现存活敌人，就立刻开战
 - `fighting`
   - 当前存在一个 `Battle`

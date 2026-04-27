@@ -18,7 +18,8 @@
 - 基础设施：`tick`、`rng`、`events`、`formula`、`content`、`save`
 - 数值系统：`attribute`、dynamic provider、lazy invalidation
 - 行为系统：`talent` 施放管线、`effect` 生命周期、reaction hooks
-- 战斗系统：`Battle`、ATB scheduler、intent、击杀奖励、波次奖励
+- 战斗系统：`Battle`、ATB / turn 双调度模式、intent、击杀奖励、波次奖励
+- 调度时间基：ATB 以 `ATB_REFERENCE_SELF_TURN_TICKS` 为参考推导默认行动阈值；turn 以全局回合（"所有快照内存活 actor 都行动过"）为时间单位；战斗内自然回复与活动层回复分两条独立通道
 - 地点系统：`Location → Entry → Stage` 三层概念模型
 - 场景系统：`StageController` 管理运行实例 actor 生命周期
 - 活动系统：
