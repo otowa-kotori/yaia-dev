@@ -1,6 +1,14 @@
+// Debug panel — dev-only tools for inspecting game state and cheating.
+//
+// Shows:
+//   - Runtime overview (tick, wall clock, actor count, speed, battle mode)
+//   - Battle scheduler mode toggle (ATB / turn)
+//   - Actor inspector with attribute grid and active effects
+//   - Cheat section: time skip, grant levels, give items
+
 import { useState } from "react";
-import type { BattleSchedulerMode } from "../core/combat/battle";
-import { getContent } from "../core/content";
+import type { BattleSchedulerMode } from "../../core/combat/battle";
+import { getContent } from "../../core/content";
 
 import {
   getAttr,
@@ -9,12 +17,13 @@ import {
   isPlayer,
   type Actor,
   type Character,
-} from "../core/entity/actor";
+} from "../../core/entity/actor";
 
-import type { AttrDef, EffectDef, Modifier } from "../core/content/types";
-import type { GameStore } from "./store";
-import { T, fmt } from "./text";
-import { useStore } from "./useStore";
+import type { AttrDef, EffectDef, Modifier } from "../../core/content/types";
+import type { GameStore } from "../store";
+import { T, fmt } from "../text";
+import { useStore } from "../hooks/useStore";
+import { Card } from "../components/Card";
 
 const ATTR_PRIORITY = [
   "max_hp",
@@ -29,54 +38,7 @@ const ATTR_PRIORITY = [
   "spd",
 ];
 
-const tabStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 16,
-};
-
-const panelStyle: React.CSSProperties = {
-  background: "#222",
-  borderRadius: 6,
-  padding: 12,
-  border: "1px solid #333",
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 11,
-  opacity: 0.55,
-  letterSpacing: 0.5,
-  textTransform: "uppercase",
-  marginBottom: 8,
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "4px 8px",
-  fontSize: 12,
-  background: "#111",
-  border: "1px solid #444",
-  borderRadius: 4,
-  color: "#fff",
-  fontFamily: "inherit",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 12,
-  borderRadius: 4,
-  border: "1px solid #4b657c",
-  background: "#2a2a2a",
-  color: "#fff",
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
-const metaLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  opacity: 0.55,
-};
-
-export function DebugView({ store }: { store: GameStore }) {
+export function DebugPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
   const content = getContent();
   const actors = s.state.actors;
@@ -189,14 +151,16 @@ export function DebugView({ store }: { store: GameStore }) {
   }
 
   return (
-    <div style={tabStyle}>
-      <div style={panelStyle}>
-        <div style={sectionTitleStyle}>{T.debugTools}</div>
-        <div style={{ fontSize: 12, opacity: 0.65 }}>{T.debugOnlyInDev}</div>
-      </div>
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <Card className="p-3">
+        <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugTools}</div>
+        <div className="text-xs opacity-65">{T.debugOnlyInDev}</div>
+      </Card>
 
-      <div style={panelStyle}>
-        <div style={sectionTitleStyle}>{T.debugOverview}</div>
+      {/* Overview */}
+      <Card className="p-3">
+        <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugOverview}</div>
         <InfoGrid
           rows={[
             { label: T.debugTick, value: String(s.state.tick) },
@@ -206,34 +170,35 @@ export function DebugView({ store }: { store: GameStore }) {
             { label: T.debugBattleMode, value: schedulerModeLabel(schedulerMode) },
           ]}
         />
-      </div>
+      </Card>
 
-      <div style={panelStyle}>
-        <div style={sectionTitleStyle}>{T.debugBattleMode}</div>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>{T.debugBattleModeHint}</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+      {/* Battle mode toggle */}
+      <Card className="p-3">
+        <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugBattleMode}</div>
+        <div className="text-xs opacity-70">{T.debugBattleModeHint}</div>
+        <div className="flex gap-2 flex-wrap mt-2.5">
           {(["atb", "turn"] as const).map((mode) => {
             const active = schedulerMode === mode;
             return (
               <button
                 key={mode}
                 onClick={() => handleSchedulerModeChange(mode)}
-                style={{
-                  ...buttonStyle,
-                  borderColor: active ? "#6ba6ff" : "#4b657c",
-                  background: active ? "#20364d" : "#2a2a2a",
-                  color: active ? "#dbeaff" : "#fff",
-                }}
+                className={`px-2.5 py-1 text-xs rounded border font-[inherit] cursor-pointer ${
+                  active
+                    ? "border-blue-500 bg-blue-950/60 text-blue-200"
+                    : "border-[#4b657c] bg-[#2a2a2a] text-white hover:bg-[#333]"
+                }`}
               >
                 {schedulerModeLabel(mode)}
               </button>
             );
           })}
         </div>
-      </div>
+      </Card>
 
-      <div style={panelStyle}>
-        <div style={sectionTitleStyle}>{T.debugActorInspector}</div>
+      {/* Actor inspector */}
+      <Card className="p-3">
+        <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugActorInspector}</div>
         {actors.length === 0 ? (
           <MutedText>{T.debugActorNone}</MutedText>
         ) : (
@@ -242,7 +207,7 @@ export function DebugView({ store }: { store: GameStore }) {
               <select
                 value={actorId}
                 onChange={(event) => setSelectedActorId(event.target.value)}
-                style={{ ...inputStyle, width: "100%" }}
+                className="w-full px-2 py-1 text-xs bg-[#111] border border-gray-700 rounded text-white font-[inherit]"
               >
                 {actors.map((entry) => (
                   <option key={entry.id} value={entry.id}>
@@ -258,10 +223,11 @@ export function DebugView({ store }: { store: GameStore }) {
             )}
           </>
         )}
-      </div>
+      </Card>
 
-      <div style={panelStyle}>
-        <div style={sectionTitleStyle}>{T.debugCheats}</div>
+      {/* Cheats */}
+      <Card className="p-3">
+        <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugCheats}</div>
         {feedback && <FeedbackBanner kind={feedback.kind} message={feedback.message} />}
         {heroes.length === 0 ? (
           <MutedText>{T.debugCheatNoHero}</MutedText>
@@ -271,7 +237,7 @@ export function DebugView({ store }: { store: GameStore }) {
               <select
                 value={heroId}
                 onChange={(event) => setSelectedHeroId(event.target.value)}
-                style={{ ...inputStyle, width: "100%" }}
+                className="w-full px-2 py-1 text-xs bg-[#111] border border-gray-700 rounded text-white font-[inherit]"
               >
                 {heroes.map((entry) => (
                   <option key={entry.id} value={entry.id}>
@@ -282,33 +248,39 @@ export function DebugView({ store }: { store: GameStore }) {
             </LabeledControl>
 
             <CheatSection title={T.debugCheatTime} hint={T.debugCheatTimeHint}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="flex gap-2 flex-wrap items-center">
                 <input
                   type="number"
                   min="0.1"
                   step="0.5"
                   value={hours}
                   onChange={(event) => setHours(event.target.value)}
-                  style={{ ...inputStyle, width: 96 }}
+                  className="w-24 px-2 py-1 text-xs bg-[#111] border border-gray-700 rounded text-white font-[inherit]"
                 />
-                <span style={metaLabelStyle}>{T.debugCatchUpHours}</span>
-                <button onClick={handleCatchUp} style={buttonStyle}>
+                <span className="text-[11px] opacity-55">{T.debugCatchUpHours}</span>
+                <button
+                  onClick={handleCatchUp}
+                  className="px-2.5 py-1 text-xs rounded border border-[#4b657c] bg-[#2a2a2a] text-white cursor-pointer hover:bg-[#333] font-[inherit]"
+                >
                   {T.debugCatchUpRun}
                 </button>
               </div>
             </CheatSection>
 
             <CheatSection title={T.debugCheatLevels} hint={T.debugCheatLevelsHint}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="flex gap-2 flex-wrap items-center">
                 <input
                   type="number"
                   min="1"
                   step="1"
                   value={levels}
                   onChange={(event) => setLevels(event.target.value)}
-                  style={{ ...inputStyle, width: 96 }}
+                  className="w-24 px-2 py-1 text-xs bg-[#111] border border-gray-700 rounded text-white font-[inherit]"
                 />
-                <button onClick={handleGrantLevels} style={buttonStyle}>
+                <button
+                  onClick={handleGrantLevels}
+                  className="px-2.5 py-1 text-xs rounded border border-[#4b657c] bg-[#2a2a2a] text-white cursor-pointer hover:bg-[#333] font-[inherit]"
+                >
                   {T.debugCheatGrantLevels}
                 </button>
               </div>
@@ -318,13 +290,13 @@ export function DebugView({ store }: { store: GameStore }) {
               title={T.debugCheatItems}
               hint={resolvedItem ? fmt(T.debugResolvedItem, { name: resolvedItem.name }) : undefined}
             >
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="flex gap-2 flex-wrap items-center">
                 <input
                   list="debug-item-ids"
                   value={itemId}
                   onChange={(event) => setItemId(event.target.value)}
                   placeholder={T.debugCheatItemId}
-                  style={{ ...inputStyle, minWidth: 220, flex: "1 1 220px" }}
+                  className="min-w-[220px] flex-[1_1_220px] px-2 py-1 text-xs bg-[#111] border border-gray-700 rounded text-white font-[inherit]"
                 />
                 <datalist id="debug-item-ids">
                   {itemEntries.map(([id, item]) => (
@@ -338,29 +310,33 @@ export function DebugView({ store }: { store: GameStore }) {
                   value={qty}
                   onChange={(event) => setQty(event.target.value)}
                   aria-label={T.debugCheatItemQty}
-                  style={{ ...inputStyle, width: 96 }}
+                  className="w-24 px-2 py-1 text-xs bg-[#111] border border-gray-700 rounded text-white font-[inherit]"
                 />
-                <button onClick={handleGiveItem} style={buttonStyle}>
+                <button
+                  onClick={handleGiveItem}
+                  className="px-2.5 py-1 text-xs rounded border border-[#4b657c] bg-[#2a2a2a] text-white cursor-pointer hover:bg-[#333] font-[inherit]"
+                >
                   {T.debugCheatGiveItem}
                 </button>
               </div>
             </CheatSection>
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
 
+// ---------- ActorInspector ----------
 
 function ActorInspector({ actor }: { actor: Actor }) {
   const content = getContent();
   const infoRows = buildActorInfoRows(actor);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="flex flex-col gap-3">
       <div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{actor.name}</div>
+        <div className="text-base font-bold text-white mb-1">{actor.name}</div>
         <InfoGrid rows={infoRows} />
       </div>
 
@@ -376,6 +352,8 @@ function ActorInspector({ actor }: { actor: Actor }) {
   );
 }
 
+// ---------- CompactAttrGrid ----------
+
 function CompactAttrGrid({
   actor,
 }: {
@@ -386,18 +364,12 @@ function CompactAttrGrid({
 
   return (
     <div>
-      <div style={sectionTitleStyle}>{T.debugActorAttrs}</div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-          gap: 8,
-        }}
-      >
+      <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugActorAttrs}</div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
         {attrIds.map((attrId) => (
-          <div key={attrId} style={{ background: "#1a1a1a", borderRadius: 4, padding: "8px 10px", border: "1px solid #303030" }}>
-            <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 3 }}>{attrDefs[attrId]?.name ?? attrId}</div>
-            <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+          <div key={attrId} className="bg-[#1a1a1a] rounded p-2 border border-[#303030]">
+            <div className="text-[11px] opacity-55 mb-0.5">{attrDefs[attrId]?.name ?? attrId}</div>
+            <div className="text-sm font-semibold tabular-nums">
               {formatNumber(getAttr(actor, attrId))}
             </div>
           </div>
@@ -407,16 +379,18 @@ function CompactAttrGrid({
   );
 }
 
+// ---------- EffectList ----------
+
 function EffectList({ actor }: { actor: Character }) {
   const content = getContent();
 
   return (
     <div>
-      <div style={sectionTitleStyle}>{T.debugActorEffectsTitle}</div>
+      <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.debugActorEffectsTitle}</div>
       {actor.activeEffects.length === 0 ? (
         <MutedText>{T.debugActorEffectsEmpty}</MutedText>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {actor.activeEffects.map((effect, index) => {
             const def = safeGetEffectDef(effect.effectId);
             const modifiers = resolveEffectModifiers(def, effect);
@@ -424,46 +398,46 @@ function EffectList({ actor }: { actor: Character }) {
             const stateSummary = formatStateSummary(effect.state);
 
             return (
-              <div key={`${effect.sourceId}:${index}`} style={{ background: "#1a1a1a", borderRadius: 4, padding: 10, border: "1px solid #303030" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-                  <div style={{ fontWeight: 600, color: "#fff" }}>{def?.name ?? effect.effectId}</div>
-                  <div style={{ fontSize: 12, opacity: 0.72, fontVariantNumeric: "tabular-nums" }}>
+              <div key={`${effect.sourceId}:${index}`} className="bg-[#1a1a1a] rounded p-2.5 border border-[#303030]">
+                <div className="flex justify-between gap-3 flex-wrap mb-1.5">
+                  <div className="font-semibold text-white">{def?.name ?? effect.effectId}</div>
+                  <div className="text-xs opacity-72 tabular-nums">
                     {formatRemainingActions(effect.remainingActions)}
                     {effect.stacks > 1 ? ` · ${fmt(T.debugEffectStacks, { count: effect.stacks })}` : ""}
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", fontSize: 12 }}>
-                  <span style={metaLabelStyle}>{T.debugEffectId}</span>
+                <div className="grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1 text-xs">
+                  <span className="text-[11px] opacity-55">{T.debugEffectId}</span>
                   <span>{effect.effectId}</span>
                   {effect.sourceTalentId ? (
                     <>
-                      <span style={metaLabelStyle}>{T.debugEffectSourceTalent}</span>
+                      <span className="text-[11px] opacity-55">{T.debugEffectSourceTalent}</span>
                       <span>{content.talents[effect.sourceTalentId]?.name ?? effect.sourceTalentId}</span>
                     </>
                   ) : null}
-                  <span style={metaLabelStyle}>{T.debugEffectSourceActor}</span>
+                  <span className="text-[11px] opacity-55">{T.debugEffectSourceActor}</span>
                   <span>{effect.sourceActorId}</span>
                   {def?.tags?.length ? (
                     <>
-                      <span style={metaLabelStyle}>{T.debugEffectTags}</span>
+                      <span className="text-[11px] opacity-55">{T.debugEffectTags}</span>
                       <span>{def.tags.join(" · ")}</span>
                     </>
                   ) : null}
                   {modifiers.length > 0 ? (
                     <>
-                      <span style={metaLabelStyle}>{T.debugEffectModifiers}</span>
+                      <span className="text-[11px] opacity-55">{T.debugEffectModifiers}</span>
                       <span>{modifiers.map((modifier) => formatModifier(modifier, content.attributes)).join(" · ")}</span>
                     </>
                   ) : null}
                   {modifiers.length === 0 && reactionCount > 0 ? (
                     <>
-                      <span style={metaLabelStyle}>{T.debugEffectModifiers}</span>
+                      <span className="text-[11px] opacity-55">{T.debugEffectModifiers}</span>
                       <span>{T.debugEffectReactions}</span>
                     </>
                   ) : null}
                   {stateSummary ? (
                     <>
-                      <span style={metaLabelStyle}>{T.debugEffectState}</span>
+                      <span className="text-[11px] opacity-55">{T.debugEffectState}</span>
                       <span>{stateSummary}</span>
                     </>
                   ) : null}
@@ -477,6 +451,8 @@ function EffectList({ actor }: { actor: Character }) {
   );
 }
 
+// ---------- Layout helpers ----------
+
 function CheatSection({
   title,
   hint,
@@ -487,9 +463,9 @@ function CheatSection({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 4 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>{title}</div>
-      {hint ? <div style={{ fontSize: 11, opacity: 0.6 }}>{hint}</div> : null}
+    <div className="flex flex-col gap-1.5 pt-1">
+      <div className="text-xs font-semibold text-white">{title}</div>
+      {hint ? <div className="text-[11px] opacity-60">{hint}</div> : null}
       {children}
     </div>
   );
@@ -497,8 +473,8 @@ function CheatSection({
 
 function LabeledControl({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-      <div style={metaLabelStyle}>{label}</div>
+    <div className="flex flex-col gap-1.5 mb-3">
+      <div className="text-[11px] opacity-55">{label}</div>
       {children}
     </div>
   );
@@ -513,15 +489,11 @@ function FeedbackBanner({
 }) {
   return (
     <div
-      style={{
-        marginBottom: 12,
-        padding: "8px 10px",
-        borderRadius: 4,
-        border: kind === "success" ? "1px solid #356a48" : "1px solid #6d3636",
-        background: kind === "success" ? "#1d3022" : "#3a1f1f",
-        color: kind === "success" ? "#b8efc8" : "#ffb3b3",
-        fontSize: 12,
-      }}
+      className={`mb-3 px-2.5 py-2 rounded text-xs border ${
+        kind === "success"
+          ? "border-green-800/60 bg-green-950/40 text-green-300"
+          : "border-red-800/60 bg-red-950/40 text-red-300"
+      }`}
     >
       {message}
     </div>
@@ -530,7 +502,7 @@ function FeedbackBanner({
 
 function InfoGrid({ rows }: { rows: Array<{ label: string; value: string }> }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", fontSize: 12 }}>
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
       {rows.map((row) => (
         <FragmentRow key={`${row.label}:${row.value}`} label={row.label} value={row.value} />
       ))}
@@ -541,15 +513,17 @@ function InfoGrid({ rows }: { rows: Array<{ label: string; value: string }> }) {
 function FragmentRow({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <span style={metaLabelStyle}>{label}</span>
-      <span style={{ fontVariantNumeric: "tabular-nums" }}>{value}</span>
+      <span className="text-[11px] opacity-55">{label}</span>
+      <span className="tabular-nums">{value}</span>
     </>
   );
 }
 
 function MutedText({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, opacity: 0.6 }}>{children}</div>;
+  return <div className="text-xs opacity-60">{children}</div>;
 }
+
+// ---------- Pure helpers ----------
 
 function buildActorInfoRows(
   actor: Actor,

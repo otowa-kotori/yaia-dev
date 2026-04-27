@@ -5,9 +5,9 @@
 // and PendingLootEntry data without knowing the source.
 
 import { useState } from "react";
-import { getContent } from "../core/content";
-import type { GearEntry, StackEntry } from "../core/inventory";
-import type { PendingLootEntry } from "../core/world/stage/types";
+import { getContent } from "../../core/content";
+import type { GearEntry, StackEntry } from "../../core/inventory";
+import type { PendingLootEntry } from "../../core/world/stage/types";
 
 // ---------- Layout constants (shared with grids) ----------
 
@@ -45,36 +45,32 @@ export interface ItemSlotCellProps {
 export function ItemSlotCell({ item, selected = false, onClick, tooltip }: ItemSlotCellProps) {
   const [hovered, setHovered] = useState(false);
   const clickable = item !== null && onClick !== undefined;
+  const lit = hovered || selected;
+  const isEmpty = item === null;
 
-  const base: React.CSSProperties = {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    boxSizing: "border-box",
-    border: `1px solid ${selected ? "#4a9" : item === null ? "#2a2a2a" : "#444"}`,
-    boxShadow: selected ? "0 0 0 1px #4a9 inset" : undefined,
-    borderRadius: 3,
-    background: item === null ? "#191919" : hovered || selected ? "#2e2e2e" : "#242424",
-    position: "relative",
-    cursor: clickable ? "pointer" : "default",
-    transition: "background 80ms, border-color 80ms",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    userSelect: "none",
-  };
+  const borderClass = selected
+    ? "border-accent ring-1 ring-inset ring-accent"
+    : isEmpty
+      ? "border-border/40"
+      : "border-border";
+
+  const bgClass = isEmpty
+    ? "bg-surface-dim"
+    : lit
+      ? "bg-surface-lighter"
+      : "bg-surface-light";
 
   return (
     <div
-      style={base}
+      className={`w-[52px] h-[52px] rounded border ${borderClass} ${bgClass} relative flex items-center justify-center select-none transition-colors duration-75 overflow-hidden ${clickable ? "cursor-pointer" : ""}`}
       title={tooltip}
       onClick={clickable ? onClick : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {item?.kind === "stack" && <StackCellContent itemId={item.itemId} qty={item.qty} lit={hovered || selected} />}
+      {item?.kind === "stack" && <StackCellContent itemId={item.itemId} qty={item.qty} lit={lit} />}
       {item?.kind === "gear" && (
-        <GearCellContent itemId={item.instance.itemId} affixCount={item.instance.rolledMods.length} lit={hovered || selected} />
+        <GearCellContent itemId={item.instance.itemId} affixCount={item.instance.rolledMods.length} lit={lit} />
       )}
     </div>
   );
@@ -86,21 +82,10 @@ function StackCellContent({ itemId, qty, lit }: { itemId: string; qty: number; l
   const abbr = itemAbbr(safeItemName(itemId));
   return (
     <>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#9cb", opacity: lit ? 1 : 0.9 }}>
+      <span className={`text-[13px] font-semibold text-teal-300 ${lit ? "opacity-100" : "opacity-90"}`}>
         {abbr}
       </span>
-      <span
-        style={{
-          position: "absolute",
-          bottom: 2,
-          right: 3,
-          fontSize: 10,
-          fontVariantNumeric: "tabular-nums",
-          opacity: 0.8,
-          color: "#ccc",
-          lineHeight: 1,
-        }}
-      >
+      <span className="absolute bottom-0.5 right-1 text-[10px] tabular-nums text-gray-300/80 leading-none">
         {qty}
       </span>
     </>
@@ -111,21 +96,11 @@ function GearCellContent({ itemId, affixCount, lit }: { itemId: string; affixCou
   const abbr = itemAbbr(safeItemName(itemId));
   return (
     <>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#d8c878", opacity: lit ? 1 : 0.9 }}>
+      <span className={`text-[13px] font-semibold text-yellow-300 ${lit ? "opacity-100" : "opacity-90"}`}>
         {abbr}
       </span>
       {affixCount > 0 && (
-        <span
-          style={{
-            position: "absolute",
-            bottom: 2,
-            right: 3,
-            fontSize: 10,
-            opacity: 0.7,
-            color: "#d8c878",
-            lineHeight: 1,
-          }}
-        >
+        <span className="absolute bottom-0.5 right-1 text-[10px] text-yellow-300/70 leading-none">
           +{affixCount}
         </span>
       )}

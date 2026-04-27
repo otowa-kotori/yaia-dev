@@ -1,32 +1,30 @@
 // Inventory panel — bag grids + item details + equipment management.
 //
-// This file used to be read-only. It now owns the first layer of inventory
-// interaction:
+// Tailwind v4 rewrite of the original InventoryView. Functionality is identical:
 //   - click a bag slot to inspect the item in a side panel
 //   - equip equippable gear directly from the bag
 //   - inspect currently equipped items and unequip them
 //
-// Scope stays intentionally narrow:
-//   - no drag/drop
-//   - no split stacks
-//   - no discard / sell / consume actions
-// Those can stack on top later without changing the underlying session API.
+// Desktop layout: grid-cols-[1fr_280px] (bags | details + equipment).
+// All sections wrapped in Card for consistent styling.
 
 import { useState } from "react";
-import type { ItemDef, Modifier } from "../core/content/types";
-import { getContent } from "../core/content";
+import type { ItemDef, Modifier } from "../../core/content/types";
+import { getContent } from "../../core/content";
 import type {
   GearEntry,
   Inventory,
   InventorySlot,
   StackEntry,
-} from "../core/inventory";
-import { SHARED_INVENTORY_KEY } from "../core/infra/state";
-import type { GameStore } from "./store";
-import { useStore } from "./useStore";
-import { T, slotLabel, fmt } from "./text";
-import { ItemSlotCell, safeItemName, CELL_SIZE, CELL_GAP, GRID_COLS } from "./ItemSlot";
-import { PendingLootPanel } from "./PendingLootPanel";
+} from "../../core/inventory";
+import { SHARED_INVENTORY_KEY } from "../../core/infra/state";
+import type { GameStore } from "../store";
+import { useStore } from "../hooks/useStore";
+import { T, slotLabel, fmt } from "../text";
+import { Card } from "../components/Card";
+import { Badge } from "../components/Badge";
+import { ItemSlotCell, safeItemName, GRID_COLS } from "../components/ItemSlot";
+import { PendingLootPanel } from "../components/PendingLootPanel";
 
 // ---------- Layout ----------
 
@@ -38,7 +36,7 @@ interface SelectionState {
   slotIndex: number;
 }
 
-export function InventoryView({ store }: { store: GameStore }) {
+export function InventoryPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
   const cc = s.getFocusedCharacter();
   const hero = cc.hero;
@@ -84,8 +82,9 @@ export function InventoryView({ store }: { store: GameStore }) {
   }
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-      <div style={{ flex: "1 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-start">
+      {/* Left column — bags + pending loot */}
+      <div className="flex flex-col gap-3">
         {actionError && <ErrorBanner message={actionError} />}
         <BagGrid
           title={fmt(T.heroBag, { name: hero.name })}
@@ -106,7 +105,8 @@ export function InventoryView({ store }: { store: GameStore }) {
         />
       </div>
 
-      <div style={{ flex: "0 0 260px", width: 260, display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Right column — details + equipment */}
+      <div className="flex flex-col gap-3">
         <ItemDetailsPanel
           heroName={hero.name}
           heroInventoryOwnerId={hero.id}
@@ -139,34 +139,26 @@ function BagGrid({
 }) {
   if (!inv) {
     return (
-      <div style={sectionStyle}>
-        <div style={headerStyle}>{title}</div>
-        <div style={{ fontSize: 12, opacity: 0.5 }}>{T.noBag}</div>
-      </div>
+      <Card className="p-3">
+        <div className="flex justify-between font-semibold mb-2 text-[13px]">{title}</div>
+        <div className="text-xs opacity-50">{T.noBag}</div>
+      </Card>
     );
   }
 
   const used = inv.slots.reduce((n, s) => (s === null ? n : n + 1), 0);
-  const gridWidth = cols * CELL_SIZE + (cols - 1) * CELL_GAP;
-  const rows = Math.ceil(inv.capacity / cols);
 
   return (
-    <div style={sectionStyle}>
-      <div style={headerStyle}>
+    <Card className="p-3">
+      <div className="flex justify-between font-semibold mb-2 text-[13px]">
         <span>{title}</span>
-        <span style={{ opacity: 0.55, fontWeight: 400, fontSize: 11 }}>
+        <span className="opacity-55 font-normal text-[11px]">
           {used} / {inv.capacity}
         </span>
       </div>
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${cols}, ${CELL_SIZE}px)`,
-          gridTemplateRows: `repeat(${rows}, ${CELL_SIZE}px)`,
-          gap: CELL_GAP,
-          width: gridWidth,
-          overflow: "hidden",
-        }}
+        className="grid gap-1 overflow-hidden"
+        style={{ gridTemplateColumns: `repeat(${cols}, 52px)` }}
       >
         {inv.slots.map((slot, i) => (
           <ItemSlotCell
@@ -178,7 +170,7 @@ function BagGrid({
           />
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -199,12 +191,12 @@ function ItemDetailsPanel({
 }) {
   if (!selected || !selectedSlot) {
     return (
-      <div style={sectionStyle}>
-        <div style={headerStyle}>{T.itemDetails}</div>
-        <div style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.68 }}>
+      <Card className="p-3">
+        <div className="flex justify-between font-semibold mb-2 text-[13px]">{T.itemDetails}</div>
+        <div className="text-xs leading-relaxed opacity-68">
           {T.itemDetailsHint}
         </div>
-      </div>
+      </Card>
     );
   }
 
@@ -212,10 +204,10 @@ function ItemDetailsPanel({
   const def = getContent().items[itemId] as ItemDef | undefined;
   if (!def) {
     return (
-      <div style={sectionStyle}>
-        <div style={headerStyle}>{T.itemDetails}</div>
-        <div style={{ fontSize: 12, color: "#f88" }}>{T.missingItemDef}{itemId}</div>
-      </div>
+      <Card className="p-3">
+        <div className="flex justify-between font-semibold mb-2 text-[13px]">{T.itemDetails}</div>
+        <div className="text-xs text-red-400">{T.missingItemDef}{itemId}</div>
+      </Card>
     );
   }
 
@@ -228,18 +220,18 @@ function ItemDetailsPanel({
     selected.inventoryOwnerId === heroInventoryOwnerId;
 
   return (
-    <div style={sectionStyle}>
-      <div style={headerStyle}>{T.itemDetails}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <Card className="p-3">
+      <div className="flex justify-between font-semibold mb-2 text-[13px]">{T.itemDetails}</div>
+      <div className="flex flex-col gap-2.5">
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{def.name}</div>
-          <div style={{ fontSize: 12, opacity: 0.58 }}>
+          <div className="text-base font-bold text-white mb-1">{def.name}</div>
+          <div className="text-xs opacity-58">
             {selected.inventoryTitle} · 槽位 {selected.slotIndex + 1}
           </div>
         </div>
 
         {def.description && (
-          <div style={{ fontSize: 12, lineHeight: 1.6, color: "#cfcfcf" }}>{def.description}</div>
+          <div className="text-xs leading-relaxed text-gray-300">{def.description}</div>
         )}
 
         <InfoRow label={T.label_type} value={def.stackable ? T.type_material : T.type_equipment} />
@@ -253,20 +245,25 @@ function ItemDetailsPanel({
         <ModifierList title={T.modifierEffects} modifiers={allMods} emptyLabel={T.noModifiers} />
 
         {canEquip && (
-          <button onClick={onEquip} style={primaryButtonStyle}>
+          <button
+            onClick={onEquip}
+            className="px-3 py-2 rounded border border-green-700 bg-green-700 text-white text-xs font-inherit cursor-pointer hover:bg-green-600 transition-colors"
+          >
             {fmt(T.equipTo, { name: heroName })}
           </button>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
+
+// ---------- Equipment panel ----------
 
 function EquipmentPanel({
   hero,
   onUnequip,
 }: {
-  hero: GameStore["state"]["actors"][number] & { equipped: Record<string, import("../core/item").GearInstance | null> };
+  hero: GameStore["state"]["actors"][number] & { equipped: Record<string, import("../../core/item").GearInstance | null> };
   onUnequip: (slot: string) => void;
 }) {
   const content = getContent();
@@ -276,21 +273,21 @@ function EquipmentPanel({
   const slots = sortEquipmentSlots([...new Set([...definedSlots, ...Object.keys(hero.equipped)])]);
 
   return (
-    <div style={sectionStyle}>
-      <div style={headerStyle}>{T.equipPanel}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <Card className="p-3">
+      <div className="flex justify-between font-semibold mb-2 text-[13px]">{T.equipPanel}</div>
+      <div className="flex flex-col gap-2">
         {slots.map((slot) => {
           const equipped = hero.equipped[slot] ?? null;
           const def = equipped ? content.items[equipped.itemId] : null;
           return (
-            <div key={slot} style={equipmentRowStyle}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ fontSize: 12, opacity: 0.55 }}>{slotLabel(slot)}</div>
-                <div style={{ fontSize: 13, color: equipped ? "#fff" : "#777" }}>
+            <div key={slot} className="flex justify-between gap-3 items-center p-2 rounded bg-surface-dim">
+              <div className="flex flex-col gap-0.5">
+                <div className="text-xs opacity-55">{slotLabel(slot)}</div>
+                <div className={`text-[13px] ${equipped ? "text-white" : "text-gray-500"}`}>
                   {equipped && def ? def.name : T.unequipped}
                 </div>
                 {equipped && def?.modifiers?.length ? (
-                  <div style={{ fontSize: 11, opacity: 0.65 }}>
+                  <div className="text-[11px] opacity-65">
                     {def.modifiers.map(formatModifier).join(" · ")}
                   </div>
                 ) : null}
@@ -298,11 +295,9 @@ function EquipmentPanel({
               <button
                 onClick={() => onUnequip(slot)}
                 disabled={!equipped}
-                style={{
-                  ...secondaryButtonStyle,
-                  opacity: equipped ? 1 : 0.45,
-                  cursor: equipped ? "pointer" : "default",
-                }}
+                className={`px-2.5 py-1.5 rounded border border-border bg-surface-light text-white text-xs font-inherit ${
+                  equipped ? "cursor-pointer hover:bg-surface-lighter" : "opacity-45 cursor-default"
+                } transition-colors`}
               >
                 {T.btn_unequip}
               </button>
@@ -310,9 +305,11 @@ function EquipmentPanel({
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
+
+// ---------- Modifier list ----------
 
 function ModifierList({
   title,
@@ -325,13 +322,13 @@ function ModifierList({
 }) {
   return (
     <div>
-      <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 6, letterSpacing: 0.4 }}>{title}</div>
+      <div className="text-[11px] opacity-50 mb-1.5 tracking-wide">{title}</div>
       {modifiers.length === 0 ? (
-        <div style={{ fontSize: 12, opacity: 0.55 }}>{emptyLabel}</div>
+        <div className="text-xs opacity-55">{emptyLabel}</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="flex flex-col gap-1">
           {modifiers.map((modifier, index) => (
-            <div key={`${modifier.sourceId}:${index}`} style={{ fontSize: 12 }}>
+            <div key={`${modifier.sourceId}:${index}`} className="text-xs">
               {formatModifier(modifier)}
             </div>
           ))}
@@ -341,27 +338,20 @@ function ModifierList({
   );
 }
 
+// ---------- Shared sub-components ----------
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12 }}>
-      <span style={{ opacity: 0.55 }}>{label}</span>
-      <span style={{ textAlign: "right" }}>{value}</span>
+    <div className="flex justify-between gap-3 text-xs">
+      <span className="opacity-55">{label}</span>
+      <span className="text-right">{value}</span>
     </div>
   );
 }
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div
-      style={{
-        padding: "8px 10px",
-        background: "#3a1f1f",
-        border: "1px solid #6d3636",
-        borderRadius: 4,
-        fontSize: 12,
-        color: "#ffb3b3",
-      }}
-    >
+    <div className="px-2.5 py-2 bg-red-900/30 border border-red-700/40 rounded text-xs text-red-300">
       {message}
     </div>
   );
@@ -402,7 +392,6 @@ function shortTail(instanceId: string): string {
   return `#${instanceId.slice(-6)}`;
 }
 
-
 function sortEquipmentSlots(slots: string[]): string[] {
   const order = ["weapon", "offhand", "helmet", "chest", "gloves", "boots", "ring", "amulet"];
   return [...slots].sort((a, b) => {
@@ -414,51 +403,3 @@ function sortEquipmentSlots(slots: string[]): string[] {
     return ai - bi;
   });
 }
-
-// ---------- Styles ----------
-
-const sectionStyle: React.CSSProperties = {
-  padding: 10,
-  background: "#222",
-  borderRadius: 4,
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  fontWeight: 600,
-  marginBottom: 8,
-  fontSize: 13,
-};
-
-const equipmentRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  padding: "8px 10px",
-  borderRadius: 4,
-  background: "#1b1b1b",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 4,
-  border: "1px solid #2f7a5f",
-  background: "#2a5",
-  color: "#fff",
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: 12,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: 4,
-  border: "1px solid #444",
-  background: "#2a2a2a",
-  color: "#fff",
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: 12,
-};

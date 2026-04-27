@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 
 function normalizeBasePath(raw: string | undefined): string {
@@ -16,7 +17,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: normalizeBasePath(env.VITE_BASE_PATH),
-    plugins: [react()],
+    plugins: [tailwindcss(), react()],
     resolve: {
       alias: {
         "@core": path.resolve(__dirname, "src/core"),

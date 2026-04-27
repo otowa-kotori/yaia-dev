@@ -1,4 +1,4 @@
-// Global Upgrades shop tab.
+// Global Upgrades shop panel.
 //
 // Shows the player's current gold balance, then a card for each UpgradeDef
 // in the content db. Cards display:
@@ -10,15 +10,17 @@
 // Read/write: reads store.getCurrencies() / getWorldRecord() / listUpgradeIds();
 // writes via store.purchaseUpgrade(). No local state beyond hover.
 
-import { getContent } from "../core/content";
-import { upgradeCost } from "../core/growth/worldrecord";
-import { ATTR } from "../core/entity/attribute";
-import type { Modifier } from "../core/content/types";
-import type { GameStore } from "./store";
-import { useStore } from "./useStore";
-import { T, currencyName } from "./text";
+import { getContent } from "../../core/content";
+import { upgradeCost } from "../../core/growth/worldrecord";
+import { ATTR } from "../../core/entity/attribute";
+import type { Modifier } from "../../core/content/types";
+import type { GameStore } from "../store";
+import { useStore } from "../hooks/useStore";
+import { T, currencyName } from "../text";
+import { Card } from "../components/Card";
+import { Badge } from "../components/Badge";
 
-export function UpgradesView({ store }: { store: GameStore }) {
+export function UpgradePanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
   const currencies = s.getCurrencies();
   const worldRecord = s.getWorldRecord();
@@ -28,28 +30,28 @@ export function UpgradesView({ store }: { store: GameStore }) {
   const gold = currencies["currency.gold"] ?? 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="flex flex-col gap-3">
       {/* Currency balance header */}
-      <div style={{ background: "#222", borderRadius: 4, padding: "8px 12px", display: "flex", gap: 16 }}>
+      <Card className="px-3 py-2 flex gap-4">
         {Object.entries(currencies).map(([id, amount]) => (
-          <span key={id} style={{ fontSize: 14 }}>
-            <span style={{ color: "#f0c040", fontWeight: 600 }}>
+          <span key={id} className="text-sm">
+            <span className="text-yellow-400 font-semibold">
               {currencyName(id)}
             </span>
-            <span style={{ marginLeft: 6, fontVariantNumeric: "tabular-nums" }}>
+            <span className="ml-1.5 tabular-nums">
               {amount}
             </span>
           </span>
         ))}
         {Object.keys(currencies).length === 0 && (
-          <span style={{ opacity: 0.45, fontSize: 13 }}>
+          <span className="opacity-45 text-[13px]">
             {T.noCurrencyHint}
           </span>
         )}
-      </div>
+      </Card>
 
       {/* Upgrade cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      <div className="grid grid-cols-2 gap-2">
         {upgradeIds.map((id) => {
           const def = content.upgrades[id];
           if (!def) return null;
@@ -77,7 +79,7 @@ export function UpgradesView({ store }: { store: GameStore }) {
       </div>
 
       {upgradeIds.length === 0 && (
-        <div style={{ opacity: 0.45, fontSize: 13 }}>{T.noUpgrades}</div>
+        <div className="opacity-45 text-[13px]">{T.noUpgrades}</div>
       )}
     </div>
   );
@@ -108,79 +110,57 @@ function UpgradeCard({
 }) {
   const pct = maxLevel > 0 ? currentLevel / maxLevel : 0;
 
+  const borderClass = maxed ? "border-emerald-600/60" : "border-border";
+
   return (
-    <div
-      style={{
-        background: "#222",
-        borderRadius: 4,
-        padding: 10,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        border: maxed ? "1px solid #3a6" : "1px solid #333",
-      }}
-    >
+    <div className={`bg-surface rounded p-2.5 flex flex-col gap-1.5 border ${borderClass}`}>
       {/* Name + level */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: maxed ? "#4a9" : "#eee" }}>
+      <div className="flex justify-between items-baseline">
+        <span className={`font-semibold text-[13px] ${maxed ? "text-emerald-400" : "text-gray-100"}`}>
           {name}
         </span>
-        <span style={{ fontSize: 11, opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>
+        <span className="text-[11px] opacity-60 tabular-nums">
           Lv {currentLevel} / {maxLevel}
         </span>
       </div>
 
       {/* Progress bar */}
-      <div style={{ height: 4, background: "#111", borderRadius: 2, overflow: "hidden" }}>
+      <div className="h-1 bg-[#111] rounded-sm overflow-hidden">
         <div
-          style={{
-            height: "100%",
-            width: `${pct * 100}%`,
-            background: maxed ? "#3a6" : "#59c",
-            transition: "width 150ms",
-          }}
+          className={`h-full transition-[width] duration-150 ${maxed ? "bg-emerald-600" : "bg-blue-500"}`}
+          style={{ width: `${pct * 100}%` }}
         />
       </div>
 
       {/* Description */}
-      <div style={{ fontSize: 12, opacity: 0.7 }}>{description}</div>
+      <div className="text-xs opacity-70">{description}</div>
 
       {/* Current bonus summary */}
       {currentLevel > 0 && (
-        <div style={{ fontSize: 11, color: "#a9d", opacity: 0.9 }}>
+        <div className="text-[11px] text-purple-300 opacity-90">
           {T.currentBonus}{modifiers.map((m) => formatBonus(m, currentLevel)).join("，")}
         </div>
       )}
 
       {/* Buy button */}
       {maxed ? (
-        <div style={{ fontSize: 12, color: "#4a9", fontWeight: 500, textAlign: "center", marginTop: 2 }}>
+        <div className="text-xs text-emerald-400 font-medium text-center mt-0.5">
           {T.maxLevel}
         </div>
       ) : (
         <button
           onClick={onBuy}
           disabled={!canAfford}
-          style={{
-            marginTop: 2,
-            padding: "5px 10px",
-            fontSize: 12,
-            borderRadius: 4,
-            border: "1px solid #444",
-            background: canAfford ? "#2a4a2a" : "#2a2a2a",
-            color: canAfford ? "#8d8" : "#666",
-            cursor: canAfford ? "pointer" : "not-allowed",
-            fontFamily: "inherit",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-          }}
+          className={`mt-0.5 px-2.5 py-1.5 text-xs rounded border font-[inherit] flex items-center justify-center gap-1 ${
+            canAfford
+              ? "border-green-800 bg-green-950/50 text-green-300 cursor-pointer hover:bg-green-900/50"
+              : "border-gray-700 bg-[#2a2a2a] text-gray-600 cursor-not-allowed"
+          }`}
         >
-          <span style={{ color: "#f0c040" }}>{T.btn_upgrade}</span>
-          <span style={{ opacity: 0.8 }}>—</span>
-          <span style={{ fontVariantNumeric: "tabular-nums", color: "#f0c040" }}>{cost}</span>
-          <span style={{ opacity: 0.65 }}>{costCurrencyName}</span>
+          <span className="text-yellow-400">{T.btn_upgrade}</span>
+          <span className="opacity-80">—</span>
+          <span className="tabular-nums text-yellow-400">{cost}</span>
+          <span className="opacity-65">{costCurrencyName}</span>
         </button>
       )}
     </div>

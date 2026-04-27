@@ -4,14 +4,14 @@
 // (multi-select). The component stays presentation-focused: callers provide the
 // display data and receive the next selected id list on click.
 
-import type { PlayerCharacter } from "../core/entity/actor";
+import type { PlayerCharacter } from "../../core/entity/actor";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
   type CombatActivity,
   type GatherActivity,
-} from "../core/world/activity";
-import { T } from "./text";
+} from "../../core/world/activity";
+import { T } from "../text";
 
 export interface CharacterSelectOption {
   id: string;
@@ -36,7 +36,7 @@ export function CharacterSelectButtons({
   onChange,
 }: CharacterSelectButtonsProps) {
   return (
-    <div style={groupStyle}>
+    <div className="flex gap-1.5 flex-nowrap">
       {options.map((option) => {
         const active = selectedIds.includes(option.id);
         const disabled = option.disabled ?? false;
@@ -59,10 +59,16 @@ export function CharacterSelectButtons({
               }
               onChange([...selectedIds, option.id]);
             }}
-            style={buttonStyle(active, disabled)}
+            className={`px-3 py-1.5 rounded-md text-xs flex flex-col items-start gap-0.5 min-w-[90px] cursor-pointer transition-colors
+              ${active
+                ? "border-2 border-accent/60 bg-accent/10 text-white"
+                : "border border-border bg-surface-light text-gray-400 hover:border-border-light"
+              }
+              ${disabled ? "opacity-45 cursor-not-allowed" : ""}
+            `}
           >
-            <span style={{ fontWeight: 600 }}>{option.name}</span>
-            <span style={subLabelStyle}>
+            <span className="font-semibold">{option.name}</span>
+            <span className="text-[10px] opacity-65">
               Lv {option.level} · {option.statusLabel}
             </span>
           </button>
@@ -80,34 +86,4 @@ export function getCharacterSelectStatusLabel(
   if (activity?.kind === ACTIVITY_COMBAT_KIND) return T.status_inCombat;
   if (activity?.kind === ACTIVITY_GATHER_KIND) return T.status_gathering;
   return T.status_idle;
-}
-
-const groupStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-};
-
-const subLabelStyle: React.CSSProperties = {
-  fontSize: 10,
-  opacity: 0.65,
-};
-
-function buttonStyle(active: boolean, disabled: boolean): React.CSSProperties {
-  return {
-    padding: "6px 12px",
-    fontSize: 12,
-    borderRadius: 6,
-    border: active ? "2px solid #4a9" : "1px solid #444",
-    background: active ? "#2a3a2a" : "#222",
-    color: active ? "#fff" : "#aaa",
-    cursor: disabled ? "not-allowed" : active ? "default" : "pointer",
-    fontFamily: "inherit",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 2,
-    minWidth: 90,
-    opacity: disabled ? 0.45 : active ? 1 : 0.92,
-  };
 }

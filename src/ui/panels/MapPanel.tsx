@@ -1,0 +1,131 @@
+// MapPanel — location selection + entry list.
+//
+// Standalone panel for choosing where to go. Previously embedded in BattlePanel,
+// now lives as its own tab so it doesn't clutter the battle view.
+
+import { useState } from "react";
+import { getContent } from "../../core/content";
+import type { GameStore } from "../store";
+import { useStore } from "../hooks/useStore";
+import { T } from "../text";
+import { Card } from "../components/Card";
+import { PartyDialog, type PartyDialogMode } from "../components/PartyDialog";
+
+export function MapPanel({ store }: { store: GameStore }) {
+  const { store: s } = useStore(store);
+  const cc = s.getFocusedCharacter();
+  const locationIds = s.listLocationIds();
+  const currentLocationId = cc.hero.locationId;
+  const content = getContent();
+  const stage = cc.stageSession;
+
+  return (
+    <div>
+      {/* Location buttons */}
+      <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">{T.label_location}</div>
+      <div className="flex gap-2 flex-wrap mb-4">
+        {locationIds.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              const pending = cc.stageSession?.pendingLoot ?? [];
+              if (pending.length > 0) {
+                if (!confirm(T.confirmLeavePendingLoot)) return;
+              }
+              cc.enterLocation(id);
+            }}
+            className={`px-4 py-2 rounded-lg text-sm cursor-pointer transition-colors
+              ${currentLocationId === id
+                ? "bg-accent/20 text-accent border border-accent/30"
+                : "bg-surface-light text-gray-400 border border-border hover:border-border-light"}`}
+          >
+            {content.locations[id]?.name ?? id}
+          </button>
+        ))}
+      </div>
+
+      {/* Entry list for current location */}
+      {currentLocationId && !stage && (
+        <EntryList locationId={currentLocationId} store={s} />
+      )}
+
+      {/* Current location info */}
+      {currentLocationId && (
+        <Card className="mt-4 p-3">
+          <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-1">
+            {T.label_location}
+          </div>
+          <div className="text-white font-semibold">
+            {content.locations[currentLocationId]?.name ?? currentLocationId}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function EntryList({
+  locationId,
+  store,
+}: {
+  locationId: string;
+  store: GameStore;
+}) {
+  const cc = store.getFocusedCharacter();
+  const content = getContent();
+  const [pendingEntry, setPendingEntry] = useState<{
+    mode: PartyDialogMode;
+    targetId: string;
+  } | null>(null);
+  const loc = content.locations[locationId];
+  if (!loc) return null;
+
+  return (
+    <>
+      <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">
+        {T.entry_combat}
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {loc.entries.map((entry, i) => {
+          const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : T.entry_gather);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                if (entry.kind === "combat") {
+                  setPendingEntry({ mode: "combat", targetId: entry.combatZoneId });
+                } else if (entry.kind === "gather") {
+                  const nodeId = entry.resourceNodes[0];
+                  if (nodeId) cc.startGather(nodeId);
+                } else if (entry.kind === "dungeon") {
+                  setPendingEntry({ mode: "dungeon", targetId: entry.dungeonId });
+                }
+              }}
+              className="px-4 py-2 rounded-lg text-sm bg-surface-light text-gray-300 border border-border hover:border-border-light cursor-pointer transition-colors"
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <PartyDialog
+        store={store}
+        mode={pendingEntry?.mode ?? "combat"}
+        targetId={pendingEntry?.targetId ?? null}
+        isOpen={pendingEntry !== null}
+        onClose={() => setPendingEntry(null)}
+        onConfirm={(partyCharIds) => {
+          if (!pendingEntry) return;
+          if (pendingEntry.mode === "dungeon") {
+            store.startDungeon(pendingEntry.targetId, partyCharIds);
+          } else {
+            store.startPartyCombat(pendingEntry.targetId, partyCharIds);
+          }
+          setPendingEntry(null);
+        }}
+      />
+    </>
+  );
+}

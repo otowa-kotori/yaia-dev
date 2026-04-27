@@ -1,46 +1,35 @@
-// Scene view — the main "what's happening right now" panel.
+// BattlePanel — the main "what's happening right now" panel.
 //
-// Layout (unified for solo combat, party combat, and dungeon):
-//   ┌─ phase badge ──────────────────────────────────────────┐
-//   │ 队伍                                                    │
-//   │   HeroCard (name · Lv · HP bar · ATB bar · XP bar)     │
-//   │   HeroCard …                                            │
-//   │ 敌人                                                    │
-//   │   ActorCard (enemy, compact)                            │
-//   │   ActorCard …                                           │
-//   │ 战斗日志                                                │
-//   └────────────────────────────────────────────────────────┘
-//
-// When idle / gathering, the focused hero's HeroCard is shown at the top
-// as before (no panel wrapper).
-//
-// Pure presentation — reads from Store, dispatches nothing.
+// Layout: left-right split — party (left) vs enemies (right).
+// No embedded log — the right sidebar handles that.
+// No location selector — that's a separate "map" tab now.
 
-import type { PlayerCharacter } from "../core/entity/actor";
-import { isCharacter, isEnemy, isPlayer, isResourceNode } from "../core/entity/actor";
-import { xpProgressToNextLevel } from "../core/growth/leveling";
+import type { PlayerCharacter } from "../../core/entity/actor";
+import { isCharacter, isEnemy, isPlayer, isResourceNode } from "../../core/entity/actor";
+import { xpProgressToNextLevel } from "../../core/growth/leveling";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
   type CombatActivity,
-
   type GatherActivity,
-} from "../core/world/activity";
-import type { GameStore } from "./store";
-import { useStore } from "./useStore";
-import { T, fmt } from "./text";
-import { PendingLootPanel } from "./PendingLootPanel";
-import { ActivityLogPanel } from "./ActivityLogPanel";
-import { ActorCard } from "./ActorCard";
-import type { Battle } from "../core/combat/battle/battle";
-import { getAtbGaugePct } from "../core/combat/battle/scheduler";
-import { getContent } from "../core/content";
-import type { DungeonSession } from "../core/infra/state/types";
-import type { GameLogEntry } from "../core/infra/game-log";
-import type { StageSession } from "../core/world/stage/types";
+} from "../../core/world/activity";
+import type { GameStore } from "../store";
+import { useStore } from "../hooks/useStore";
+import { T, fmt } from "../text";
+import { PendingLootPanel } from "../components/PendingLootPanel";
+import { ActorCard } from "../components/ActorCard";
+import { Card } from "../components/Card";
+import { ProgressBar } from "../components/ProgressBar";
+import { Badge } from "../components/Badge";
+import type { Battle } from "../../core/combat/battle/battle";
+import { getAtbGaugePct } from "../../core/combat/battle/scheduler";
+import { getContent } from "../../core/content";
+import type { DungeonSession } from "../../core/infra/state/types";
+import type { GameLogEntry } from "../../core/infra/game-log";
+import type { StageSession } from "../../core/world/stage/types";
 
 
-export function BattleView({ store }: { store: GameStore }) {
+export function BattlePanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
   const cc = s.getFocusedCharacter();
   const activity = cc.activity;
@@ -67,6 +56,7 @@ export function BattleView({ store }: { store: GameStore }) {
     if (ds) {
       return (
         <div>
+          <Controls store={s} />
           {lootPanel}
           <DungeonCombatPanel store={s} dungeonSession={ds} heroId={hero.id} />
         </div>
@@ -80,6 +70,7 @@ export function BattleView({ store }: { store: GameStore }) {
     const battle = findCurrentBattle(combatAct, s);
     return (
       <div>
+        <Controls store={s} />
         {lootPanel}
         <CombatPanel activity={combatAct} store={s} battle={battle} />
       </div>
@@ -88,18 +79,15 @@ export function BattleView({ store }: { store: GameStore }) {
 
   // ── Gather ──
   if (activity?.kind === ACTIVITY_GATHER_KIND) {
-    const gatherLog = logsForHero(s.state.gameLog, hero.id);
     return (
       <div>
+        <Controls store={s} />
         <HeroCard hero={hero} statusOverride={T.status_hero_gathering} />
         {lootPanel}
         <GatherPanel activity={activity} store={s} />
-        <SectionTitle>{T.activityLogTitle}</SectionTitle>
-        <ActivityLogPanel entries={gatherLog} />
       </div>
     );
   }
-
 
   // ── Idle in a location ──
   return (
@@ -112,7 +100,7 @@ export function BattleView({ store }: { store: GameStore }) {
 }
 
 // ============================================================
-// Unified combat panel — used for both solo and party combat
+// Unified combat panel — LEFT/RIGHT layout: party vs enemies
 // ============================================================
 
 function CombatPanel({
@@ -125,67 +113,72 @@ function CombatPanel({
   battle: Battle | null;
 }) {
   const phaseLabel = combatPhaseLabel(activity.phase);
-  const localLog = logsForHero(store.state.gameLog, activity.partyCharIds[0]);
 
   const partyHeroes = activity.partyCharIds
-
     .map((id) => store.state.actors.find((a) => a.id === id))
     .filter((a): a is PlayerCharacter => a !== undefined && isPlayer(a));
 
   if (!battle) {
     return (
-      <div style={panelStyle}>
+      <Card className="p-3">
         <PanelHeader phaseLabel={phaseLabel} />
-        <SectionTitle>{T.combatPartyLabel}</SectionTitle>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="flex flex-col gap-1">
           {partyHeroes.map((h) => (
             <HeroCard key={h.id} hero={h} statusOverride={phaseLabel} />
           ))}
         </div>
         <StageRoster store={store} />
-        <SectionTitle>{T.activityLogTitle}</SectionTitle>
-        <ActivityLogPanel entries={localLog} />
-      </div>
+      </Card>
     );
   }
-
 
   const enemies = battle.participantIds
     .map((id) => store.state.actors.find((a) => a.id === id))
     .filter((a) => a !== undefined && isCharacter(a) && isEnemy(a));
 
   return (
-    <div style={panelStyle}>
+    <Card className="p-3">
       <PanelHeader phaseLabel={phaseLabel} />
 
-      <SectionTitle>{T.combatPartyLabel}</SectionTitle>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {partyHeroes.map((h) => (
-          <HeroCard key={h.id} hero={h} battle={battle} statusOverride={phaseLabel} />
-        ))}
-      </div>
+      {/* Left-right battle layout */}
+      <div className="flex gap-4">
+        {/* Left: party */}
+        <div className="flex-1 min-w-0">
+          <SectionTitle>{T.combatPartyLabel}</SectionTitle>
+          <div className="flex flex-col gap-1.5">
+            {partyHeroes.map((h) => (
+              <HeroCard key={h.id} hero={h} battle={battle} statusOverride={phaseLabel} />
+            ))}
+          </div>
+        </div>
 
-      <SectionTitle>{T.enemies}</SectionTitle>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {enemies.map((a) => (
-          <ActorCard
-            key={a.id}
-            actor={a}
-            variant="enemy"
-            atbPct={getAtbPct(battle, a.id)}
-          />
-        ))}
-      </div>
+        {/* VS divider */}
+        <div className="flex items-center shrink-0">
+          <span className="text-gray-600 text-sm font-bold">VS</span>
+        </div>
 
-      <SectionTitle>{T.activityLogTitle}</SectionTitle>
-      <ActivityLogPanel entries={localLog} />
-    </div>
+        {/* Right: enemies */}
+        <div className="flex-1 min-w-0">
+          <SectionTitle>{T.enemies}</SectionTitle>
+          <div className="flex flex-col gap-1.5">
+            {enemies.map((a) => (
+              <ActorCard
+                key={a.id}
+                actor={a}
+                variant="enemy"
+                atbPct={getAtbPct(battle, a.id)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
 
 // ============================================================
-// Dungeon panel — reuses the same layout structure
+// Dungeon panel — left-right layout too
 // ============================================================
 
 function DungeonCombatPanel({
@@ -207,7 +200,6 @@ function DungeonCombatPanel({
   const phase = ds.phase;
   const phaseLabel = dungeonPhaseLabel(phase);
 
-
   const enemies = stage
     ? (stage.currentWave?.enemyIds ?? stage.spawnedActorIds)
         .map((id) => store.state.actors.find((a) => a.id === id))
@@ -219,59 +211,58 @@ function DungeonCombatPanel({
     const partyIds = new Set(ds.partyCharIds);
     return b.participantIds.some((pid) => partyIds.has(pid));
   }) ?? null;
-  const dungeonSessionId = partyHeroes.find((partyHero) => partyHero.id === heroId)?.dungeonSessionId ?? null;
-  const localLog = logsForHero(store.state.gameLog, heroId);
 
   const totalWaves = dungeon?.waves.length ?? Math.max(1, ds.currentWaveIndex + 1);
-
-
   const currentWave = Math.min(totalWaves, ds.currentWaveIndex + 1);
 
   return (
-    <div style={panelStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+    <Card className="p-3">
+      <div className="flex justify-between items-start gap-3">
         <div>
-          <div style={{ fontSize: 11, opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.4 }}>
+          <div className="text-[11px] opacity-60 uppercase tracking-wide">
             {T.dungeonPanelTitle}
           </div>
-          <div style={{ marginTop: 4, fontSize: 18, fontWeight: 700, color: "#fff" }}>
+          <div className="mt-1 text-lg font-bold text-white">
             {dungeon?.name ?? ds.dungeonId}
           </div>
         </div>
         <PhaseBadge label={phaseLabel} phase={phase} />
       </div>
 
-      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+      <div className="text-xs opacity-70 mt-2 mb-2">
         {fmt(T.dungeonProgress, { current: currentWave, total: totalWaves })}
       </div>
 
-      <SectionTitle>{T.combatPartyLabel}</SectionTitle>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {partyHeroes.map((h) => (
-          <HeroCard key={h.id} hero={h} battle={activeBattle} statusOverride={phaseLabel} />
-        ))}
-      </div>
-
-      {enemies.length > 0 && (
-        <>
-          <SectionTitle>{T.enemies}</SectionTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {enemies.map((a) => (
-              <ActorCard key={a.id} actor={a} variant="enemy"
-                atbPct={activeBattle ? getAtbPct(activeBattle, a.id) : undefined} />
+      {/* Left-right layout */}
+      <div className="flex gap-4">
+        <div className="flex-1 min-w-0">
+          <SectionTitle>{T.combatPartyLabel}</SectionTitle>
+          <div className="flex flex-col gap-1.5">
+            {partyHeroes.map((h) => (
+              <HeroCard key={h.id} hero={h} battle={activeBattle} statusOverride={phaseLabel} />
             ))}
           </div>
-        </>
-      )}
+        </div>
 
-      <SectionTitle>{T.activityLogTitle}</SectionTitle>
-      <ActivityLogPanel
-        entries={localLog}
-        emptyMessage={T.dungeonNoLog}
-      />
+        {enemies.length > 0 && (
+          <>
+            <div className="flex items-center shrink-0">
+              <span className="text-gray-600 text-sm font-bold">VS</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <SectionTitle>{T.enemies}</SectionTitle>
+              <div className="flex flex-col gap-1.5">
+                {enemies.map((a) => (
+                  <ActorCard key={a.id} actor={a} variant="enemy"
+                    atbPct={activeBattle ? getAtbPct(activeBattle, a.id) : undefined} />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+      <div className="flex justify-end mt-3">
         <button
           type="button"
           onClick={() => {
@@ -279,12 +270,12 @@ function DungeonCombatPanel({
               store.abandonDungeon(heroId);
             }
           }}
-          style={dangerButtonStyle}
+          className="px-3 py-1.5 rounded-md border border-red-900/60 bg-red-950/40 text-red-300 cursor-pointer hover:bg-red-950/60 transition-colors"
         >
           {T.btn_abandonDungeon}
         </button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -309,26 +300,18 @@ function HeroCard({
     <ActorCard
       actor={hero}
       variant="hero"
-      statusLabel={`Lv ${hero.level} · ${statusLabel}`}
+      statusLabel={`Lv ${hero.level} \u00b7 ${statusLabel}`}
       atbPct={inBattle ? getAtbPct(battle, hero.id) : undefined}
     >
-      <div style={{ marginTop: 3 }}>
-        <div style={{ height: 5, background: "#111", borderRadius: 2, overflow: "hidden" }}>
-          <div style={{
-            height: "100%",
-            width: `${Math.min(1, Math.max(0, xp.pct)) * 100}%`,
-            background: "#59c",
-            transition: "width 100ms linear",
-          }} />
-        </div>
-        <div style={{
-          fontSize: 11,
-          marginTop: 2,
-          opacity: 0.7,
-          fontVariantNumeric: "tabular-nums",
-        }}>
-          XP {hero.exp} / {xp.cost || "\u2014"}
-        </div>
+      <div className="mt-1">
+        <ProgressBar
+          value={hero.exp}
+          max={xp.cost || 1}
+          color="xp"
+          size="sm"
+          label="XP"
+          valueLabel={`${hero.exp} / ${xp.cost || "\u2014"}`}
+        />
       </div>
     </ActorCard>
   );
@@ -340,44 +323,55 @@ function HeroCard({
 
 function Idle({ msg }: { msg: string }) {
   return (
-    <div style={{ opacity: 0.6, fontSize: 14, marginTop: 12 }}>{msg}</div>
+    <div className="opacity-60 text-sm mt-3">{msg}</div>
   );
 }
 
 function PanelHeader({ phaseLabel }: { phaseLabel: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+    <div className="flex justify-end mb-1">
       <PhaseBadge label={phaseLabel} phase={phaseLabel} />
     </div>
   );
 }
 
 function PhaseBadge({ label, phase }: { label: string; phase: string }) {
-  const color =
-    phase === "fighting" || phase === T.inCombat ? "#58A6FF"
-    : phase === "deathRecovering" || phase === T.deathRecovering || phase === "waveResting" || phase === T.dungeonPhase_waveResting ? "#F0C674"
-    : phase === T.dungeonPhase_waveCleared || phase === T.dungeonPhase_completed ? "#3FB950"
+  const variant = phaseToVariant(phase);
+  return <Badge variant={variant}>{label}</Badge>;
+}
 
-    : phase === T.dungeonPhase_failed || phase === T.dungeonPhase_abandoned ? "#F85149"
-    : "#8B949E";
-  return (
-    <div style={{
-      padding: "4px 8px",
-      borderRadius: 999,
-      border: `1px solid ${color}`,
-      color,
-      fontSize: 12,
-      fontWeight: 600,
-      whiteSpace: "nowrap",
-    }}>
-      {label}
-    </div>
-  );
+function phaseToVariant(phase: string): "info" | "warning" | "accent" | "danger" | "neutral" {
+  if (phase === "fighting" || phase === T.inCombat) return "info";
+  if (
+    phase === "deathRecovering" || phase === T.deathRecovering ||
+    phase === "waveResting" || phase === T.dungeonPhase_waveResting
+  ) return "warning";
+  if (phase === T.dungeonPhase_waveCleared || phase === T.dungeonPhase_completed) return "accent";
+  if (phase === T.dungeonPhase_failed || phase === T.dungeonPhase_abandoned) return "danger";
+  return "neutral";
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 12, opacity: 0.7, marginTop: 14, marginBottom: 6 }}>{children}</div>
+    <div className="text-xs opacity-70 mt-3 mb-1.5">{children}</div>
+  );
+}
+
+function Controls({ store }: { store: GameStore }) {
+  const cc = store.getFocusedCharacter();
+  const running = cc.isRunning();
+  if (!running) return null;
+
+  return (
+    <div className="flex gap-2 items-center mb-2 flex-wrap">
+      <button
+        type="button"
+        onClick={() => cc.stopActivity()}
+        className="px-3 py-1.5 rounded-md text-xs bg-surface-lighter text-gray-300 border border-border hover:border-border-light cursor-pointer transition-colors"
+      >
+        {T.btn_stop}
+      </button>
+    </div>
   );
 }
 
@@ -391,18 +385,12 @@ function GatherPanel({
   const node = store.state.actors.find((a) => a.id === activity.nodeId);
   const def = node && isResourceNode(node) ? node : null;
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
-        {T.gatheringLabel}
+    <Card className="mt-2 p-2">
+      <div className="font-semibold">{def?.name ?? activity.nodeId}</div>
+      <div className="text-xs opacity-70 mt-1">
+        swings: {activity.swingsCompleted} · progress {activity.progressTicks} tick(s)
       </div>
-      <div style={{ padding: 8, background: "#222", borderRadius: 4 }}>
-        <div style={{ fontWeight: 600 }}>{def?.name ?? activity.nodeId}</div>
-        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-          swings: {activity.swingsCompleted} · progress {activity.progressTicks}
-          tick(s)
-        </div>
-      </div>
-    </div>
+    </Card>
   );
 }
 
@@ -416,29 +404,17 @@ function StageRoster({ store }: { store: GameStore }) {
     return <Idle msg={T.stageEmpty} />;
   }
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>
+    <div className="mt-3">
+      <div className="text-xs opacity-60 mb-1">
         {T.inThisStage}
       </div>
       {roster.map((a) => {
         if (isCharacter(a)) return <ActorCard key={a.id} actor={a} variant="enemy" />;
         return (
-          <div
-            key={a.id}
-            style={{
-              marginBottom: 6,
-              padding: 8,
-              background: "#222",
-              borderRadius: 4,
-              fontSize: 12,
-              opacity: 0.85,
-            }}
-          >
-            <span style={{ fontWeight: 500 }}>{a.name}</span>
-            <span style={{ float: "right", opacity: 0.6 }}>
-              {a.kind.replace("_", " ")}
-            </span>
-          </div>
+          <Card key={a.id} className="mb-1.5 p-2 text-xs opacity-85">
+            <span className="font-medium">{a.name}</span>
+            <span className="float-right opacity-60">{a.kind.replace("_", " ")}</span>
+          </Card>
         );
       })}
     </div>
@@ -455,7 +431,6 @@ function logsForHero(entries: readonly GameLogEntry[], heroId: string | null | u
 }
 
 function findCurrentBattle(
-
   activity: CombatActivity,
   store: GameStore,
 ): Battle | null {
@@ -468,7 +443,6 @@ function getAtbPct(battle: Battle, actorId: string): number | undefined {
   return getAtbGaugePct(battle.scheduler, actorId);
 }
 
-
 function combatPhaseLabel(phase: string): string {
   switch (phase) {
     case "deathRecovering": return T.deathRecovering;
@@ -477,9 +451,6 @@ function combatPhaseLabel(phase: string): string {
     default: return T.stopped;
   }
 }
-
-
-// ── Dungeon phase inference (moved from DungeonStatusPanel) ──
 
 type DungeonPhase =
   | "spawningWave" | "fighting" | "waveCleared"
@@ -497,24 +468,3 @@ function dungeonPhaseLabel(phase: DungeonPhase): string {
   };
   return map[phase];
 }
-
-
-// ── Styles ──
-
-const panelStyle: React.CSSProperties = {
-  marginTop: 12,
-  padding: 12,
-  background: "#1d1f22",
-  borderRadius: 6,
-  border: "1px solid #333",
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "6px 12px",
-  borderRadius: 6,
-  border: "1px solid #733",
-  background: "#2b1919",
-  color: "#f0b0b0",
-  cursor: "pointer",
-  fontFamily: "inherit",
-};

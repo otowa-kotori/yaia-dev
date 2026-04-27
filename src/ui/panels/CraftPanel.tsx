@@ -1,24 +1,23 @@
-// Crafting tab — recipe list + material requirements + one-click crafting.
+// Crafting panel — recipe list + material requirements + one-click crafting.
 //
-// MVP scope:
+// Tailwind v4 rewrite of the original CraftingView. Functionality is identical:
 //   - show all registered recipes
 //   - compare required inputs against the hero's personal bag
 //   - allow immediate crafting when requirements are met and no activity is running
 //
-// Deliberately omitted for now:
-//   - queueing / timed progress bars
-//   - batch crafting
-//   - recipe discovery / unlock states
+// Each recipe card is wrapped in Card for consistent styling.
 
 import { useMemo, useState } from "react";
-import { getContent } from "../core/content";
-import type { RecipeDef } from "../core/content/types";
-import type { Inventory, InventorySlot } from "../core/inventory";
-import type { GameStore } from "./store";
-import { useStore } from "./useStore";
-import { T, slotLabel } from "./text";
+import { getContent } from "../../core/content";
+import type { RecipeDef } from "../../core/content/types";
+import type { Inventory, InventorySlot } from "../../core/inventory";
+import type { GameStore } from "../store";
+import { useStore } from "../hooks/useStore";
+import { T, slotLabel } from "../text";
+import { Card } from "../components/Card";
+import { Badge } from "../components/Badge";
 
-export function CraftingView({ store }: { store: GameStore }) {
+export function CraftPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
   const cc = s.getFocusedCharacter();
   const hero = cc.hero;
@@ -42,13 +41,13 @@ export function CraftingView({ store }: { store: GameStore }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={sectionStyle}>
-        <div style={headerStyle}>{T.craftingBench}</div>
-        <div style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.68 }}>
+    <div className="flex flex-col gap-3">
+      <Card className="p-3">
+        <div className="flex justify-between font-semibold mb-2 text-[13px]">{T.craftingBench}</div>
+        <div className="text-xs leading-relaxed opacity-68">
           {T.craftingBenchHint}
         </div>
-      </div>
+      </Card>
 
       {actionError && <ErrorBanner message={actionError} />}
 
@@ -86,6 +85,8 @@ export function CraftingView({ store }: { store: GameStore }) {
   );
 }
 
+// ---------- RecipeCard ----------
+
 function RecipeCard({
   recipe,
   inventory,
@@ -109,28 +110,26 @@ function RecipeCard({
   const skillName = content.skills[recipe.skill]?.name ?? recipe.skill;
 
   return (
-    <div style={sectionStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
+    <Card className="p-3">
+      <div className="flex justify-between gap-3 items-start mb-2.5">
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{recipe.name}</div>
-          <div style={{ fontSize: 12, opacity: 0.58 }}>
+          <div className="text-base font-bold text-white mb-1">{recipe.name}</div>
+          <div className="text-xs opacity-58">
             {skillName} Lv {recipe.requiredLevel}+ · {recipe.durationTicks} tick · +{recipe.xpReward} XP
           </div>
         </div>
         <button
           onClick={onCraft}
           disabled={disabled}
-          style={{
-            ...primaryButtonStyle,
-            opacity: disabled ? 0.45 : 1,
-            cursor: disabled ? "default" : "pointer",
-          }}
+          className={`px-3 py-2 rounded border border-green-700 bg-green-700 text-white text-xs font-inherit shrink-0 ${
+            disabled ? "opacity-45 cursor-default" : "cursor-pointer hover:bg-green-600"
+          } transition-colors`}
         >
           {T.btn_craft}
         </button>
       </div>
 
-      <div style={gridStyle}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5">
         <RecipeGroup title={T.materialsRequired}>
           {recipe.inputs.map((input) => {
             const held = countItemInInventory(inventory, input.itemId);
@@ -162,20 +161,22 @@ function RecipeCard({
         </RecipeGroup>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+      <div className="flex flex-wrap gap-2 mt-2.5">
         <HintPill active={!blockedBySkill}>{T.currentSkillLv} {skillLevel}</HintPill>
         <HintPill active={!blockedByMaterials}>{T.materialsSufficient}</HintPill>
         <HintPill active={!blockedByActivity}>{T.notInActivity}</HintPill>
       </div>
-    </div>
+    </Card>
   );
 }
 
+// ---------- Sub-components ----------
+
 function RecipeGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#1b1b1b", borderRadius: 4, padding: 10 }}>
-      <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 0.4, marginBottom: 8 }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{children}</div>
+    <div className="bg-surface-dim rounded p-2.5">
+      <div className="text-[11px] opacity-50 tracking-wide mb-2">{title}</div>
+      <div className="flex flex-col gap-1.5">{children}</div>
     </div>
   );
 }
@@ -190,9 +191,9 @@ function RecipeLine({
   ok: boolean;
 }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12 }}>
-      <span style={{ color: ok ? "#ddd" : "#f3aaaa" }}>{name}</span>
-      <span style={{ color: ok ? "#8fd1af" : "#f3aaaa", fontVariantNumeric: "tabular-nums" }}>{right}</span>
+    <div className="flex justify-between gap-2.5 text-xs">
+      <span className={ok ? "text-gray-300" : "text-red-300"}>{name}</span>
+      <span className={`tabular-nums ${ok ? "text-accent" : "text-red-300"}`}>{right}</span>
     </div>
   );
 }
@@ -200,13 +201,11 @@ function RecipeLine({
 function HintPill({ active, children }: { active: boolean; children: React.ReactNode }) {
   return (
     <span
-      style={{
-        padding: "4px 8px",
-        borderRadius: 999,
-        fontSize: 11,
-        background: active ? "#20372f" : "#3a1f1f",
-        color: active ? "#9ad0b4" : "#f3aaaa",
-      }}
+      className={`px-2 py-1 rounded-full text-[11px] ${
+        active
+          ? "bg-accent/20 text-accent"
+          : "bg-red-900/30 text-red-300"
+      }`}
     >
       {children}
     </span>
@@ -215,16 +214,7 @@ function HintPill({ active, children }: { active: boolean; children: React.React
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div
-      style={{
-        padding: "8px 10px",
-        background: "#3a1f1f",
-        border: "1px solid #6d3636",
-        borderRadius: 4,
-        fontSize: 12,
-        color: "#ffb3b3",
-      }}
-    >
+    <div className="px-2.5 py-2 bg-red-900/30 border border-red-700/40 rounded text-xs text-red-300">
       {message}
     </div>
   );
@@ -232,12 +222,14 @@ function ErrorBanner({ message }: { message: string }) {
 
 function EmptyState({ title, message }: { title: string; message: string }) {
   return (
-    <div style={sectionStyle}>
-      <div style={headerStyle}>{title}</div>
-      <div style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.68 }}>{message}</div>
-    </div>
+    <Card className="p-3">
+      <div className="flex justify-between font-semibold mb-2 text-[13px]">{title}</div>
+      <div className="text-xs leading-relaxed opacity-68">{message}</div>
+    </Card>
   );
 }
+
+// ---------- Helpers ----------
 
 function countItemInInventory(inventory: Inventory, itemId: string): number {
   return inventory.slots.reduce((total, slot) => total + countItemInSlot(slot, itemId), 0);
@@ -248,33 +240,3 @@ function countItemInSlot(slot: InventorySlot, itemId: string): number {
   if (slot.kind === "stack") return slot.itemId === itemId ? slot.qty : 0;
   return slot.instance.itemId === itemId ? 1 : 0;
 }
-
-const sectionStyle: React.CSSProperties = {
-  padding: 10,
-  background: "#222",
-  borderRadius: 4,
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  fontWeight: 600,
-  marginBottom: 8,
-  fontSize: 13,
-};
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 10,
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 4,
-  border: "1px solid #2f7a5f",
-  background: "#2a5",
-  color: "#fff",
-  fontFamily: "inherit",
-  fontSize: 12,
-};
