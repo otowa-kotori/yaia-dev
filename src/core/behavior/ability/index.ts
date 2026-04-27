@@ -14,7 +14,6 @@
 
 import type {
   TalentDef,
-  AttrDef,
   TargetKind,
   TalentExecutionContext,
 } from "../../content/types";
@@ -42,7 +41,6 @@ export interface AbilityContext {
   state: GameState;
   bus: GameEventBus;
   rng: Rng;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   currentTick: number;
   /** Battle participants — needed for CastContext.aliveEnemies/aliveAllies. */
   participants?: readonly Character[];
@@ -151,7 +149,6 @@ export function tryUseTalent(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
   };
 
@@ -164,7 +161,7 @@ export function tryUseTalent(
 
       // Dispatch before_damage_taken so reactions can modify damage.
       if (effect.magnitudeMode === "damage" && effect.formula) {
-        const fctx = buildFormulaContext(caster, target, ctx.attrDefs);
+        const fctx = buildFormulaContext(caster, target);
         const rawDamage = Math.max(0, Math.floor(evalFormula(effect.formula, fctx)));
         const result = { finalDamage: rawDamage };
         const damageType: DamageType = effect.formula.kind === "magic_damage_v1" ? "magical" : "physical";
@@ -284,20 +281,19 @@ function safeGetEffect(id: string) {
 function buildFormulaContext(
   source: Character,
   target: Character,
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): FormulaContext {
   return {
     vars: {
-      patk: getAttr(source, ATTR.PATK, attrDefs),
-      pdef: getAttr(target, ATTR.PDEF, attrDefs),
-      matk: getAttr(source, ATTR.MATK, attrDefs),
-      mres: getAttr(target, ATTR.MRES, attrDefs),
-      source_str: getAttr(source, ATTR.STR, attrDefs),
-      source_dex: getAttr(source, ATTR.DEX, attrDefs),
-      source_int: getAttr(source, ATTR.INT, attrDefs),
-      source_max_hp: getAttr(source, ATTR.MAX_HP, attrDefs),
+      patk: getAttr(source, ATTR.PATK),
+      pdef: getAttr(target, ATTR.PDEF),
+      matk: getAttr(source, ATTR.MATK),
+      mres: getAttr(target, ATTR.MRES),
+      source_str: getAttr(source, ATTR.STR),
+      source_dex: getAttr(source, ATTR.DEX),
+      source_int: getAttr(source, ATTR.INT),
+      source_max_hp: getAttr(source, ATTR.MAX_HP),
       source_current_hp: source.currentHp,
-      target_max_hp: getAttr(target, ATTR.MAX_HP, attrDefs),
+      target_max_hp: getAttr(target, ATTR.MAX_HP),
       target_current_hp: target.currentHp,
     },
   };
@@ -313,7 +309,7 @@ function dealDamageWithReactions(
 ): number {
   // 1. Calculate raw damage via formula.
   const formulaKind = damageType === "physical" ? "phys_damage_v1" : "magic_damage_v1";
-  const fctx = buildFormulaContext(caster, target, ctx.attrDefs);
+  const fctx = buildFormulaContext(caster, target);
   const rawDamage = Math.max(0, Math.floor(evalFormula({ kind: formulaKind, skillMul: coefficient }, fctx)));
 
   // 2. before_damage_taken reaction (can modify finalDamage).
@@ -421,7 +417,7 @@ function createReactionContext(
       }
     },
     healTarget(target, amount) {
-      const maxHp = getAttr(target, ATTR.MAX_HP, ctx.attrDefs);
+      const maxHp = getAttr(target, ATTR.MAX_HP);
       target.currentHp = Math.min(maxHp, target.currentHp + Math.max(0, Math.floor(amount)));
     },
     applyEffect(effectId, source, target, _state) {
@@ -435,7 +431,6 @@ function createReactionContext(
     activeReactionKeys: new Set(),
     reactionDepth: 0,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     bus: ctx.bus,
     state: ctx.state,
     battle: battle as unknown as Battle,  // may be undefined in non-battle context

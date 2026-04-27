@@ -13,7 +13,7 @@ import {
 } from "../../../src/core/inventory";
 import { createGearInstance } from "../../../src/core/item";
 import { createRng } from "../../../src/core/infra/rng";
-import { attrDefs, loadFixtureContent, makePlayer } from "../../fixtures/content";
+import { loadFixtureContent, makePlayer } from "../../fixtures/content";
 
 // A content bundle the save layer needs to resolve itemIds / slots.
 const copperOre: ItemDef = {
@@ -56,7 +56,7 @@ describe("inventory + gear save roundtrip", () => {
       state.inventories[hero.id]!,
       copperOre.id,
       7,
-      getAttr(hero, ATTR.INVENTORY_STACK_LIMIT, attrDefs),
+      getAttr(hero, ATTR.INVENTORY_STACK_LIMIT),
     );
     const rng = createRng(123);
     const s1 = createGearInstance(moddedSword.id, { rng });
@@ -64,7 +64,7 @@ describe("inventory + gear save roundtrip", () => {
     addGear(state.inventories[hero.id]!, s1);
     addGear(state.inventories[hero.id]!, s2);
 
-    const restored = deserialize(serialize(state), { attrDefs });
+    const restored = deserialize(serialize(state), {});
     const restoredInv = restored.inventories[hero.id]!;
     expect(restoredInv.capacity).toBe(DEFAULT_CHAR_INVENTORY_CAPACITY);
 
@@ -88,11 +88,11 @@ describe("inventory + gear save roundtrip", () => {
     state.actors.push(hero);
     state.inventories[hero.id] = createInventory(DEFAULT_CHAR_INVENTORY_CAPACITY);
 
-    const restored = deserialize(serialize(state), { attrDefs });
+    const restored = deserialize(serialize(state), {});
     const loaded = restored.actors[0]!;
     if (!isPlayer(loaded)) throw new Error("expected player");
     expect(loaded.equipped.weapon?.instanceId).toBe(sword.instanceId);
-    // +5 from def.modifiers, +1 from pinned roll (min==max==1) �?+6 over base 10.
-    expect(getAttr(loaded, ATTR.PATK, attrDefs)).toBe(16);
+    // +5 from def.modifiers, +1 from pinned roll (min==max==1) → +6 over base 10.
+    expect(getAttr(loaded, ATTR.PATK)).toBe(16);
   });
 });

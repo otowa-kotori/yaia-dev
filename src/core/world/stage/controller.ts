@@ -27,7 +27,7 @@ import {
   type Actor,
   type Enemy,
 } from "../../entity/actor";
-import type { AttrDef, CombatZoneDef, WaveDef } from "../../content/types";
+import type { CombatZoneDef, WaveDef } from "../../content/types";
 import { getCombatZone, getMonster, getResourceNode } from "../../content/registry";
 import { COMBAT_ZONE_RECOVERY_RULES } from "../activity/recovery";
 
@@ -45,7 +45,6 @@ export interface StageControllerContext {
   state: GameState;
   bus: GameEventBus;
   rng: Rng;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   currentTick: number;
 }
 
@@ -227,7 +226,6 @@ function spawnCombatWave(zone: CombatZoneDef, session: StageSession, ctx: StageC
     const enemy = createEnemy({
       instanceId,
       def: mdef,
-      attrDefs: ctx.attrDefs,
     });
     ctx.state.actors.push(enemy);
     session.spawnedActorIds.push(instanceId);

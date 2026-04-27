@@ -1,13 +1,12 @@
 import { isPlayer } from "../entity/actor/types";
 import { ATTR, getAttr as getAttrFromSet } from "../entity/attribute";
-import type { AttrDef } from "../content/types";
+import { getContent } from "../content/registry";
 import { SHARED_INVENTORY_KEY, type GameState } from "../infra/state/types";
 import { DEFAULT_SHARED_STACK_LIMIT } from "./constants";
 
 export function getInventoryStackLimit(
   state: GameState,
   inventoryOwnerId: string,
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): number | null {
   if (inventoryOwnerId === SHARED_INVENTORY_KEY) {
     return normalizeStackLimit(
@@ -29,7 +28,7 @@ export function getInventoryStackLimit(
   }
 
   return normalizeStackLimit(
-    getAttrFromSet(owner.attrs, ATTR.INVENTORY_STACK_LIMIT, attrDefs),
+    getAttrFromSet(owner.attrs, ATTR.INVENTORY_STACK_LIMIT, getContent().attributes),
     `player inventory stack limit for "${inventoryOwnerId}"`,
   );
 }

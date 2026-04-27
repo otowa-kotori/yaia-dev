@@ -9,7 +9,6 @@
 // them. The runtime class holds only refs + transient counters; it is NOT
 // persisted.
 
-import type { AttrDef } from "../../content/types";
 import type { BattleSchedulerMode } from "../../combat/battle";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
@@ -21,7 +20,6 @@ export interface ActivityContext {
   state: GameState;
   bus: GameEventBus;
   rng: Rng;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   currentTick: number;
   /** Optional for backwards-compatible tests/helpers; runtime session always sets it. */
   battleSchedulerMode?: BattleSchedulerMode;

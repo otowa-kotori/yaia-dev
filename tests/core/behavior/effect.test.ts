@@ -27,7 +27,6 @@ describe("effect: instant", () => {
       state: h.state,
       bus: h.bus,
       rng: h.rng,
-      attrDefs: h.attrDefs,
       currentTick: h.currentTick,
     });
 
@@ -69,9 +68,9 @@ describe("effect: duration", () => {
     const h = makeHarness();
     const c = makePlayer({ id: "u" });
 
-    const defBefore = getAttr(c, ATTR.PDEF, h.attrDefs);
+    const defBefore = getAttr(c, ATTR.PDEF);
     applyEffect(shieldBuffEffect, c, c, { ...h });
-    const defAfter = getAttr(c, ATTR.PDEF, h.attrDefs);
+    const defAfter = getAttr(c, ATTR.PDEF);
 
     expect(c.activeEffects.length).toBe(1);
     expect(defAfter - defBefore).toBe(5);
@@ -86,16 +85,15 @@ describe("effect: duration", () => {
       state: h.state,
       bus: h.bus,
       rng: h.rng,
-      attrDefs: h.attrDefs,
       currentTick: h.currentTick,
     };
     for (let i = 0; i < 9; i++) processActionEffects(c, ctx);
     expect(c.activeEffects.length).toBe(1);
-    expect(getAttr(c, ATTR.PDEF, h.attrDefs)).toBe(5); // still buffed
+    expect(getAttr(c, ATTR.PDEF)).toBe(5); // still buffed
 
     processActionEffects(c, ctx); // tick #10 expires it
     expect(c.activeEffects.length).toBe(0);
-    expect(getAttr(c, ATTR.PDEF, h.attrDefs)).toBe(0);
+    expect(getAttr(c, ATTR.PDEF)).toBe(0);
   });
 });
 
@@ -111,7 +109,6 @@ describe("effect: periodic", () => {
       state: h.state,
       bus: h.bus,
       rng: h.rng,
-      attrDefs: h.attrDefs,
       currentTick: h.currentTick,
     };
 

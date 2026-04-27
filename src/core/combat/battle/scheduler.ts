@@ -13,7 +13,6 @@
 // A `SchedulerState` carries the live state; pure functions advance it.
 // This keeps Battle save-friendly and deterministic.
 
-import type { AttrDef } from "../../content/types";
 import type { Character } from "../../entity/actor";
 import {
   ATB_REFERENCE_SELF_TURN_TICKS,
@@ -41,12 +40,6 @@ import {
   DEFAULT_TURN_INTERVAL_TICKS,
   TURN_ACTION_SLOT_TICKS,
 } from "./scheduler-turn";
-
-/** Input to scheduler dispatchers. The live mutable scheduler state is stored in
- *  the SchedulerState passed in. */
-export interface SchedulerContext {
-  attrDefs: Readonly<Record<string, AttrDef>>;
-}
 
 export type BattleSchedulerMode = "atb" | "turn";
 
@@ -88,14 +81,13 @@ export function createSchedulerForMode(
 export function tickScheduler(
   state: SchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): void {
   switch (state.kind) {
     case "atb":
-      tickAtbScheduler(state, participants, ctx);
+      tickAtbScheduler(state, participants);
       return;
     case "turn":
-      tickTurnScheduler(state, participants, ctx);
+      tickTurnScheduler(state, participants);
       return;
   }
 }
@@ -104,13 +96,12 @@ export function tickScheduler(
 export function nextActor(
   state: SchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): Character | null {
   switch (state.kind) {
     case "atb":
-      return nextActorAtb(state, participants, ctx);
+      return nextActorAtb(state, participants);
     case "turn":
-      return nextActorTurn(state, participants, ctx);
+      return nextActorTurn(state, participants);
   }
 }
 

@@ -355,7 +355,7 @@ export function DebugView({ store }: { store: GameStore }) {
 
 function ActorInspector({ actor }: { actor: Actor }) {
   const content = getContent();
-  const infoRows = buildActorInfoRows(actor, content.attributes);
+  const infoRows = buildActorInfoRows(actor);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -366,7 +366,7 @@ function ActorInspector({ actor }: { actor: Actor }) {
 
       {isCharacter(actor) ? (
         <>
-          <CompactAttrGrid actor={actor} attrDefs={content.attributes} />
+          <CompactAttrGrid actor={actor} />
           <EffectList actor={actor} />
         </>
       ) : (
@@ -378,11 +378,10 @@ function ActorInspector({ actor }: { actor: Actor }) {
 
 function CompactAttrGrid({
   actor,
-  attrDefs,
 }: {
   actor: Character;
-  attrDefs: Readonly<Record<string, AttrDef>>;
 }) {
+  const attrDefs = getContent().attributes;
   const attrIds = collectVisibleAttrIds(actor, attrDefs);
 
   return (
@@ -399,7 +398,7 @@ function CompactAttrGrid({
           <div key={attrId} style={{ background: "#1a1a1a", borderRadius: 4, padding: "8px 10px", border: "1px solid #303030" }}>
             <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 3 }}>{attrDefs[attrId]?.name ?? attrId}</div>
             <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-              {formatNumber(getAttr(actor, attrId, attrDefs))}
+              {formatNumber(getAttr(actor, attrId))}
             </div>
           </div>
         ))}
@@ -554,7 +553,6 @@ function MutedText({ children }: { children: React.ReactNode }) {
 
 function buildActorInfoRows(
   actor: Actor,
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = [
     { label: T.debugActorKind, value: actorKindLabel(actor) },
@@ -565,11 +563,11 @@ function buildActorInfoRows(
     rows.push(
       {
         label: T.debugActorHp,
-        value: `${formatNumber(actor.currentHp)} / ${formatNumber(getAttr(actor, "max_hp", attrDefs))}`,
+        value: `${formatNumber(actor.currentHp)} / ${formatNumber(getAttr(actor, "max_hp"))}`,
       },
       {
         label: T.debugActorMp,
-        value: `${formatNumber(actor.currentMp)} / ${formatNumber(getAttr(actor, "max_mp", attrDefs))}`,
+        value: `${formatNumber(actor.currentMp)} / ${formatNumber(getAttr(actor, "max_mp"))}`,
       },
       {
         label: T.debugActorEffectCount,
@@ -626,7 +624,7 @@ function shouldShowAttr(
 ): boolean {
   if (priorityOrder.has(attrId)) return true;
   if (attrId in actor.attrs.base) return true;
-  const value = getAttr(actor, attrId, attrDefs);
+  const value = getAttr(actor, attrId);
   const defaultBase = attrDefs[attrId]?.defaultBase ?? 0;
   return Math.abs(value - defaultBase) > 0.0001;
 }

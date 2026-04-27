@@ -217,7 +217,6 @@ function stepFighting(
       state: ctx.state,
       bus: ctx.bus,
       rng: ctx.rng,
-      attrDefs: ctx.attrDefs,
       currentTick: ctx.currentTick,
     };
     tickBattle(battle, bctx);
@@ -412,7 +411,6 @@ function spawnDungeonWave(
     const enemy = createEnemy({
       instanceId,
       def: mdef,
-      attrDefs: ctx.attrDefs,
     });
     ctx.state.actors.push(enemy);
     session.spawnedActorIds.push(instanceId);
@@ -547,7 +545,6 @@ function onParticipantKilled(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
     currencyChangeSource: "kill_reward",
   };
@@ -610,7 +607,6 @@ function grantDungeonWaveRewards(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
     currencyChangeSource: "dungeon_reward",
   };

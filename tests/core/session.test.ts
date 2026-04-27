@@ -18,7 +18,6 @@ import {
   trainingSword,
 } from "../../src/content/index";
 import {
-  attrDefs,
   basicAttackTalent,
   forestCombatZone,
   forestLocation,
@@ -181,7 +180,7 @@ describe("GameSession location flow", () => {
       ...session.state.battles.map((battle) => battle.id),
     ]);
 
-    const loaded = deserialize(serialize(session.state), { attrDefs });
+    const loaded = deserialize(serialize(session.state), {});
     session.loadFromSave(loaded);
 
     const rehydrated = session.getFocusedCharacter();
@@ -224,12 +223,12 @@ describe("GameSession location flow", () => {
       ),
     ).toBe(false);
 
-    const weaponAtkEquipped = getAttr(hero, ATTR.WEAPON_ATK, content.attributes);
+    const weaponAtkEquipped = getAttr(hero, ATTR.WEAPON_ATK);
 
     // 卸下武器后 WEAPON_ATK 应回落到 defaultBase，剑回到背包
     cc.unequipItem("weapon");
     expect(hero.equipped.weapon ?? null).toBeNull();
-    expect(getAttr(hero, ATTR.WEAPON_ATK, content.attributes)).toBeLessThan(weaponAtkEquipped);
+    expect(getAttr(hero, ATTR.WEAPON_ATK)).toBeLessThan(weaponAtkEquipped);
     const backpackSlot = inventory.slots.findIndex(
       (slot) => slot?.kind === "gear" && slot.instance.itemId === trainingSword.id,
     );
@@ -238,7 +237,7 @@ describe("GameSession location flow", () => {
     // 重新装备后恢复原值
     cc.equipItem(backpackSlot);
     expect(hero.equipped.weapon?.itemId).toBe(trainingSword.id);
-    expect(getAttr(hero, ATTR.WEAPON_ATK, content.attributes)).toBe(weaponAtkEquipped);
+    expect(getAttr(hero, ATTR.WEAPON_ATK)).toBe(weaponAtkEquipped);
   });
 
   test("craftRecipe consumes materials, grants smithing XP, and produces the crafted weapon", () => {

@@ -11,7 +11,7 @@
 // the modifier stack in sync with the talent level.
 
 import type { PlayerCharacter, Character } from "../entity/actor/types";
-import type { ContentDb, TalentId, TalentDef, EffectId, AttrDef } from "../content/types";
+import type { ContentDb, TalentId, TalentDef, EffectId } from "../content/types";
 import type { EffectInstance } from "../infra/state/types";
 import { addModifiers, removeModifiersBySource, ATTR, getAttr as getAttrFromSet } from "../entity/attribute";
 import { getEffect } from "../content/registry";
@@ -125,7 +125,7 @@ export function allocateTalentPoint(
       }
       pc.activeSustains[group] = talentId as string;
     }
-    installPassiveEffects(pc, def, newLevel, content.attributes);
+    installPassiveEffects(pc, def, newLevel);
   }
 
   return { ok: true, newLevel };
@@ -147,7 +147,6 @@ function installPassiveEffects(
   pc: PlayerCharacter,
   def: TalentDef,
   level: number,
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): void {
   if (!def.grantEffects) return;
 
@@ -253,7 +252,7 @@ export function toggleSustain(
   pc.activeSustains[group] = talentId as string;
 
   if (def.grantEffects) {
-    installPassiveEffects(pc, def, level, content.attributes);
+    installPassiveEffects(pc, def, level);
   }
   return { ok: true, activated: true };
 }
@@ -310,7 +309,7 @@ export function equipTalent(
       }
       pc.activeSustains[group] = talentId as string;
     }
-    installPassiveEffects(pc, def, level, content.attributes);
+    installPassiveEffects(pc, def, level);
   }
 
   return { ok: true };

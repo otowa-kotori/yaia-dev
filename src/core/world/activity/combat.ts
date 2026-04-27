@@ -134,8 +134,8 @@ export function createCombatActivity(
       // onStart because the caller skips it when rehydrating from a save.
       for (const hero of getPartyHeroes(activity, ctx.state)) {
         clearPhaseRecoveryEffects(hero);
-        hero.currentHp = getAttr(hero, ATTR.MAX_HP, ctx.attrDefs);
-        hero.currentMp = getAttr(hero, ATTR.MAX_MP, ctx.attrDefs);
+        hero.currentHp = getAttr(hero, ATTR.MAX_HP);
+        hero.currentMp = getAttr(hero, ATTR.MAX_MP);
         // Clear temporary effects (finite-duration combat buffs/debuffs) but
         // keep permanent effects (remainingActions === -1): passive talents,
         // sustain stances, global upgrades, etc.
@@ -237,7 +237,6 @@ function stepFighting(
       state: ctx.state,
       bus: ctx.bus,
       rng: ctx.rng,
-      attrDefs: ctx.attrDefs,
       currentTick: ctx.currentTick,
     };
     tickBattle(battle, bctx);
@@ -426,7 +425,6 @@ function onParticipantKilled(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
     currencyChangeSource: "kill_reward",
   };
@@ -481,7 +479,6 @@ function grantWaveRewards(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
     currencyChangeSource: "wave_reward",
   };

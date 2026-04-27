@@ -213,7 +213,6 @@ export function createGameSession(
 
   const content = opts.content;
   const seed = opts.seed ?? 42;
-  const attrDefs = content.attributes;
 
   // --- Mutable runtime slots. Swapped on reload. buildCtx always closes
   //     over the current values through the bindings below.
@@ -273,7 +272,6 @@ export function createGameSession(
       state,
       bus,
       rng,
-      attrDefs,
       currentTick: engine.currentTick,
       battleSchedulerMode,
     };
@@ -304,7 +302,7 @@ export function createGameSession(
         inventory,
         itemId,
         qty,
-        getInventoryStackLimit(state, inventoryOwnerId, attrDefs),
+        getInventoryStackLimit(state, inventoryOwnerId),
       );
       if (!res.ok) {
         throw new Error(
@@ -329,7 +327,7 @@ export function createGameSession(
   }
 
   function rebuildHeroDerived(hero: PlayerCharacter): void {
-    rebuildCharacterDerived(hero, attrDefs, state.worldRecord);
+    rebuildCharacterDerived(hero, state.worldRecord);
   }
 
   function getHeroControllerOrThrow(charId: string): CharacterControllerImpl {
@@ -446,7 +444,7 @@ export function createGameSession(
           draft,
           output.itemId,
           output.qty,
-          getInventoryStackLimit(state, hero.id, attrDefs),
+          getInventoryStackLimit(state, hero.id),
         );
         if (!res.ok) {
           throw new Error(
@@ -813,7 +811,7 @@ export function createGameSession(
             inv,
             entry.itemId,
             entry.qty,
-            getInventoryStackLimit(state, hero.id, attrDefs),
+            getInventoryStackLimit(state, hero.id),
           );
           if (!res.ok) return false;
         } else {
@@ -851,7 +849,7 @@ export function createGameSession(
               inv,
               entry.itemId,
               entry.qty,
-              getInventoryStackLimit(state, hero.id, attrDefs),
+              getInventoryStackLimit(state, hero.id),
             );
             const pickedQty = res.ok ? entry.qty : entry.qty - res.remaining;
             if (pickedQty > 0) {
@@ -1304,7 +1302,6 @@ export function createGameSession(
     const result = purchaseUpgradeCore(upgradeId, {
       state,
       content,
-      attrDefs,
     });
     if (!result.success) return;
 
@@ -1380,7 +1377,6 @@ export function createGameSession(
         xpCurve: heroCfg.xpCurve,
         knownTalents: heroCfg.knownTalents.slice(),
         baseAttrs: heroCfg.baseAttrs as Record<string, number> | undefined,
-        attrDefs,
       });
       state.actors.push(hero);
       if (!state.inventories[hero.id]) {

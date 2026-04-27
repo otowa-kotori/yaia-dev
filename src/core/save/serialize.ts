@@ -22,7 +22,6 @@
 import type { GameState } from "../infra/state/types";
 import { assertGameLogEntries } from "../infra/game-log";
 import { isCharacter, isEnemy, isPlayer, rebuildCharacterDerived } from "../entity/actor";
-import type { AttrDef } from "../content/types";
 import { getMonster } from "../content/registry";
 import { SAVE_VERSION, migrations } from "./migrations";
 
@@ -54,7 +53,6 @@ export function serialize(state: GameState): string {
 // ---------- Deserialize ----------
 
 export interface DeserializeOptions {
-  attrDefs: Readonly<Record<string, AttrDef>>;
   /** If true, run the migration pipeline before hydration. Default true. */
   runMigrations?: boolean;
 }
@@ -109,12 +107,12 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
       // producing a toothless enemy).
       const mdef = getMonster(a.defId);
       a.knownTalentIds = mdef.talents.slice() as typeof a.knownTalentIds;
-      rebuildCharacterDerived(a, opts.attrDefs);
+      rebuildCharacterDerived(a);
     } else if (isPlayer(a)) {
       a.knownTalentIds = a.knownTalents.slice();
       // Backfill for saves created before equippedTalents was introduced.
       if (!a.equippedTalents) a.equippedTalents = [];
-      rebuildCharacterDerived(a, opts.attrDefs, state.worldRecord);
+      rebuildCharacterDerived(a, state.worldRecord);
     }
   }
 

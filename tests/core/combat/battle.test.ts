@@ -14,7 +14,6 @@ import { createEmptyState } from "../../../src/core/infra/state";
 import type { GameState } from "../../../src/core/infra/state";
 import { isAlive } from "../../../src/core/entity/actor";
 import {
-  attrDefs,
   basicAttackTalent,
   loadFixtureContent,
   makePlayer,
@@ -72,7 +71,7 @@ describe("Battle: tick loop", () => {
     const maxTicks = 500;
     while (battle.outcome === "ongoing" && tick < maxTicks) {
       tick += 1;
-      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: tick });
+      tickBattle(battle, { state, bus, rng, currentTick: tick });
     }
     expect(battle.outcome).toBe("players_won");
     expect(isAlive(hero)).toBe(true);
@@ -109,7 +108,7 @@ describe("Battle: tick loop", () => {
       let t = 0;
       while (b.outcome === "ongoing" && t < 500) {
         t += 1;
-        tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
+        tickBattle(b, { state, bus, rng, currentTick: t });
       }
       return trace;
     }
@@ -140,7 +139,7 @@ describe("Battle: tick loop", () => {
     let t = 0;
     while (battle.outcome === "ongoing" && t < 200) {
       t += 1;
-      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: t });
+      tickBattle(battle, { state, bus, rng, currentTick: t });
     }
     // Slime acts first (speed 5 > hero speed 1) and one-shots hero.
     expect(battle.outcome).toBe("enemies_won");
@@ -167,7 +166,7 @@ describe("Battle: tick loop", () => {
     });
     // Pump enough ticks for ATB energy to trigger the one-shot action.
     for (let t = 1; t <= 50; t++) {
-      tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
+      tickBattle(b, { state, bus, rng, currentTick: t });
       if (b.outcome !== "ongoing") break;
     }
     expect(b.outcome).toBe("players_won");
@@ -177,7 +176,7 @@ describe("Battle: tick loop", () => {
     bus.on("damage", () => extraEvents++);
     bus.on("battleEnded", () => extraEvents++);
     for (let t = 2; t < 10; t++) {
-      tickBattle(b, { state, bus, rng, attrDefs, currentTick: t });
+      tickBattle(b, { state, bus, rng, currentTick: t });
     }
     expect(extraEvents).toBe(0);
   });
@@ -212,7 +211,7 @@ describe("Battle: tick loop", () => {
       intents: testIntents(hero.id, slime.id),
     });
 
-    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 });
+    tickBattle(battle, { state, bus, rng, currentTick: 1 });
 
     expect(hero.currentHp).toBe(51);
     expect(hero.currentMp).toBe(1);
@@ -245,13 +244,13 @@ describe("Battle: tick loop", () => {
       intents: testIntents(hero.id, slime.id),
     });
 
-    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 });
+    tickBattle(battle, { state, bus, rng, currentTick: 1 });
     expect(hero.currentHp).toBe(50);
 
-    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 2 });
+    tickBattle(battle, { state, bus, rng, currentTick: 2 });
     expect(hero.currentHp).toBe(50);
 
-    tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 3 });
+    tickBattle(battle, { state, bus, rng, currentTick: 3 });
     expect(hero.currentHp).toBe(55);
   });
 
@@ -299,7 +298,7 @@ describe("Battle: tick loop", () => {
     });
 
     expect(() =>
-      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 }),
+      tickBattle(battle, { state, bus, rng, currentTick: 1 }),
     ).toThrow(
       `battle b: missing participant actor "${missingEnemyId}" in GameState`,
     );
@@ -349,8 +348,7 @@ describe("Battle: tick loop", () => {
     });
 
     expect(() =>
-      tickBattle(battle, { state, bus, rng, attrDefs, currentTick: 1 }),
+      tickBattle(battle, { state, bus, rng, currentTick: 1 }),
     ).toThrow("boom");
   });
 });
-

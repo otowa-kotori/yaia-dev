@@ -405,7 +405,6 @@ export interface TestHarness {
   state: GameState;
   bus: GameEventBus;
   rng: Rng;
-  attrDefs: Record<string, AttrDef>;
   currentTick: number;
 }
 
@@ -415,7 +414,6 @@ export function makeHarness(seed = 42): TestHarness {
     state: createEmptyState(seed, SAVE_VERSION),
     bus: createGameEventBus(),
     rng: createRng(seed),
-    attrDefs,
     currentTick: 0,
   };
 }
@@ -424,7 +422,6 @@ export function makeSlime(instanceId: string): Enemy {
   return createEnemy({
     instanceId,
     def: slimeMonster,
-    attrDefs,
     side: "enemy",
   });
 }
@@ -460,7 +457,6 @@ export function makePlayer(overrides: {
 
     baseAttrs: base as Record<string, number>,
     knownTalents: (overrides.talents ?? []) as unknown as TalentId[],
-    attrDefs,
   });
   if (overrides.hp !== undefined) pc.currentHp = overrides.hp;
   if (overrides.mp !== undefined) pc.currentMp = overrides.mp;

@@ -17,7 +17,7 @@
 //   Enemy:           read from MonsterDef at rebuild time (default [{STR, 1.0}] / [{INT, 1.0}]).
 //   These configs live in content and are never duplicated on the actor.
 
-import type { AttrDef, AttrId, MonsterDef, TalentId } from "../../content/types";
+import type { AttrId, MonsterDef, TalentId } from "../../content/types";
 import { getContent, getEffect, getItem } from "../../content/registry";
 import type { FormulaRef } from "../../infra/formula/types";
 import {
@@ -61,7 +61,6 @@ export interface CreatePlayerOptions {
   equipped?: PlayerCharacter["equipped"];
   talentLevels?: Record<string, number>;
   inventoryStackLimit?: number;
-  attrDefs: Readonly<Record<string, AttrDef>>;
 }
 
 export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacter {
@@ -102,9 +101,9 @@ export function createPlayerCharacter(opts: CreatePlayerOptions): PlayerCharacte
     activeSustains: {},
     equippedTalents: [],
   };
-  rebuildCharacterDerived(pc, opts.attrDefs);
-  pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, opts.attrDefs);
-  pc.currentMp = getAttrFromSet(pc.attrs, ATTR.MAX_MP, opts.attrDefs);
+  rebuildCharacterDerived(pc);
+  pc.currentHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, getContent().attributes);
+  pc.currentMp = getAttrFromSet(pc.attrs, ATTR.MAX_MP, getContent().attributes);
   return pc;
 }
 
@@ -114,7 +113,6 @@ export interface CreateEnemyOptions {
   /** Unique per-battle instance id (e.g. "enemy.slime#3"). */
   instanceId: string;
   def: MonsterDef;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   side?: Side;
 }
 
@@ -136,9 +134,9 @@ export function createEnemy(opts: CreateEnemyOptions): Enemy {
     knownTalentIds: opts.def.talents.slice(),
     side: opts.side ?? "enemy",
   };
-  rebuildCharacterDerived(e, opts.attrDefs);
-  e.currentHp = getAttrFromSet(e.attrs, ATTR.MAX_HP, opts.attrDefs);
-  e.currentMp = getAttrFromSet(e.attrs, ATTR.MAX_MP, opts.attrDefs);
+  rebuildCharacterDerived(e);
+  e.currentHp = getAttrFromSet(e.attrs, ATTR.MAX_HP, getContent().attributes);
+  e.currentMp = getAttrFromSet(e.attrs, ATTR.MAX_MP, getContent().attributes);
   return e;
 }
 
@@ -178,9 +176,9 @@ export function createResourceNode(
  */
 export function rebuildCharacterDerived(
   c: Character,
-  attrDefs: Readonly<Record<string, AttrDef>>,
   worldRecord?: WorldRecord,
 ): void {
+  const attrDefs = getContent().attributes;
   // 1) Wipe modifier stack and cache.
   c.attrs.modifiers = [];
   c.attrs.dynamicProviders = [];
@@ -317,9 +315,8 @@ export function rebuildCharacterDerived(
 export function getAttr(
   c: Character,
   attrId: string,
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): number {
-  return getAttrFromSet(c.attrs, attrId, attrDefs);
+  return getAttrFromSet(c.attrs, attrId, getContent().attributes);
 }
 
 // ---------- Internal ----------

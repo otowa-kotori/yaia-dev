@@ -10,7 +10,6 @@ import {
 } from "../../src/core/inventory";
 import { createGearInstance } from "../../src/core/item";
 import {
-  attrDefs,
   forestLocation,
   forestCombatZone,
   loadFixtureContent,
@@ -58,7 +57,6 @@ function setupHeroInStage(h: TestHarness): {
     state: h.state,
     bus: h.bus,
     rng: h.rng,
-    attrDefs: h.attrDefs,
     currentTick: h.currentTick,
   };
 
@@ -234,7 +232,6 @@ describe("pending loot", () => {
       state: h.state,
       bus: h.bus,
       rng: h.rng,
-      attrDefs: h.attrDefs,
       currentTick: h.currentTick,
     };
 

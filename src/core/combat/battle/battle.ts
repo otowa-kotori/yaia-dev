@@ -12,8 +12,6 @@
 //   This intentionally preserves the current owner-turn decay model even under
 //   ATB, keeping the blast radius limited while the scheduler is replaced.
 
-import type { AttrDef } from "../../content/types";
-
 /** Battle mode: solo (1 player) or party (future multi-character). */
 export type BattleMode = "solo" | "party";
 import { getTalent } from "../../content/registry";
@@ -40,7 +38,6 @@ import {
   nextActor as schedulerNextActor,
   onActionResolved as schedulerOnActionResolved,
   tickScheduler,
-  type SchedulerContext,
   type SchedulerState,
 } from "./scheduler";
 
@@ -167,7 +164,6 @@ export interface TickBattleContext {
   state: GameState;
   bus: GameEventBus;
   rng: Rng;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   currentTick: number;
 }
 
@@ -179,15 +175,14 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
   if (battle.outcome !== "ongoing") return;
 
   let participants = resolveParticipants(battle, ctx.state);
-  applyPassiveBattleRegen(battle.scheduler, participants, ctx.attrDefs);
+  applyPassiveBattleRegen(battle.scheduler, participants);
   emitNewDeaths(battle, participants, ctx);
 
   maybeTerminate(battle, participants, ctx);
 
   if (battle.outcome !== "ongoing") return;
 
-  const schedCtx: SchedulerContext = { attrDefs: ctx.attrDefs };
-  tickScheduler(battle.scheduler, participants, schedCtx);
+  tickScheduler(battle.scheduler, participants);
 
   const maxActionsThisTick = Math.max(
     1,
@@ -196,10 +191,10 @@ export function tickBattle(battle: Battle, ctx: TickBattleContext): void {
   let actionsServed = 0;
 
   while (battle.outcome === "ongoing") {
-    const actor = schedulerNextActor(battle.scheduler, participants, schedCtx);
+    const actor = schedulerNextActor(battle.scheduler, participants);
     if (!actor) return;
 
-    applyCompletedRoundBattleRegen(battle.scheduler, participants, ctx.attrDefs);
+    applyCompletedRoundBattleRegen(battle.scheduler, participants);
 
     actionsServed += 1;
 
@@ -272,7 +267,6 @@ function processPreActionEffects(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
   });
 }
@@ -360,7 +354,6 @@ function executePlannedAction(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
     participants,
   });
@@ -431,24 +424,22 @@ function getDefaultActionCost(state: SchedulerState): number {
 function applyPassiveBattleRegen(
   scheduler: SchedulerState,
   participants: readonly Character[],
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): void {
   const scale = getPassiveBattleRegenScalePerTick(scheduler);
   if (scale <= 0) return;
   for (const participant of participants) {
-    applyScaledResourceRegen(participant, attrDefs, scale);
+    applyScaledResourceRegen(participant, scale);
   }
 }
 
 function applyCompletedRoundBattleRegen(
   scheduler: SchedulerState,
   participants: readonly Character[],
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): void {
   const completedRounds = consumeCompletedRounds(scheduler);
   if (completedRounds <= 0) return;
   for (const participant of participants) {
-    applyScaledResourceRegen(participant, attrDefs, completedRounds);
+    applyScaledResourceRegen(participant, completedRounds);
   }
 }
 

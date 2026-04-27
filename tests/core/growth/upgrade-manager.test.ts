@@ -15,7 +15,6 @@ import {
 import { createEmptyState, type GameState } from "../../../src/core/infra/state";
 import { emptyContentDb, type ContentDb } from "../../../src/core/content";
 import type {
-  AttrDef,
   AttrId,
   UpgradeDef,
 } from "../../../src/core/content/types";
@@ -36,11 +35,6 @@ const testUpgrade: UpgradeDef = {
   ],
 };
 
-// Minimal attrDefs — only what rebuildCharacterDerived touches in a
-// player-less state. purchaseUpgrade walks state.actors; with no actors,
-// rebuildCharacterDerived is never called, so an empty record is enough.
-const attrDefs: Readonly<Record<string, AttrDef>> = {};
-
 describe("UpgradeManager", () => {
   let state: GameState;
   let content: ContentDb;
@@ -52,7 +46,7 @@ describe("UpgradeManager", () => {
       ...emptyContentDb(),
       upgrades: { [testUpgrade.id]: testUpgrade },
     };
-    ctx = { state, content, attrDefs };
+    ctx = { state, content };
 
     // Give the player some starting gold (1000 is enough for ~3 levels).
     state.currencies["currency.gold"] = 1000;

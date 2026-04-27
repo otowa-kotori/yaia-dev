@@ -132,7 +132,6 @@ describe("knight integration / retaliation reaction", () => {
       state,
       bus,
       rng,
-      attrDefs,
       currentTick: 0,
       participants: [pc, enemy],
     };
@@ -183,7 +182,6 @@ describe("knight integration / retaliation reaction", () => {
       activeReactionKeys: new Set(),
       reactionDepth: 0,
       rng,
-      attrDefs,
       bus,
       state,
       battle: {} as any,
@@ -227,7 +225,6 @@ describe("knight integration / retaliation reaction", () => {
       activeReactionKeys: new Set(),
       reactionDepth: 0,
       rng: createRng(1),
-      attrDefs,
       bus: createGameEventBus(),
       state: createEmptyState(1, SAVE_VERSION),
       battle: {} as any,
@@ -262,7 +259,6 @@ describe("knight integration / retaliation reaction", () => {
         state: createEmptyState(seed, SAVE_VERSION),
         bus: createGameEventBus(),
         rng: createRng(seed),
-        attrDefs,
         currentTick: 0,
         participants: [knight, enemy],
       };
@@ -317,7 +313,6 @@ describe("knight integration / basic attack reaction dispatch", () => {
       state,
       bus,
       rng,
-      attrDefs,
       currentTick: 0,
       participants: [pc, enemy],
     };
@@ -349,7 +344,7 @@ describe("knight integration / PriorityListIntent", () => {
       { talentId: knightPowerStrike.id as string },
     ];
     const intent = createPriorityListIntent(rules);
-    const action = intent(pc, { participants: [pc, enemy], rng, attrDefs });
+    const action = intent(pc, { participants: [pc, enemy], rng });
 
     expect(action).not.toBeNull();
     expect(action!.talentId).toBe(knightPowerStrike.id);
@@ -372,7 +367,7 @@ describe("knight integration / PriorityListIntent", () => {
       { talentId: knightPowerStrike.id as string },
     ];
     const intent = createPriorityListIntent(rules);
-    const action = intent(pc, { participants: [pc, enemy], rng, attrDefs });
+    const action = intent(pc, { participants: [pc, enemy], rng });
 
     expect(action).not.toBeNull();
     expect(action!.talentId).toBe(basicAttackTalent.id);

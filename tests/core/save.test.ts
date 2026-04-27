@@ -9,7 +9,7 @@ import { createEmptyState } from "../../src/core/infra/state";
 import { createBattle } from "../../src/core/combat/battle";
 import { INTENT, registerBuiltinIntents } from "../../src/core/combat/intent";
 import { resetContent } from "../../src/core/content";
-import { loadFixtureContent, makePlayer, makeSlime, attrDefs } from "../fixtures/content";
+import { loadFixtureContent, makePlayer, makeSlime } from "../fixtures/content";
 import { ATTR } from "../../src/core/entity/attribute";
 import { getAttr, isCharacter, isEnemy, isPlayer } from "../../src/core/entity/actor";
 
@@ -23,7 +23,7 @@ describe("save / serialize+deserialize", () => {
   test("round-trips an empty state", () => {
     const state = createEmptyState(123, 1);
     const raw = serialize(state);
-    const restored = deserialize(raw, { attrDefs });
+    const restored = deserialize(raw, {});
     expect(restored.rngSeed).toBe(123);
     expect(restored.rngState).toBe(123);
     expect(restored.actors).toEqual([]);
@@ -39,7 +39,7 @@ describe("save / serialize+deserialize", () => {
     });
 
     const raw = serialize(state);
-    const restored = deserialize(raw, { attrDefs });
+    const restored = deserialize(raw, {});
 
     expect(restored.gameLog).toEqual(state.gameLog);
   });
@@ -49,7 +49,7 @@ describe("save / serialize+deserialize", () => {
     const payload = JSON.parse(serialize(state)) as { version: number; state: Record<string, unknown> };
     delete payload.state.gameLog;
 
-    expect(() => deserialize(JSON.stringify(payload), { attrDefs })).toThrow();
+    expect(() => deserialize(JSON.stringify(payload), {})).toThrow();
   });
 
   test("round-trips PC level / exp / currentHp / xpCurve", () => {
@@ -66,13 +66,13 @@ describe("save / serialize+deserialize", () => {
     state.actors.push(hero);
 
     const raw = serialize(state);
-    const restored = deserialize(raw, { attrDefs });
+    const restored = deserialize(raw, {});
     const loaded = restored.actors[0]!;
     if (!isPlayer(loaded)) throw new Error("expected player");
     expect(loaded.currentHp).toBe(73);
     expect(loaded.level).toBe(5);
     expect(loaded.exp).toBe(42);
-    expect(getAttr(loaded, ATTR.INVENTORY_STACK_LIMIT, attrDefs)).toBe(12);
+    expect(getAttr(loaded, ATTR.INVENTORY_STACK_LIMIT)).toBe(12);
   });
 
   test("strips derived attr modifiers — rebuilt from SoT on load", () => {
@@ -91,7 +91,7 @@ describe("save / serialize+deserialize", () => {
     expect(raw).not.toContain("stale");
     expect(raw).not.toContain("999999");
 
-    const restored = deserialize(raw, { attrDefs });
+    const restored = deserialize(raw, {});
     const loaded = restored.actors[0]!;
     if (!isCharacter(loaded)) throw new Error("not a character");
     expect(loaded.attrs.modifiers).toEqual([]);
@@ -106,7 +106,7 @@ describe("save / serialize+deserialize", () => {
     hero.attrs.base[ATTR.MAX_HP] = 80;
 
     const raw = serialize(state);
-    const restored = deserialize(raw, { attrDefs });
+    const restored = deserialize(raw, {});
     const loaded = restored.actors[0]!;
     if (!isCharacter(loaded)) throw new Error("not a character");
     expect(loaded.currentHp).toBe(80);
@@ -132,7 +132,7 @@ describe("save / serialize+deserialize", () => {
     state.battles.push(battle);
 
     const raw = serialize(state);
-    const restored = deserialize(raw, { attrDefs });
+    const restored = deserialize(raw, {});
 
     expect(restored.battles.length).toBe(1);
     const b = restored.battles[0]!;
@@ -152,7 +152,7 @@ describe("save / serialize+deserialize", () => {
 
   test("version mismatch throws when no migration exists", () => {
     const bad = JSON.stringify({ version: SAVE_VERSION + 99, state: {} });
-    expect(() => deserialize(bad, { attrDefs })).toThrow();
+    expect(() => deserialize(bad, {})).toThrow();
   });
 
   test("adapter round-trips raw data", async () => {

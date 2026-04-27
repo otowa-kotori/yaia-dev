@@ -13,7 +13,6 @@ import { setContent } from "../../../src/core/content";
 import type { UpgradeDef } from "../../../src/core/content/types";
 import type { WorldRecord } from "../../../src/core/infra/state/types";
 import {
-  attrDefs,
   loadFixtureContent,
   makeHarness,
   makePlayer,
@@ -153,27 +152,27 @@ describe("rebuildCharacterDerived + worldRecord", () => {
     const pc = makePlayer({ id: "p1", atk: 10 });
     const record: WorldRecord = { upgrades: { [atkUpgradeDef.id]: 2 } };
 
-    rebuildCharacterDerived(pc, attrDefs, record);
+    rebuildCharacterDerived(pc, record);
 
     // base ATK 10 + 3×2 = 16
-    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(16);
+    expect(getAttr(pc, ATTR.PATK)).toBe(16);
   });
 
   test("no world modifiers when worldRecord omitted (enemy path)", () => {
     const pc = makePlayer({ id: "p1", atk: 10 });
-    rebuildCharacterDerived(pc, attrDefs); // no worldRecord
+    rebuildCharacterDerived(pc); // no worldRecord
 
-    expect(getAttr(pc, ATTR.PATK, attrDefs)).toBe(10);
+    expect(getAttr(pc, ATTR.PATK)).toBe(10);
   });
 
   test("rebuild is idempotent �?double call gives same result", () => {
     const record: WorldRecord = { upgrades: { [atkUpgradeDef.id]: 1 } };
     const pc = makePlayer({ id: "p1", atk: 10 });
 
-    rebuildCharacterDerived(pc, attrDefs, record);
-    const first = getAttr(pc, ATTR.PATK, attrDefs);
-    rebuildCharacterDerived(pc, attrDefs, record);
-    const second = getAttr(pc, ATTR.PATK, attrDefs);
+    rebuildCharacterDerived(pc, record);
+    const first = getAttr(pc, ATTR.PATK);
+    rebuildCharacterDerived(pc, record);
+    const second = getAttr(pc, ATTR.PATK);
 
     expect(first).toBe(second);
     expect(first).toBe(13); // 10 + 3
@@ -200,7 +199,6 @@ describe("applyRewards: currencies", () => {
       state: h.state,
       bus: h.bus,
       rng: h.rng,
-      attrDefs: h.attrDefs,
       currentTick: 0,
     });
 
@@ -219,9 +217,9 @@ describe("applyRewards: currencies", () => {
       rewards: { currencies: { "currency.gold": 5 } },
     };
 
-    applyEffect(rewardEffect, pc, pc, { state: h.state, bus: h.bus, rng: h.rng, attrDefs: h.attrDefs, currentTick: 0 });
-    applyEffect(rewardEffect, pc, pc, { state: h.state, bus: h.bus, rng: h.rng, attrDefs: h.attrDefs, currentTick: 1 });
-    applyEffect(rewardEffect, pc, pc, { state: h.state, bus: h.bus, rng: h.rng, attrDefs: h.attrDefs, currentTick: 2 });
+    applyEffect(rewardEffect, pc, pc, { state: h.state, bus: h.bus, rng: h.rng, currentTick: 0 });
+    applyEffect(rewardEffect, pc, pc, { state: h.state, bus: h.bus, rng: h.rng, currentTick: 1 });
+    applyEffect(rewardEffect, pc, pc, { state: h.state, bus: h.bus, rng: h.rng, currentTick: 2 });
 
     expect(h.state.currencies["currency.gold"]).toBe(15);
   });

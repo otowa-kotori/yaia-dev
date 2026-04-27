@@ -1,7 +1,6 @@
 import type { Character } from "../../entity/actor";
 import { getAttr, isAlive } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
-import type { SchedulerContext } from "./scheduler";
 
 export const TURN_ACTION_SLOT_TICKS = 10;
 export const DEFAULT_TURN_INTERVAL_TICKS = TURN_ACTION_SLOT_TICKS;
@@ -50,7 +49,6 @@ export function createTurnScheduler(
 export function tickTurnScheduler(
   state: TurnSchedulerState,
   participants: readonly Character[],
-  _ctx: SchedulerContext,
 ): void {
   syncTurnRoundParticipants(state, participants);
   if (state.ticksUntilNextAction > 0) {
@@ -61,12 +59,11 @@ export function tickTurnScheduler(
 export function nextActorTurn(
   state: TurnSchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): Character | null {
   syncTurnRoundParticipants(state, participants);
   if (state.ticksUntilNextAction > 0) return null;
 
-  let actor = pickNextTurnActorFromCurrentRound(state, participants, ctx);
+  let actor = pickNextTurnActorFromCurrentRound(state, participants);
   if (actor) return actor;
 
   if (state.roundEligibleActorIds.length > 0) {
@@ -74,7 +71,7 @@ export function nextActorTurn(
   }
 
   if (!primeTurnRound(state, participants)) return null;
-  actor = pickNextTurnActorFromCurrentRound(state, participants, ctx);
+  actor = pickNextTurnActorFromCurrentRound(state, participants);
   if (!actor) {
     throw new Error("scheduler.turn: round was primed but no actor could be selected");
   }
@@ -142,7 +139,6 @@ function primeTurnRound(
 function pickNextTurnActorFromCurrentRound(
   state: TurnSchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): Character | null {
   if (state.roundEligibleActorIds.length === 0) return null;
 
@@ -160,7 +156,7 @@ function pickNextTurnActorFromCurrentRound(
   }
 
   candidates.sort((left, right) => {
-    const speedDelta = getActorSpeed(right, ctx) - getActorSpeed(left, ctx);
+    const speedDelta = getActorSpeed(right) - getActorSpeed(left);
     if (speedDelta !== 0) return speedDelta;
     return (indexOf.get(left.id) ?? Infinity) - (indexOf.get(right.id) ?? Infinity);
   });
@@ -170,9 +166,8 @@ function pickNextTurnActorFromCurrentRound(
 
 function getActorSpeed(
   actor: Character,
-  ctx: SchedulerContext,
 ): number {
-  const speed = getAttr(actor, ATTR.SPEED, ctx.attrDefs);
+  const speed = getAttr(actor, ATTR.SPEED);
   if (!Number.isFinite(speed) || speed <= 0) {
     throw new Error(`scheduler.${actor.id}: invalid SPD ${speed} on actor ${actor.id}`);
   }

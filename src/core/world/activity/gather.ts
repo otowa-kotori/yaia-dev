@@ -143,7 +143,6 @@ function grantSwingRewards(
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
-    attrDefs: ctx.attrDefs,
     currentTick: ctx.currentTick,
     currencyChangeSource: "other",
   };

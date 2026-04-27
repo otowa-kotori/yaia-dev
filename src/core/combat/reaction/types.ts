@@ -14,7 +14,7 @@
 //   broadcast — dispatch to all alive actors on a side (or all)
 
 import type { Character } from "../../entity/actor/types";
-import type { EffectId, AttrDef } from "../../content/types";
+import type { EffectId } from "../../content/types";
 import type { GameEventBus } from "../../infra/events";
 import type { Rng } from "../../infra/rng";
 import type { GameState } from "../../infra/state/types";
@@ -121,7 +121,6 @@ export interface ReactionContext {
 
   // ---- pass-through context ----
   rng: Rng;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   bus: GameEventBus;
   state: GameState;
   battle: Battle;

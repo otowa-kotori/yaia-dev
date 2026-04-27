@@ -42,7 +42,7 @@ export function applyActorResourceRegen(
   actor: Character,
   ctx: ActivityContext,
 ): void {
-  applyTickResourceRegen(actor, ctx.attrDefs);
+  applyTickResourceRegen(actor);
 }
 
 export function ensurePhaseRecoveryEffect(
@@ -106,8 +106,8 @@ export function clearPhaseRecoveryEffects(actor: Character): void {
 }
 
 export function restoreActorToFull(actor: Character, ctx: ActivityContext): void {
-  actor.currentHp = getAttr(actor, ATTR.MAX_HP, ctx.attrDefs);
-  actor.currentMp = getAttr(actor, ATTR.MAX_MP, ctx.attrDefs);
+  actor.currentHp = getAttr(actor, ATTR.MAX_HP);
+  actor.currentMp = getAttr(actor, ATTR.MAX_MP);
 }
 
 function buildPhaseRecoveryState(
@@ -118,11 +118,11 @@ function buildPhaseRecoveryState(
   const totalTicks = Math.max(1, opts.totalTicks);
   return {
     hpRegen:
-      Math.max(0, getAttr(actor, ATTR.MAX_HP, ctx.attrDefs)) *
+      Math.max(0, getAttr(actor, ATTR.MAX_HP)) *
       Math.max(0, opts.hpPct) /
       totalTicks,
     mpRegen:
-      Math.max(0, getAttr(actor, ATTR.MAX_MP, ctx.attrDefs)) *
+      Math.max(0, getAttr(actor, ATTR.MAX_MP)) *
       Math.max(0, opts.mpPct) /
       totalTicks,
   };

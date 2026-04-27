@@ -12,10 +12,7 @@
 import type { Character } from "../core/entity/actor";
 import { getAttr } from "../core/entity/actor";
 import { ATTR } from "../core/entity/attribute";
-import { DEFAULT_CONTENT } from "../content";
 import { T } from "./text";
-
-const ATTR_DEFS = DEFAULT_CONTENT.attributes;
 
 
 export interface ActorCardProps {
@@ -37,8 +34,8 @@ export function ActorCard({
   children,
   statusLabel,
 }: ActorCardProps) {
-  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP, ATTR_DEFS));
-  const maxMp = Math.max(0, getAttr(actor, ATTR.MAX_MP, ATTR_DEFS));
+  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP));
+  const maxMp = Math.max(0, getAttr(actor, ATTR.MAX_MP));
   const hpPct = Math.max(0, Math.min(1, actor.currentHp / maxHp));
   const mpPct = maxMp > 0 ? Math.max(0, Math.min(1, actor.currentMp / maxMp)) : 0;
   const showMp = maxMp > 0;

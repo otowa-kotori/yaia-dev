@@ -1,7 +1,6 @@
 import type { Character } from "../../entity/actor";
 import { getAttr, isAlive } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
-import type { SchedulerContext } from "./scheduler";
 
 export const ATB_REFERENCE_SELF_TURN_TICKS = 25;
 export const DEFAULT_ATB_BASE_ENERGY_GAIN = 40;
@@ -63,9 +62,8 @@ export function createAtbScheduler(
 export function tickAtbScheduler(
   state: AtbSchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): void {
-  syncAtbParticipants(state, participants, ctx);
+  syncAtbParticipants(state, participants);
   for (const actor of participants) {
     if (!isAlive(actor)) continue;
 
@@ -74,7 +72,7 @@ export function tickAtbScheduler(
       throw new Error(`scheduler.atb: missing energy for actor ${actor.id} after sync`);
     }
 
-    const nextEnergy = currentEnergy + getEnergyGain(state, actor, ctx);
+    const nextEnergy = currentEnergy + getEnergyGain(state, actor);
     state.energyByActorId[actor.id] = nextEnergy;
 
     // Clear floor once energy is back to non-negative — the post-action
@@ -90,9 +88,8 @@ export function tickAtbScheduler(
 export function nextActorAtb(
   state: AtbSchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): Character | null {
-  syncAtbParticipants(state, participants, ctx);
+  syncAtbParticipants(state, participants);
 
   const indexOf = buildParticipantOrderIndex(participants);
 
@@ -157,7 +154,6 @@ export function getAtbGaugePct(
 function syncAtbParticipants(
   state: AtbSchedulerState,
   participants: readonly Character[],
-  ctx: SchedulerContext,
 ): void {
   const liveIds = new Set(participants.map((actor) => actor.id));
   for (const actorId of Object.keys(state.energyByActorId)) {
@@ -169,7 +165,7 @@ function syncAtbParticipants(
 
   for (const actor of participants) {
     if (state.energyByActorId[actor.id] !== undefined) continue;
-    state.energyByActorId[actor.id] = getInitialEnergy(state, actor, ctx);
+    state.energyByActorId[actor.id] = getInitialEnergy(state, actor);
     state.energyFloorByActorId[actor.id] = 0;
   }
 }
@@ -177,9 +173,8 @@ function syncAtbParticipants(
 function getInitialEnergy(
   state: AtbSchedulerState,
   actor: Character,
-  ctx: SchedulerContext,
 ): number {
-  const raw = getActorSpeed(actor, ctx) * state.initialEnergyPerSpeed;
+  const raw = getActorSpeed(actor) * state.initialEnergyPerSpeed;
   const capped = Math.min(state.actionThreshold - 1, raw);
   return Math.max(0, capped);
 }
@@ -187,17 +182,15 @@ function getInitialEnergy(
 function getEnergyGain(
   state: AtbSchedulerState,
   actor: Character,
-  ctx: SchedulerContext,
 ): number {
-  const speed = getActorSpeed(actor, ctx);
+  const speed = getActorSpeed(actor);
   return state.baseEnergyGain * (speed / state.baseSpeed);
 }
 
 function getActorSpeed(
   actor: Character,
-  ctx: SchedulerContext,
 ): number {
-  const speed = getAttr(actor, ATTR.SPEED, ctx.attrDefs);
+  const speed = getAttr(actor, ATTR.SPEED);
   if (!Number.isFinite(speed) || speed <= 0) {
     throw new Error(`scheduler.${actor.id}: invalid SPD ${speed} on actor ${actor.id}`);
   }

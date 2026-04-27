@@ -36,7 +36,7 @@ export function TalentsView({ store }: { store: GameStore }) {
   const availableTalentIds = heroCfg?.availableTalents ?? [];
   const totalTp = computeTotalTp(hero.level);
   const availableTp = computeAvailableTp(hero.level, hero.talentLevels, content.talents);
-  const talentSlots = Math.max(0, Math.floor(getAttr(hero, ATTR.TALENT_SLOTS, content.attributes)));
+  const talentSlots = Math.max(0, Math.floor(getAttr(hero, ATTR.TALENT_SLOTS)));
   const equippedCount = hero.equippedTalents.length;
   const equippedSlots = Array.from({ length: talentSlots }, (_, index) => hero.equippedTalents[index] ?? null);
 

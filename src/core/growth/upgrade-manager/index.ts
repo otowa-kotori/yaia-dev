@@ -12,12 +12,11 @@
 import { upgradeCost } from "../worldrecord";
 import { isPlayer, rebuildCharacterDerived } from "../../entity/actor";
 import type { GameState } from "../../infra/state/types";
-import type { ContentDb, AttrDef } from "../../content/types";
+import type { ContentDb } from "../../content/types";
 
 export interface UpgradePurchaseContext {
   state: GameState;
   content: ContentDb;
-  attrDefs: Readonly<Record<string, AttrDef>>;
 }
 
 export type UpgradePurchaseResult =
@@ -74,7 +73,7 @@ export function purchaseUpgrade(
   // Rebuild derived state for every PlayerCharacter so world modifiers take effect.
   for (const actor of ctx.state.actors) {
     if (isPlayer(actor)) {
-      rebuildCharacterDerived(actor, ctx.attrDefs, ctx.state.worldRecord);
+      rebuildCharacterDerived(actor, ctx.state.worldRecord);
     }
   }
 

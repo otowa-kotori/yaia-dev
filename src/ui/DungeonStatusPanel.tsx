@@ -13,12 +13,9 @@ import type { DungeonSession } from "../core/infra/state";
 import type { GameLogEntry } from "../core/infra/game-log";
 import type { StageSession } from "../core/world/stage/types";
 
-import { DEFAULT_CONTENT } from "../content";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import type { GameStore } from "./store";
 import { T, fmt } from "./text";
-
-const ATTR_DEFS = DEFAULT_CONTENT.attributes;
 
 
 export function DungeonStatusPanel({
@@ -198,7 +195,7 @@ function EmptyHint({ message }: { message: string }) {
 }
 
 function ParticipantRow({ actor }: { actor: Character }) {
-  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP, ATTR_DEFS));
+  const maxHp = Math.max(1, getAttr(actor, ATTR.MAX_HP));
   const hpPct = Math.max(0, Math.min(1, actor.currentHp / maxHp));
   const dead = actor.currentHp <= 0;
 

@@ -24,15 +24,12 @@
 import type { Character } from "../../entity/actor";
 import { isAlive } from "../../entity/actor";
 import type { Rng } from "../../infra/rng";
-import type { AttrDef } from "../../content/types";
 
 export interface IntentContext {
   /** All participants in the current battle. */
   participants: readonly Character[];
   /** Shared combat RNG (used for pick()-style decisions). */
   rng: Rng;
-  /** Attribute definitions — needed for AGGRO_WEIGHT weighted targeting. */
-  attrDefs?: Readonly<Record<string, AttrDef>>;
 }
 
 /**
@@ -147,20 +144,20 @@ export function registerBuiltinIntents(): void {
 // ---------- Weighted target selection ----------
 
 import { ATTR, getAttr as getAttrFromSet } from "../../entity/attribute";
+import { getContent } from "../../content/registry";
 
 /**
- * Pick a target from `candidates` weighted by AGGRO_WEIGHT. Falls back to
- * uniform random if attrDefs is not provided or all weights are equal.
+ * Pick a target from `candidates` weighted by AGGRO_WEIGHT.
  */
 export function pickWeightedTarget(
   candidates: Character[],
   ctx: IntentContext,
 ): Character {
   if (candidates.length === 1) return candidates[0]!;
-  if (!ctx.attrDefs) return ctx.rng.pick(candidates);
 
+  const attrDefs = getContent().attributes;
   const weights = candidates.map(c => {
-    const w = getAttrFromSet(c.attrs, ATTR.AGGRO_WEIGHT, ctx.attrDefs!);
+    const w = getAttrFromSet(c.attrs, ATTR.AGGRO_WEIGHT, attrDefs);
     return Math.max(0.1, w); // clamp same as AttrDef.clampMin
   });
   const totalWeight = weights.reduce((s, w) => s + w, 0);
@@ -176,7 +173,6 @@ export function pickWeightedTarget(
 
 // ---------- PriorityListIntent (content-driven) ----------
 
-import { getContent } from "../../content/registry";
 import { isPlayer, isEnemy } from "../../entity/actor";
 import type { PlayerCharacter, Enemy } from "../../entity/actor";
 import { createPriorityListIntent, type PriorityRule } from "./priority";

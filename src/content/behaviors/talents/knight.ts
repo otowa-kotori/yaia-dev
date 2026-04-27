@@ -57,7 +57,7 @@ export const knightPowerStrike: TalentDef = {
   },
   describe: (ctx: TalentStaticContext) => {
     const p = powerStrikeParams(ctx);
-    return `伤害系数 ${fmtNum(p.coeff)}x，MP 消耗 ${p.mpCost}`;
+    return `伤害系数 ${fmtNum(p.coeff)}x`;
   },
 };
 

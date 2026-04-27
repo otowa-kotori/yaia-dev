@@ -71,7 +71,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     seed: opts.seed,
   });
   const adapter = opts.saveAdapter ?? new LocalStorageSaveAdapter();
-  const attrDefs = opts.content.attributes;
   const now = opts.now ?? (() => Date.now());
 
   // ---------- Subscription plumbing ----------
@@ -321,7 +320,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     try {
       const raw = await adapter.load(SAVE_KEY);
       if (!raw) return false;
-      const loaded = deserialize(raw, { attrDefs });
+      const loaded = deserialize(raw, {});
       session.loadFromSave(loaded);
       // Cold-resume catch-up: compensate for time elapsed since this save
       // was last written.

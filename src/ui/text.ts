@@ -200,19 +200,19 @@ export const T = {
   talentType_sustain: "姿态",
 
   // ── Talent equip ──
-  talentEquipTitle: "技能装备",
-  talentEquipHint: "只有装备的主动/姿态技能才能在战斗中使用。被动技能始终生效。",
+  talentEquipTitle: "技能装配",
+  talentEquipHint: "只有装配的主动/姿态技能才能在战斗中使用。被动技能始终生效。",
   talentSlotsFull: "槽位已满",
   talentEquipEmptySlot: "空槽",
-  talentEquipped: "已装备",
+  talentEquipped: "已装配",
   talentMetaMp: "MP {amount}",
-  talentMetaCooldown: "冷却 {count} 行动",
+  talentMetaCooldown: "冷却 {count} 回合",
   talentMetaActionCostRatio: "行动耗时 ×{ratio}",
 
-  btn_equipTalent: "装备",
+  btn_equipTalent: "装配",
 
   btn_unequipTalent: "卸下",
-  talentEquipFailed: "技能装备失败",
+  talentEquipFailed: "技能装配失败",
   talentUnequipFailed: "技能卸下失败",
 
   // ── Settings ──

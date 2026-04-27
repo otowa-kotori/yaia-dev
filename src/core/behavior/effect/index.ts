@@ -11,7 +11,7 @@
 // "effect:<effectId>:<sourceActorId>:<appliedAtTick>" so that on expiration we
 // can remove the right stack via removeModifiersBySource.
 
-import type { EffectDef, AttrDef, ItemId } from "../../content/types";
+import type { EffectDef, ItemId } from "../../content/types";
 import { getEffect, getItem, getSkill } from "../../content/registry";
 import { evalFormula, type FormulaContext } from "../../infra/formula";
 import type { Rng } from "../../infra/rng";
@@ -32,7 +32,6 @@ export interface EffectContext {
   state: GameState;
   bus: GameEventBus;
   rng: Rng;
-  attrDefs: Readonly<Record<string, AttrDef>>;
   /** Current logic tick; used to timestamp applied-at markers and compute cooldown/expiry. */
   currentTick: number;
   /** Optional semantic source for emitted currency change events. */
@@ -117,7 +116,7 @@ function applyInstantPulse(
   let magnitude = 0;
 
   if (effect.formula) {
-    const fctx = buildFormulaContext(source, target, ctx.attrDefs);
+    const fctx = buildFormulaContext(source, target);
     magnitude = Math.max(0, Math.floor(evalFormula(effect.formula, fctx)));
   }
 
@@ -130,7 +129,7 @@ function applyInstantPulse(
       amount: magnitude,
     });
   } else if (mode === "heal" && magnitude > 0) {
-    const maxHp = getAttr(target, ATTR.MAX_HP, ctx.attrDefs);
+    const maxHp = getAttr(target, ATTR.MAX_HP);
     const healedAmount = Math.max(0, Math.min(maxHp, target.currentHp + magnitude) - target.currentHp);
     target.currentHp += healedAmount;
     if (healedAmount > 0) {
@@ -185,7 +184,7 @@ function applyRewards(
     const levelsGained = grantCharacterXp(pc, rewards.charXp, { bus: ctx.bus });
     // 如果升了级，重建派生属性（base 已被 grantCharacterXp 修改）。
     if (levelsGained > 0) {
-      rebuildCharacterDerived(pc, ctx.attrDefs, ctx.state.worldRecord);
+      rebuildCharacterDerived(pc, ctx.state.worldRecord);
     }
   }
 
@@ -236,7 +235,7 @@ function addItemToInventory(
   }
   const def = getItem(itemId);
   if (def.stackable) {
-    const stackLimit = getInventoryStackLimit(ctx.state, charId, ctx.attrDefs);
+    const stackLimit = getInventoryStackLimit(ctx.state, charId);
     const res = addStack(inv, itemId, qty, stackLimit);
     if (!res.ok) {
       pushToPendingLoot(ctx, charId, { kind: "stack", itemId, qty: res.remaining });
@@ -313,9 +312,7 @@ function playerLogScope(hero: PlayerCharacter): {
 function buildFormulaContext(
   source: Character,
   target: Character,
-  attrDefs: Readonly<Record<string, AttrDef>>,
 ): FormulaContext {
-
   // Variables available to formulas. Names here are part of the FORMULA
   // DATA CONTRACT — designers reference them by string in content JSON
   // (e.g. `{ kind: "linear", xVar: "target_def" }`). Treat these names as
@@ -327,18 +324,18 @@ function buildFormulaContext(
   return {
     vars: {
       // 物理伤害公式所需
-      patk: getAttr(source, ATTR.PATK, attrDefs),
-      pdef: getAttr(target, ATTR.PDEF, attrDefs),
+      patk: getAttr(source, ATTR.PATK),
+      pdef: getAttr(target, ATTR.PDEF),
       // 魔法伤害公式所需
-      matk: getAttr(source, ATTR.MATK, attrDefs),
-      mres: getAttr(target, ATTR.MRES, attrDefs),
+      matk: getAttr(source, ATTR.MATK),
+      mres: getAttr(target, ATTR.MRES),
       // 一级属性（供其他公式类型使用）
-      source_str:        getAttr(source, ATTR.STR, attrDefs),
-      source_dex:        getAttr(source, ATTR.DEX, attrDefs),
-      source_int:        getAttr(source, ATTR.INT, attrDefs),
-      source_max_hp:     getAttr(source, ATTR.MAX_HP, attrDefs),
+      source_str:        getAttr(source, ATTR.STR),
+      source_dex:        getAttr(source, ATTR.DEX),
+      source_int:        getAttr(source, ATTR.INT),
+      source_max_hp:     getAttr(source, ATTR.MAX_HP),
       source_current_hp: source.currentHp,
-      target_max_hp:     getAttr(target, ATTR.MAX_HP, attrDefs),
+      target_max_hp:     getAttr(target, ATTR.MAX_HP),
       target_current_hp: target.currentHp,
     },
   };
@@ -347,7 +344,6 @@ function buildFormulaContext(
 // ---------- Processing action effects ----------
 
 export interface ProcessActionEffectsContext {
-  attrDefs: Readonly<Record<string, AttrDef>>;
   bus: GameEventBus;
   state: GameState;
   rng: Rng;
@@ -394,7 +390,6 @@ export function processActionEffects(
             state: ctx.state,
             bus: ctx.bus,
             rng: ctx.rng,
-            attrDefs: ctx.attrDefs,
             currentTick: ctx.currentTick,
           });
         }

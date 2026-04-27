@@ -11,10 +11,7 @@ import { getContent } from "../core/content";
 import { xpProgressToNextLevel } from "../core/growth/leveling";
 import type { GameStore } from "./store";
 import { useStore } from "./useStore";
-import { DEFAULT_CONTENT } from "../content";
 import { T } from "./text";
-
-const ATTR_DEFS = DEFAULT_CONTENT.attributes;
 
 
 /** Attribute ids we want to display, in order. */
@@ -71,7 +68,7 @@ export function XpOverview({ store }: { store: GameStore }) {
           }}
         >
           {DISPLAY_ATTRS.map(({ id, label }) => {
-            const val = Math.round(getAttr(hero, id, ATTR_DEFS));
+            const val = Math.round(getAttr(hero, id));
             return (
               <div key={id} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <span style={{ fontSize: 10, opacity: 0.55, letterSpacing: 0.5, textTransform: "uppercase" }}>
