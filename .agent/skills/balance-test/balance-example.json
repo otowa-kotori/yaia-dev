@@ -1,0 +1,207 @@
+{
+  "seed": 42,
+  "defaults": {
+    "waves": 50,
+    "maxTicks": 200000
+  },
+  "heroProfiles": {
+    "knight_lv1": {
+      "heroId": "hero.knight",
+      "level": 1
+    },
+    "knight_lv3": {
+      "heroId": "hero.knight",
+      "level": 3
+    },
+    "knight_lv5": {
+      "heroId": "hero.knight",
+      "level": 5
+    },
+    "knight_lv5_copper": {
+      "heroId": "hero.knight",
+      "level": 5,
+      "equipment": ["item.weapon.copper_sword"]
+    },
+    "knight_lv8_copper": {
+      "heroId": "hero.knight",
+      "level": 8,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.power_strike": 3, "talent.knight.fortitude": 2 },
+      "equippedTalents": ["talent.knight.power_strike"]
+    },
+    "knight_lv10_copper_ps": {
+      "heroId": "hero.knight",
+      "level": 10,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.power_strike": 5, "talent.knight.fortitude": 3 },
+      "equippedTalents": ["talent.knight.power_strike"]
+    },
+    "knight_lv10_copper_rage": {
+      "heroId": "hero.knight",
+      "level": 10,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.power_strike": 5, "talent.knight.rage": 3 },
+      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
+    },
+    "knight_lv10_copper_guard": {
+      "heroId": "hero.knight",
+      "level": 10,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.fortitude": 5, "talent.knight.guard": 3 },
+      "equippedTalents": ["talent.knight.guard"]
+    },
+    "knight_lv10_copper_warcry": {
+      "heroId": "hero.knight",
+      "level": 10,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.fortitude": 5, "talent.knight.warcry": 3 },
+      "equippedTalents": ["talent.knight.warcry"]
+    },
+    "knight_lv10_copper_retal": {
+      "heroId": "hero.knight",
+      "level": 10,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.fortitude": 5, "talent.knight.warcry": 5, "talent.knight.retaliation": 2 },
+      "equippedTalents": ["talent.knight.warcry"]
+    },
+    "knight_lv15_copper": {
+      "heroId": "hero.knight",
+      "level": 15,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.power_strike": 5, "talent.knight.fortitude": 5, "talent.knight.rage": 3, "talent.knight.warcry": 1 },
+      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
+    },
+    "knight_lv20_copper": {
+      "heroId": "hero.knight",
+      "level": 20,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.power_strike": 8, "talent.knight.fortitude": 5, "talent.knight.rage": 5, "talent.knight.warcry": 5, "talent.knight.retaliation": 3 },
+      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
+    },
+    "knight_lv25_copper": {
+      "heroId": "hero.knight",
+      "level": 25,
+      "equipment": ["item.weapon.copper_sword"],
+      "talents": { "talent.knight.power_strike": 10, "talent.knight.fortitude": 8, "talent.knight.rage": 8, "talent.knight.warcry": 5, "talent.knight.retaliation": 5 },
+      "equippedTalents": ["talent.knight.power_strike", "talent.knight.rage"]
+    },
+    "ranger_lv1": {
+      "heroId": "hero.ranger",
+      "level": 1
+    },
+    "ranger_lv5": {
+      "heroId": "hero.ranger",
+      "level": 5
+    },
+    "ranger_lv10": {
+      "heroId": "hero.ranger",
+      "level": 10
+    },
+    "mage_lv1": {
+      "heroId": "hero.mage",
+      "level": 1
+    },
+    "mage_lv5": {
+      "heroId": "hero.mage",
+      "level": 5
+    },
+    "mage_lv10": {
+      "heroId": "hero.mage",
+      "level": 10
+    },
+    "cleric_lv1": {
+      "heroId": "hero.cleric",
+      "level": 1
+    },
+    "cleric_lv5": {
+      "heroId": "hero.cleric",
+      "level": 5
+    },
+    "cleric_lv10": {
+      "heroId": "hero.cleric",
+      "level": 10
+    }
+  },
+  "scenarios": [
+    {
+      "name": "草原1-1 绿史莱姆：骑士成长",
+      "profiles": ["knight_lv1", "knight_lv3", "knight_lv5_copper"],
+      "combatZoneId": "combatzone.prairie.1_1_green_slime"
+    },
+    {
+      "name": "草原1-2 史莱姆：骑士成长",
+      "profiles": ["knight_lv1", "knight_lv3", "knight_lv5", "knight_lv5_copper", "knight_lv8_copper"],
+      "combatZoneId": "combatzone.prairie.1_2_slime"
+    },
+    {
+      "name": "草原1-3 野猪：骑士成长",
+      "profiles": ["knight_lv5_copper", "knight_lv8_copper", "knight_lv10_copper_ps"],
+      "combatZoneId": "combatzone.prairie.1_3_boar"
+    },
+    {
+      "name": "草原1-4 角兔：骑士成长",
+      "profiles": ["knight_lv5_copper", "knight_lv8_copper", "knight_lv10_copper_ps"],
+      "combatZoneId": "combatzone.prairie.1_4_rabbit"
+    },
+    {
+      "name": "草原1-5 大史莱姆：骑士成长",
+      "profiles": ["knight_lv8_copper", "knight_lv10_copper_ps", "knight_lv15_copper"],
+      "combatZoneId": "combatzone.prairie.1_5_big_slime"
+    },
+    {
+      "name": "暮色2-1 毒蘑菇：骑士成长",
+      "profiles": ["knight_lv10_copper_ps", "knight_lv15_copper", "knight_lv20_copper"],
+      "combatZoneId": "combatzone.twilight.2_1_mushroom"
+    },
+    {
+      "name": "暮色2-2 暮色狼：骑士成长",
+      "profiles": ["knight_lv10_copper_ps", "knight_lv15_copper", "knight_lv20_copper"],
+      "combatZoneId": "combatzone.twilight.2_2_wolf"
+    },
+    {
+      "name": "暮色2-3 骸骨兵：骑士成长",
+      "profiles": ["knight_lv15_copper", "knight_lv20_copper", "knight_lv25_copper"],
+      "combatZoneId": "combatzone.twilight.2_3_skeleton"
+    },
+    {
+      "name": "矿坑3-1 洞穴蝙蝠：骑士成长",
+      "profiles": ["knight_lv15_copper", "knight_lv20_copper", "knight_lv25_copper"],
+      "combatZoneId": "combatzone.mine.3_1_bat"
+    },
+    {
+      "name": "矿坑3-2 暗影魔：骑士成长",
+      "profiles": ["knight_lv20_copper", "knight_lv25_copper"],
+      "combatZoneId": "combatzone.mine.3_2_shadow"
+    },
+    {
+      "name": "矿坑3-3 矿石蟹：骑士成长",
+      "profiles": ["knight_lv20_copper", "knight_lv25_copper"],
+      "combatZoneId": "combatzone.mine.3_3_crab"
+    },
+    {
+      "name": "骑士Lv10天赋对比 vs 草原1-3",
+      "profiles": ["knight_lv10_copper_ps", "knight_lv10_copper_rage", "knight_lv10_copper_guard", "knight_lv10_copper_warcry", "knight_lv10_copper_retal"],
+      "combatZoneId": "combatzone.prairie.1_3_boar"
+    },
+    {
+      "name": "骑士Lv10天赋对比 vs 暮色2-1",
+      "profiles": ["knight_lv10_copper_ps", "knight_lv10_copper_rage", "knight_lv10_copper_guard", "knight_lv10_copper_warcry", "knight_lv10_copper_retal"],
+      "combatZoneId": "combatzone.twilight.2_1_mushroom"
+    },
+    {
+      "name": "四职业 Lv1 裸装 vs 草原1-1",
+      "profiles": ["knight_lv1", "ranger_lv1", "mage_lv1", "cleric_lv1"],
+      "combatZoneId": "combatzone.prairie.1_1_green_slime"
+    },
+    {
+      "name": "四职业 Lv5 裸装 vs 草原1-2",
+      "profiles": ["knight_lv5", "ranger_lv5", "mage_lv5", "cleric_lv5"],
+      "combatZoneId": "combatzone.prairie.1_2_slime"
+    },
+    {
+      "name": "四职业 Lv10 裸装 vs 草原1-3",
+      "profiles": ["knight_lv10_copper_ps", "ranger_lv10", "mage_lv10", "cleric_lv10"],
+      "combatZoneId": "combatzone.prairie.1_3_boar"
+    }
+  ]
+}
