@@ -65,7 +65,7 @@ export function AppShell({ store }: { store: GameStore }) {
     if (isDesktop) setDrawerOpen(false);
   }, [isDesktop]);
 
-  function handleTabSelect(id: TabId) {
+  function navigateToTab(id: TabId) {
     if (isDesktop) {
       setActiveTab(id);
     } else {
@@ -77,6 +77,10 @@ export function AppShell({ store }: { store: GameStore }) {
         setDrawerOpen(true);
       }
     }
+  }
+
+  function handleTabSelect(id: TabId) {
+    navigateToTab(id);
   }
 
   // For MobileNav highlight: show "battle" when drawer closed, else drawerTab
@@ -102,7 +106,13 @@ export function AppShell({ store }: { store: GameStore }) {
           {/* ── Content area ── */}
           <div className={`flex-1 p-3 lg:p-4 min-w-0 ${isDesktop ? "overflow-y-auto" : "overflow-hidden"}`}>
             {isDesktop
-              ? <TabContent tab={activeTab} store={store} />
+              ? (
+                <TabContent
+                  tab={activeTab}
+                  store={store}
+                  onMapActivityStarted={() => navigateToTab("battle")}
+                />
+              )
               : <BattlePanel store={store} />
             }
           </div>
@@ -131,7 +141,11 @@ export function AppShell({ store }: { store: GameStore }) {
           onClose={() => setDrawerOpen(false)}
         >
           <div className="p-3">
-            <TabContent tab={drawerTab} store={store} />
+            <TabContent
+              tab={drawerTab}
+              store={store}
+              onMapActivityStarted={() => navigateToTab("battle")}
+            />
           </div>
         </Drawer>
       )}
@@ -146,10 +160,18 @@ export function AppShell({ store }: { store: GameStore }) {
 
 // ── Tab content router ──
 
-function TabContent({ tab, store }: { tab: TabId; store: GameStore }) {
+function TabContent({
+  tab,
+  store,
+  onMapActivityStarted,
+}: {
+  tab: TabId;
+  store: GameStore;
+  onMapActivityStarted?: () => void;
+}) {
   switch (tab) {
     case "battle":    return <BattlePanel store={store} />;
-    case "map":       return <MapPanel store={store} />;
+    case "map":       return <MapPanel store={store} onActivityStarted={onMapActivityStarted} />;
     case "inventory": return <InventoryPanel store={store} />;
     case "craft":     return <CraftPanel store={store} />;
     case "talents":   return <TalentPanel store={store} />;

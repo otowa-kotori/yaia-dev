@@ -11,7 +11,13 @@ import { T } from "../text";
 import { Card } from "../components/Card";
 import { PartyDialog, type PartyDialogMode } from "../components/PartyDialog";
 
-export function MapPanel({ store }: { store: GameStore }) {
+export function MapPanel({
+  store,
+  onActivityStarted,
+}: {
+  store: GameStore;
+  onActivityStarted?: () => void;
+}) {
   const { store: s } = useStore(store);
   const cc = s.getFocusedCharacter();
   const locationIds = s.listLocationIds();
@@ -47,7 +53,11 @@ export function MapPanel({ store }: { store: GameStore }) {
 
       {/* Entry list for current location */}
       {currentLocationId && !stage && (
-        <EntryList locationId={currentLocationId} store={s} />
+        <EntryList
+          locationId={currentLocationId}
+          store={s}
+          onActivityStarted={onActivityStarted}
+        />
       )}
 
       {/* Current location info */}
@@ -68,9 +78,11 @@ export function MapPanel({ store }: { store: GameStore }) {
 function EntryList({
   locationId,
   store,
+  onActivityStarted,
 }: {
   locationId: string;
   store: GameStore;
+  onActivityStarted?: () => void;
 }) {
   const cc = store.getFocusedCharacter();
   const content = getContent();
@@ -98,7 +110,10 @@ function EntryList({
                   setPendingEntry({ mode: "combat", targetId: entry.combatZoneId });
                 } else if (entry.kind === "gather") {
                   const nodeId = entry.resourceNodes[0];
-                  if (nodeId) cc.startGather(nodeId);
+                  if (nodeId) {
+                    cc.startGather(nodeId);
+                    onActivityStarted?.();
+                  }
                 } else if (entry.kind === "dungeon") {
                   setPendingEntry({ mode: "dungeon", targetId: entry.dungeonId });
                 }
@@ -124,6 +139,7 @@ function EntryList({
             store.startPartyCombat(pendingEntry.targetId, partyCharIds);
           }
           setPendingEntry(null);
+          onActivityStarted?.();
         }}
       />
     </>
