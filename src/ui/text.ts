@@ -18,6 +18,7 @@ export const T = {
   tab_upgrades: "全局升级",
   tab_settings: "设置",
   tab_debug: "调试",
+  tab_locked: "未解锁",
 
 
   // ── Character bar / status ──
@@ -240,6 +241,8 @@ export const T = {
   dangerZone: "危险区域",
   confirmClearSave: "清除存档并重置？此操作不可撤销。",
   btn_clearSave: "清除存档",
+  unlockGateLocked: "该功能暂未解锁（{unlockId}）。",
+  unlockGateLockedInline: "未解锁（{unlockId}）",
 
   // ── Catch-up overlay (global) ──
   catchUpInProgress: "正在恢复离线进度…",

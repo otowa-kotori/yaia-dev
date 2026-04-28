@@ -195,6 +195,10 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     notify();
     persistSoon();
   });
+  bus.on("unlocked", () => {
+    notify();
+    persistSoon();
+  });
 
   // ---------- Catch-up (offline / background tab) ----------
 

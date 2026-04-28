@@ -5,6 +5,7 @@ import type { TabId } from "./AppShell";
 export interface SidebarProps {
   activeTab: TabId;
   onSelect: (id: TabId) => void;
+  isUnlocked: (id: TabId) => boolean;
   showDebug: boolean;
 }
 
@@ -34,7 +35,7 @@ const DEBUG_NAV: NavItem = {
   icon: "M12 2a10 10 0 00-10 10 10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2zm0 4v6l4 2",
 };
 
-export function Sidebar({ activeTab, onSelect, showDebug }: SidebarProps) {
+export function Sidebar({ activeTab, onSelect, isUnlocked, showDebug }: SidebarProps) {
   return (
     <aside className="w-16 bg-surface flex flex-col items-center py-4 gap-1 border-r border-border shrink-0">
       {/* Logo */}
@@ -42,30 +43,51 @@ export function Sidebar({ activeTab, onSelect, showDebug }: SidebarProps) {
 
       {/* Top nav */}
       {TOP_NAV.map((n) => (
-        <SidebarBtn key={n.id} item={n} active={activeTab === n.id} onClick={() => onSelect(n.id)} />
+        <SidebarBtn
+          key={n.id}
+          item={n}
+          active={activeTab === n.id}
+          disabled={!isUnlocked(n.id)}
+          onClick={() => onSelect(n.id)}
+        />
       ))}
 
       <div className="flex-1" />
 
       {/* Debug (dev only) */}
       {showDebug && (
-        <SidebarBtn item={DEBUG_NAV} active={activeTab === "debug"} onClick={() => onSelect("debug")} />
+        <SidebarBtn item={DEBUG_NAV} active={activeTab === "debug"} disabled={false} onClick={() => onSelect("debug")} />
       )}
 
       {/* Settings at bottom */}
-      <SidebarBtn item={SETTINGS_NAV} active={activeTab === "settings"} onClick={() => onSelect("settings")} />
+      <SidebarBtn item={SETTINGS_NAV} active={activeTab === "settings"} disabled={false} onClick={() => onSelect("settings")} />
     </aside>
   );
 }
 
-function SidebarBtn({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+function SidebarBtn({
+  item,
+  active,
+  disabled,
+  onClick,
+}: {
+  item: NavItem;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       title={item.label}
       className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors duration-100
-        ${active ? "bg-surface-light text-accent" : "text-gray-500 hover:bg-surface-light hover:text-gray-400"}`}
+        ${disabled
+          ? "text-gray-700 cursor-not-allowed"
+          : active
+            ? "bg-surface-light text-accent"
+            : "text-gray-500 hover:bg-surface-light hover:text-gray-400"}`}
     >
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path d={item.icon} strokeLinecap="round" strokeLinejoin="round" />

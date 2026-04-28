@@ -181,6 +181,11 @@ export type GameEvents = {
     costCurrency: string;
     cost: number;
   };
+  unlocked: {
+    unlockId: string;
+    source: string;
+    tick: number;
+  };
   talentAllocated: { charId: string; talentId: string; newLevel: number };
   waveResolved: {
     charId: string;

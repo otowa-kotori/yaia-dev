@@ -14,6 +14,8 @@ import { useStore } from "../hooks/useStore";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { ENABLE_DEBUG_PANEL } from "../../env";
 import { T, fmt } from "../text";
+import { UnlockGate } from "../components/UnlockGate";
+import { TAB_UNLOCK_IDS } from "../unlocks";
 
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -53,6 +55,8 @@ const DRAWER_TITLES: Partial<Record<TabId, string>> = {
 // ── Shell ──
 
 export function AppShell({ store }: { store: GameStore }) {
+  // Keep AppShell reactive to store changes so tab lock state updates immediately.
+  useStore(store);
   const { isDesktop } = useBreakpoint();
   // Desktop uses activeTab for everything.
   // Mobile: main area is always battle; drawer shows the selected secondary tab.
@@ -66,6 +70,8 @@ export function AppShell({ store }: { store: GameStore }) {
   }, [isDesktop]);
 
   function navigateToTab(id: TabId) {
+    const tabUnlockId = TAB_UNLOCK_IDS[id];
+    if (tabUnlockId && !store.isUnlocked(tabUnlockId)) return;
     if (isDesktop) {
       setActiveTab(id);
     } else {
@@ -86,6 +92,13 @@ export function AppShell({ store }: { store: GameStore }) {
   // For MobileNav highlight: show "battle" when drawer closed, else drawerTab
   const mobileActiveTab = drawerOpen ? drawerTab : "battle";
 
+  useEffect(() => {
+    const unlockId = TAB_UNLOCK_IDS[activeTab];
+    if (unlockId && !store.isUnlocked(unlockId)) {
+      setActiveTab("battle");
+    }
+  }, [activeTab, store]);
+
   return (
     <div className="h-screen flex flex-col lg:flex-row overflow-hidden bg-[#13131f]">
       {/* ── Desktop Sidebar ── */}
@@ -93,6 +106,11 @@ export function AppShell({ store }: { store: GameStore }) {
         <Sidebar
           activeTab={activeTab}
           onSelect={handleTabSelect}
+          isUnlocked={(tabId) => {
+            const unlockId = TAB_UNLOCK_IDS[tabId];
+            if (!unlockId) return true;
+            return store.isUnlocked(unlockId);
+          }}
           showDebug={ENABLE_DEBUG_PANEL}
         />
       )}
@@ -152,7 +170,15 @@ export function AppShell({ store }: { store: GameStore }) {
 
       {/* ── Mobile: Bottom Nav ── */}
       {!isDesktop && (
-        <MobileNav activeTab={mobileActiveTab} onSelect={handleTabSelect} />
+        <MobileNav
+          activeTab={mobileActiveTab}
+          onSelect={handleTabSelect}
+          isUnlocked={(tabId) => {
+            const unlockId = TAB_UNLOCK_IDS[tabId];
+            if (!unlockId) return true;
+            return store.isUnlocked(unlockId);
+          }}
+        />
       )}
     </div>
   );
@@ -161,6 +187,26 @@ export function AppShell({ store }: { store: GameStore }) {
 // ── Tab content router ──
 
 function TabContent({
+  tab,
+  store,
+  onMapActivityStarted,
+}: {
+  tab: TabId;
+  store: GameStore;
+  onMapActivityStarted?: () => void;
+}) {
+  const unlockId = TAB_UNLOCK_IDS[tab];
+  if (unlockId) {
+    return (
+      <UnlockGate store={store} unlockId={unlockId}>
+        <TabBody tab={tab} store={store} onMapActivityStarted={onMapActivityStarted} />
+      </UnlockGate>
+    );
+  }
+  return <TabBody tab={tab} store={store} onMapActivityStarted={onMapActivityStarted} />;
+}
+
+function TabBody({
   tab,
   store,
   onMapActivityStarted,

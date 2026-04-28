@@ -7,7 +7,7 @@ import { useState } from "react";
 import { getContent } from "../../core/content";
 import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
-import { T } from "../text";
+import { T, fmt } from "../text";
 import { Card } from "../components/Card";
 import { PartyDialog, type PartyDialogMode } from "../components/PartyDialog";
 
@@ -30,25 +30,33 @@ export function MapPanel({
       {/* Location buttons */}
       <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">{T.label_location}</div>
       <div className="flex gap-2 flex-wrap mb-4">
-        {locationIds.map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              const pending = cc.stageSession?.pendingLoot ?? [];
-              if (pending.length > 0) {
-                if (!confirm(T.confirmLeavePendingLoot)) return;
-              }
-              cc.enterLocation(id);
-            }}
-            className={`px-4 py-2 rounded-lg text-sm cursor-pointer transition-colors
-              ${currentLocationId === id
-                ? "bg-accent/20 text-accent border border-accent/30"
-                : "bg-surface-light text-gray-400 border border-border hover:border-border-light"}`}
-          >
-            {content.locations[id]?.name ?? id}
-          </button>
-        ))}
+        {locationIds.map((id) => {
+          const location = content.locations[id];
+          const isLocked = !!location?.unlockId && !s.isUnlocked(location.unlockId);
+          return (
+            <button
+              key={id}
+              type="button"
+              disabled={isLocked}
+              onClick={() => {
+                const pending = cc.stageSession?.pendingLoot ?? [];
+                if (pending.length > 0) {
+                  if (!confirm(T.confirmLeavePendingLoot)) return;
+                }
+                cc.enterLocation(id);
+              }}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors border
+              ${isLocked
+                  ? "bg-surface text-gray-600 border-border cursor-not-allowed"
+                  : currentLocationId === id
+                    ? "bg-accent/20 text-accent border-accent/30 cursor-pointer"
+                    : "bg-surface-light text-gray-400 border-border hover:border-border-light cursor-pointer"}`}
+              title={isLocked ? fmt(T.unlockGateLockedInline, { unlockId: location.unlockId! }) : undefined}
+            >
+              {location?.name ?? id}
+            </button>
+          );
+        })}
       </div>
 
       {/* Entry list for current location */}
@@ -101,10 +109,12 @@ function EntryList({
       <div className="flex gap-2 flex-wrap">
         {loc.entries.map((entry, i) => {
           const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : T.entry_gather);
+          const isLocked = !!entry.unlockId && !store.isUnlocked(entry.unlockId);
           return (
             <button
               key={i}
               type="button"
+              disabled={isLocked}
               onClick={() => {
                 if (entry.kind === "combat") {
                   setPendingEntry({ mode: "combat", targetId: entry.combatZoneId });
@@ -118,7 +128,12 @@ function EntryList({
                   setPendingEntry({ mode: "dungeon", targetId: entry.dungeonId });
                 }
               }}
-              className="px-4 py-2 rounded-lg text-sm bg-surface-light text-gray-300 border border-border hover:border-border-light cursor-pointer transition-colors"
+              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                isLocked
+                  ? "bg-surface text-gray-600 border-border cursor-not-allowed"
+                  : "bg-surface-light text-gray-300 border-border hover:border-border-light cursor-pointer"
+              }`}
+              title={isLocked ? fmt(T.unlockGateLockedInline, { unlockId: entry.unlockId! }) : undefined}
             >
               {label}
             </button>

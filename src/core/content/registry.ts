@@ -32,7 +32,9 @@ export function patchContent(partial: Partial<ContentDb>): void {
       ...current.resourceNodes,
       ...(partial.resourceNodes ?? {}),
     },
+    unlocks: { ...current.unlocks, ...(partial.unlocks ?? {}) },
     formulas: { ...current.formulas, ...(partial.formulas ?? {}) },
+    starting: partial.starting ?? current.starting,
   };
 }
 
@@ -102,6 +104,14 @@ export function getFormula(id: string) {
   const v = current.formulas[id];
   if (!v) throw new Error(`content: no formula "${id}"`);
   return v;
+}
+export function getUnlock(id: string) {
+  const v = current.unlocks[id];
+  if (!v) throw new Error(`content: no unlock "${id}"`);
+  return v;
+}
+export function hasUnlock(id: string): boolean {
+  return !!current.unlocks[id];
 }
 
 /** Reset to empty — tests only. */

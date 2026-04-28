@@ -478,6 +478,7 @@ export function loadFixtureContent(): ContentDb {
     resourceNodes: {
       [testVein.id]: testVein,
     },
+    unlocks: {},
     locations: {
       [forestLocation.id]: forestLocation,
       [mineLocation.id]: mineLocation,

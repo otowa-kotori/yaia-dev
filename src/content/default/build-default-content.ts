@@ -13,6 +13,7 @@ import { recipes } from "./recipes";
 import { resourceNodes } from "./resource-nodes";
 import { skills } from "./skills";
 import { talents } from "./talents";
+import { unlocks } from "./unlocks";
 import { upgrades } from "./upgrades";
 
 const defaultContent: ContentDb = {
@@ -27,6 +28,7 @@ const defaultContent: ContentDb = {
   monsters,
   recipes,
   resourceNodes,
+  unlocks,
   skills,
   starting: startingConfig,
   talents,

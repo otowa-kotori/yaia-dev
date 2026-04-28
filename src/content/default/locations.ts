@@ -23,6 +23,12 @@ import {
 } from "./combat-zones";
 import { blackfangSanctumDungeon, wolfDenDungeon } from "./dungeons";
 import { copperVein } from "./resource-nodes";
+import {
+  unlockLocationBossSanctum,
+  unlockLocationIronMine,
+  unlockLocationTraining,
+  unlockLocationTwilight,
+} from "./unlocks";
 
 export const prairieLocation: LocationDef = {
   id: "location.prairie" as LocationId,
@@ -44,6 +50,7 @@ export const prairieLocation: LocationDef = {
 export const twilightLocation: LocationDef = {
   id: "location.twilight" as LocationId,
   name: "暮色林地",
+  unlockId: unlockLocationTwilight.id,
   entries: [
     { kind: "combat", combatZoneId: twilightPoisonMushroom.id, label: "2-1 毒蘑菇" },
     { kind: "combat", combatZoneId: twilightDuskWolf.id, label: "2-2 暮色狼" },
@@ -55,6 +62,7 @@ export const twilightLocation: LocationDef = {
 export const ironMineLocation: LocationDef = {
   id: "location.mine.ironfang" as LocationId,
   name: "铁牙矿坑",
+  unlockId: unlockLocationIronMine.id,
   entries: [
     { kind: "combat", combatZoneId: mineCaveBat.id, label: "3-1 洞穴蝙蝠" },
     { kind: "combat", combatZoneId: mineShadowFiend.id, label: "3-2 暗影魔" },
@@ -68,6 +76,7 @@ export const ironMineLocation: LocationDef = {
 export const bossSanctumLocation: LocationDef = {
   id: "location.boss.blackfang" as LocationId,
   name: "黑牙兽巢",
+  unlockId: unlockLocationBossSanctum.id,
   entries: [{ kind: "dungeon", dungeonId: blackfangSanctumDungeon.id, label: "首领战：黑牙兽王" }],
 };
 
@@ -75,6 +84,7 @@ export const bossSanctumLocation: LocationDef = {
 export const trainingGroundLocation: LocationDef = {
   id: "location.training" as LocationId,
   name: "训练场",
+  unlockId: unlockLocationTraining.id,
   entries: [{ kind: "combat", combatZoneId: trainingGroundCombat.id, label: "训练木人" }],
 };
 

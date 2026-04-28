@@ -46,7 +46,16 @@ import {
 
 import { SAVE_VERSION } from "../save/migrations";
 import type { ContentDb, ItemId, RecipeDef } from "../content";
-import { getCombatZone, getItem, getLocation, getRecipe, getSkill, getDungeon, setContent } from "../content";
+import {
+  getCombatZone,
+  getDungeon,
+  getItem,
+  getLocation,
+  getRecipe,
+  getSkill,
+  getUnlock,
+  setContent,
+} from "../content";
 import {
   ACTIVITY_COMBAT_KIND,
   ACTIVITY_GATHER_KIND,
@@ -95,6 +104,11 @@ import { createGearInstance, type GearInstance } from "../item";
 import { grantCharacterXp, grantSkillXp, xpCostToReach } from "../growth/leveling";
 import { purchaseUpgrade as purchaseUpgradeCore } from "../growth/upgrade-manager";
 import { allocateTalentPoint, equipTalent as equipTalentCore, unequipTalent as unequipTalentCore } from "../growth/talent";
+import {
+  isUnlocked as isUnlockedCore,
+  listUnlocked as listUnlockedCore,
+  unlock as unlockCore,
+} from "../growth/unlock";
 import {
   enterStage as enterStageCore,
   leaveStage as leaveStageCore,
@@ -189,6 +203,12 @@ export interface GameSession {
   abandonDungeon(charId: string): void;
   /** Purchase the next level of a global upgrade. */
   purchaseUpgrade(upgradeId: string): void;
+  /** Check whether a feature/location/system unlock is active. */
+  isUnlocked(unlockId: string): boolean;
+  /** Unlock a feature/location/system id. Unknown unlock ids throw loudly. */
+  unlock(unlockId: string, source?: string): boolean;
+  /** List all currently unlocked ids. */
+  listUnlocked(): string[];
 
   // Global commands.
 
@@ -1492,6 +1512,31 @@ export function createGameSession(
     });
   }
 
+  function assertKnownUnlock(unlockId: string): void {
+    getUnlock(unlockId);
+  }
+
+  function isUnlockedImpl(unlockId: string): boolean {
+    assertKnownUnlock(unlockId);
+    return isUnlockedCore(state, unlockId);
+  }
+
+  function unlockImpl(unlockId: string, source = "system"): boolean {
+    assertKnownUnlock(unlockId);
+    const result = unlockCore(state, unlockId);
+    if (!result.changed) return false;
+    bus.emit("unlocked", {
+      unlockId,
+      source,
+      tick: engine.currentTick,
+    });
+    return true;
+  }
+
+  function listUnlockedImpl(): string[] {
+    return listUnlockedCore(state);
+  }
+
 
   // ---------- Public lifecycle ----------
 
@@ -1579,6 +1624,11 @@ export function createGameSession(
       // Enter the initial location for each hero.
       cc.enterLocation(starting.initialLocationId);
     }
+
+    for (const unlockDef of Object.values(content.unlocks)) {
+      if (!unlockDef.defaultUnlocked) continue;
+      unlockImpl(unlockDef.id, "starting.default");
+    }
   }
 
   // ---------- Speed ----------
@@ -1642,6 +1692,9 @@ export function createGameSession(
     startPartyCombat: startPartyCombatImpl,
     abandonDungeon: abandonDungeonImpl,
     purchaseUpgrade: purchaseUpgradeImpl,
+    isUnlocked: isUnlockedImpl,
+    unlock: unlockImpl,
+    listUnlocked: listUnlockedImpl,
     setSpeedMultiplier,
     setBattleSchedulerMode,
     debugGrantHeroLevels: debugGrantHeroLevelsImpl,

@@ -9,6 +9,7 @@ import type { TabId } from "./AppShell";
 export interface MobileNavProps {
   activeTab: TabId;
   onSelect: (id: TabId) => void;
+  isUnlocked: (id: TabId) => boolean;
   showDebug?: boolean;
 }
 
@@ -37,7 +38,7 @@ const BTN_WIDTH = 56;
 // "More" button itself takes one slot
 const MORE_BTN_WIDTH = 56;
 
-export function MobileNav({ activeTab, onSelect, showDebug }: MobileNavProps) {
+export function MobileNav({ activeTab, onSelect, isUnlocked, showDebug }: MobileNavProps) {
   const navRef = useRef<HTMLElement>(null);
   const [visibleCount, setVisibleCount] = useState(ALL_ITEMS.length);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -96,6 +97,7 @@ export function MobileNav({ activeTab, onSelect, showDebug }: MobileNavProps) {
           icon={item.icon}
           label={item.label}
           active={activeTab === item.id}
+          disabled={!isUnlocked(item.id)}
           onClick={() => { setMoreOpen(false); onSelect(item.id); }}
         />
       ))}
@@ -106,6 +108,7 @@ export function MobileNav({ activeTab, onSelect, showDebug }: MobileNavProps) {
             icon={MORE_ICON}
             label={"\u66f4\u591a"}
             active={moreActive}
+            disabled={false}
             onClick={() => setMoreOpen((v) => !v)}
           />
 
@@ -115,12 +118,15 @@ export function MobileNav({ activeTab, onSelect, showDebug }: MobileNavProps) {
                 <button
                   key={item.id}
                   type="button"
+                  disabled={!isUnlocked(item.id)}
                   onClick={() => {
                     setMoreOpen(false);
                     onSelect(item.id);
                   }}
                   className={`w-full text-left px-4 py-2.5 text-sm cursor-pointer transition-colors
-                    ${activeTab === item.id
+                    ${!isUnlocked(item.id)
+                      ? "text-gray-600 cursor-not-allowed"
+                      : activeTab === item.id
                       ? "text-accent bg-accent/10"
                       : "text-gray-300 hover:bg-surface-lighter"}`}
                 >
@@ -139,19 +145,22 @@ function NavButton({
   icon,
   label,
   active,
+  disabled,
   onClick,
 }: {
   icon: string;
   label: string;
   active: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
       className={`relative flex flex-col items-center gap-0.5 px-2 py-1 cursor-pointer transition-colors shrink-0
-        ${active ? "text-accent" : "text-gray-500"}`}
+        ${disabled ? "text-gray-700 cursor-not-allowed" : active ? "text-accent" : "text-gray-500"}`}
     >
       {active && (
         <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-sm" />

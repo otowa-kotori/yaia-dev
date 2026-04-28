@@ -92,3 +92,11 @@ export {
   twilightLocation,
 } from "./default/locations";
 export { atkUpgrade, defUpgrade, upgrades } from "./default/upgrades";
+export {
+  unlocks,
+  unlockFeatureUpgradesTab,
+  unlockLocationBossSanctum,
+  unlockLocationIronMine,
+  unlockLocationTraining,
+  unlockLocationTwilight,
+} from "./default/unlocks";

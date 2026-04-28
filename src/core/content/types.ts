@@ -35,6 +35,7 @@ export type TalentId = string & { readonly __brand: "TalentId" };
 /** Currency is a plain string at runtime (e.g. "currency.gold"). Branded only
  *  for call-site clarity; safe to cast with `as CurrencyId`. */
 export type CurrencyId = string & { readonly __brand: "CurrencyId" };
+export type UnlockId = string & { readonly __brand: "UnlockId" };
 
 // ---------- Attribute ----------
 
@@ -471,9 +472,9 @@ export interface DungeonDef {
 // ---------- Location entries ----------
 
 export type LocationEntryDef =
-  | { kind: "combat"; combatZoneId: CombatZoneId; label?: string }
-  | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string }
-  | { kind: "dungeon"; dungeonId: DungeonId; label?: string };
+  | { kind: "combat"; combatZoneId: CombatZoneId; label?: string; unlockId?: UnlockId }
+  | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string; unlockId?: UnlockId }
+  | { kind: "dungeon"; dungeonId: DungeonId; label?: string; unlockId?: UnlockId };
 
 /** A physical location / map area. Contains a menu of available entries
  *  the player can choose from. The actual running instance (actor spawning,
@@ -482,6 +483,7 @@ export type LocationEntryDef =
 export interface LocationDef {
   id: LocationId;
   name: string;
+  unlockId?: UnlockId;
   entries: LocationEntryDef[];
 }
 
@@ -554,6 +556,18 @@ export interface UpgradeDef {
   costScaling: FormulaRef;
 }
 
+// ---------- Unlocks ----------
+//
+// UnlockDef is a static registry entry. Runtime only stores unlocked/locked
+// state in GameState.flags and validates IDs against this table.
+export interface UnlockDef {
+  id: UnlockId;
+  name: string;
+  description?: string;
+  /** True means unlocked on a brand-new save. */
+  defaultUnlocked?: boolean;
+}
+
 // ---------- New game bootstrap ----------
 //
 // Configures how a brand-new save is populated: the starting PlayerCharacters
@@ -605,6 +619,7 @@ export interface ContentDb {
   upgrades: Readonly<Record<string, UpgradeDef>>;
   attributes: Readonly<Record<string, AttrDef>>;
   resourceNodes: Readonly<Record<string, ResourceNodeDef>>;
+  unlocks: Readonly<Record<string, UnlockDef>>;
   /** Formulas referenced by other content (xp curves, damage, etc). */
   formulas: Readonly<Record<string, FormulaRef>>;
   /** New-game bootstrap config. Optional so empty/test DBs still type-check;
@@ -627,6 +642,7 @@ export function emptyContentDb(): ContentDb {
     upgrades: {},
     attributes: {},
     resourceNodes: {},
+    unlocks: {},
     formulas: {},
   };
 }
