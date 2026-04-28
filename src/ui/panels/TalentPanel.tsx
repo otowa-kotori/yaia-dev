@@ -26,7 +26,7 @@ import { ProgressBar } from "../components/ProgressBar";
 
 export function TalentPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const cc = s.getFocusedCharacter();
+  const cc = s.focused;
   const hero = cc.hero;
   const [error, setError] = useState<string | null>(null);
 

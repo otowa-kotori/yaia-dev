@@ -15,11 +15,10 @@ import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
 import { T, slotLabel } from "../text";
 import { Card } from "../components/Card";
-import { Badge } from "../components/Badge";
 
 export function CraftPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const cc = s.getFocusedCharacter();
+  const cc = s.focused;
   const hero = cc.hero;
   const [actionError, setActionError] = useState<string | null>(null);
   const content = getContent();

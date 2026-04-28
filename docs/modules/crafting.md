@@ -10,7 +10,7 @@
 
 - `ContentDb.recipes`：静态配方定义
 - `CharacterController.craftRecipe()`：运行时制作指令
-- `CraftingView`：配方浏览与一键制作 UI
+- `CraftPanel`：配方浏览与一键制作 UI
 
 ## 职责
 
@@ -18,12 +18,14 @@
 - **制作校验**：检查角色是否空闲、技能等级是否满足、背包材料是否足够、产物是否放得下。
 - **库存变更**：先扣除输入，再写入输出；装备产物仍通过实例工厂创建。
 - **成长反馈**：制作成功后发放对应技能 XP，并向 UI 发出 `crafted` / `inventoryChanged` 事件。
-- **界面展示**：`CraftingView` 负责展示配方、需求材料、产物和当前阻塞原因。
+- **界面展示**：`CraftPanel` 负责展示配方、需求材料、产物和当前阻塞原因。
+
 
 ## 当前实现
 
-- **制作入口**：UI 调用 `getFocusedCharacter().craftRecipe(recipeId)`。
+- **制作入口**：UI 默认调用 `session.focused.craftRecipe(recipeId)`；低层调用方仍可先取 `getFocusedCharacter()` 再执行。
 - **材料来源**：当前只读取角色**个人背包**，不读取共享背包。
+
 - **产物去向**：制作产物写回角色个人背包。
 - **首个配方**：`3 × 铜矿石 + 2 × 史莱姆胶 → 1 × 铜剑`，并奖励 `锻造` XP。
 - **制作时机**：当前实现为**同步立即完成**；角色正在战斗或采集时不可制作。
@@ -52,6 +54,8 @@
 ## 入口
 
 - `src/core/content/types.ts`（`RecipeDef`）
-- `src/core/session/index.ts`（`CharacterController.craftRecipe`）
-- `src/ui/CraftingView.tsx`
+- `src/core/session/gameplay/inventory.ts`（`craftRecipe` 实现）
+- `src/core/session/index.ts`（公开组装入口）
+- `src/ui/panels/CraftPanel.tsx`
+
 - `src/content/index.ts`（默认配方与锻造技能）

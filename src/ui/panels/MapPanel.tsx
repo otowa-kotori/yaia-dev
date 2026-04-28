@@ -19,7 +19,8 @@ export function MapPanel({
   onActivityStarted?: () => void;
 }) {
   const { store: s } = useStore(store);
-  const cc = s.getFocusedCharacter();
+  const cc = s.focused;
+
   const locationIds = s.listLocationIds();
   const currentLocationId = cc.hero.locationId;
   const content = getContent();
@@ -92,7 +93,8 @@ function EntryList({
   store: GameStore;
   onActivityStarted?: () => void;
 }) {
-  const cc = store.getFocusedCharacter();
+  const cc = store.focused;
+
   const content = getContent();
   const [pendingEntry, setPendingEntry] = useState<{
     mode: PartyDialogMode;

@@ -30,7 +30,7 @@ interface SelectionState {
 
 export function InventoryPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const cc = s.getFocusedCharacter();
+  const cc = s.focused;
   const hero = cc.hero;
   const [selected, setSelected] = useState<SelectionState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);

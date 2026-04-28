@@ -31,7 +31,7 @@ const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [
 
 export function StatsPanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const hero = s.getFocusedCharacter().hero;
+  const hero = s.focused.hero;
   if (!hero) {
     return (
       <div className="opacity-50 text-sm mt-3">

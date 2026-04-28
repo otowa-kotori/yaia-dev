@@ -1,12 +1,13 @@
 # session
 
-`GameSession` 是运行时编排层，采用 **GameSession + CharacterController** 的两层接口。
+`GameSession` 是运行时编排层，对外提供 **GameSession + CharacterController** 契约；其中 UI 面向当前角色时默认通过 `session.focused` 这层 lazy bridge 访问 `CharacterController`。
 
 ## 定位
 
 - **GameSession** 负责全局生命周期、tick 引擎、事件总线、随机数、共享状态与角色管理。
-- **CharacterController** 负责单角色的 gameplay 指令，UI 不需要反复传 `charId`。
-- **Store** 构建在 `GameSession` 之上，额外补充订阅、revision 和自动存档。
+- **CharacterController** 负责单角色的 gameplay 指令；底层调用方可以通过 `getCharacter(charId)` 或 `getFocusedCharacter()` 拿到它。
+- **Focused bridge**（`session.focused`）保留 `CharacterController` 的完整表面，但会在每次访问时懒解析当前 `focusedCharId`，供 UI 作为默认入口。
+- **Store** 构建在 `GameSession` 之上，额外补充订阅、revision 和自动存档，并把 `focused` 一并暴露给面板层。
 
 ## 职责
 
@@ -45,7 +46,7 @@
 - `upgradePurchased`：一次全局升级购买完成
 - `activityComplete`：活动自然结束
 
-`src/ui/store.ts` 监听这些事件以及 `gameLogAppended` 后触发订阅通知并安排持久化；Store 不再自己执行升级购买交易，只委托 `session.purchaseUpgrade()`。
+`src/ui/store.ts` 监听这些事件以及 `gameLogAppended` 后触发订阅通知并安排持久化；Store 不再自己执行升级购买交易，只委托 `session.purchaseUpgrade()`，并把 `session.focused` 作为面板层的默认角色入口。
 
 ## 边界
 
@@ -64,5 +65,11 @@
 
 ## 入口
 
-- `src/core/session/index.ts`
+- `src/core/session/index.ts`：公共工厂与最终组装器
+- `src/core/session/types.ts`：公开接口与内部运行时契约
+- `src/core/session/runtime.ts`：共享运行时、engine/bus/rng/stage 映射
+- `src/core/session/controller.ts`：`CharacterController` 薄桥接器
+- `src/core/session/bridge.ts`：`session.focused` 的懒解析 bridge
+- `src/core/session/lifecycle.ts`：`loadFromSave` / `resetToFresh` 生命周期编排
+- `src/core/session/gameplay/`：按领域拆分的角色、背包、成长、组队战斗、副本指令
 - `src/ui/store.ts`

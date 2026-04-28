@@ -9,7 +9,9 @@
 //
 // GameStore IS-A GameSession (type-level): `GameStore extends GameSession`.
 // Adding a new gameplay command = add a method on CharacterController; the
-// store picks it up for free via getFocusedCharacter().
+// store exposes it on `focused` automatically while getFocusedCharacter()
+// stays available for lower-level callers.
+
 
 import { TICK_MS } from "../core/infra/tick";
 import { computeCatchUpTicks, MAX_CATCHUP_TICKS } from "../core/infra/tick/catch-up";

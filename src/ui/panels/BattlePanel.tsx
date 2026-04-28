@@ -32,8 +32,9 @@ import { COMBAT_ZONE_ACTIVITY_RULES } from "../../core/world/activity/recovery";
 
 export function BattlePanel({ store }: { store: GameStore }) {
   const { store: s } = useStore(store);
-  const cc = s.getFocusedCharacter();
+  const cc = s.focused;
   const activity = cc.activity;
+
   const hero = cc.hero;
   const pendingLoot = cc.stageSession?.pendingLoot ?? [];
 
@@ -384,7 +385,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function Controls({ store }: { store: GameStore }) {
-  const cc = store.getFocusedCharacter();
+  const cc = store.focused;
+
   const running = cc.isRunning();
   if (!running) return null;
 
@@ -421,7 +423,8 @@ function GatherPanel({
 }
 
 function StageRoster({ store }: { store: GameStore }) {
-  const stage = store.getFocusedCharacter().stageSession;
+  const stage = store.focused.stageSession;
+
   if (!stage) return null;
   const roster = stage.spawnedActorIds
     .map((id) => store.state.actors.find((a) => a.id === id))
