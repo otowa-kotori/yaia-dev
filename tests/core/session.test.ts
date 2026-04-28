@@ -15,6 +15,8 @@ import {
   copperOre,
   copperSword,
   copperSwordRecipe,
+  knightHero,
+  rangerHero,
   slimeGel,
   smithingSkill,
   trainingSword,
@@ -374,8 +376,8 @@ describe("GameSession location flow", () => {
 
     const cc1 = session.getCharacter("hero.knight");
     const cc2 = session.getCharacter("hero.ranger");
-    expect(cc1.hero.name).toBe("骑士");
-    expect(cc2.hero.name).toBe("游侠");
+    expect(cc1.hero.name).toBe(knightHero.name);
+    expect(cc2.hero.name).toBe(rangerHero.name);
   });
 });
 

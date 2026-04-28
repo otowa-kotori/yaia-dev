@@ -246,9 +246,17 @@ describe("CombatActivity + Stage integration", () => {
 
     engine.register(activity);
 
+    // 每轮：搜索窗口 + 短暂战斗（上界 50 ticks）+ 死亡恢复。跑完 2 轮后才能断言
+    // combatWaveIndex >= 2，乘以 2 再加一倍余量保证稳定。
+    const ticksPerRound =
+      COMBAT_ZONE_ACTIVITY_RULES.searchTicks +
+      50 +
+      COMBAT_ZONE_ACTIVITY_RULES.deathRespawnTicks;
+    const maxTicks = ticksPerRound * 2 * 2;
+
     for (
       let i = 0;
-      i < 400
+      i < maxTicks
         && (!resolvedOutcomes.includes("enemies_won")
           || state.stages[STAGE_ID]!.combatWaveIndex < 2);
       i++

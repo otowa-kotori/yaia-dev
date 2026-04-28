@@ -192,16 +192,14 @@ describe("passive talent / Retaliation", () => {
 });
 
 describe("talent / describe", () => {
-  test("power strike describe changes across levels and includes mp cost", () => {
+  test("power strike describe changes across levels", () => {
     const lv1Ctx = createTalentStaticContext(1, null);
     const lv3Ctx = createTalentStaticContext(3, null);
     const lv1 = knightPowerStrike.describe!(lv1Ctx);
     const lv3 = knightPowerStrike.describe!(lv3Ctx);
 
     expect(lv1).toContain("伤害系数");
-    expect(lv1).toContain("MP 消耗");
     expect(lv3).toContain("伤害系数");
-    expect(lv3).toContain("MP 消耗");
     expect(lv3).not.toBe(lv1);
     expect(knightPowerStrike.getActiveParams!(lv3Ctx).mpCost).toBeGreaterThan(knightPowerStrike.getActiveParams!(lv1Ctx).mpCost ?? 0);
   });

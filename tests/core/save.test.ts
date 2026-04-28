@@ -6,7 +6,7 @@ import {
   serialize,
 } from "../../src/core/save";
 import { createEmptyState } from "../../src/core/infra/state";
-import { createBattle } from "../../src/core/combat/battle";
+import { createBattle, DEFAULT_BATTLE_SCHEDULER_MODE } from "../../src/core/combat/battle";
 import { INTENT, registerBuiltinIntents } from "../../src/core/combat/intent";
 import { resetContent } from "../../src/core/content";
 import { loadFixtureContent, makePlayer, makeSlime } from "../fixtures/content";
@@ -138,7 +138,7 @@ describe("save / serialize+deserialize", () => {
     const b = restored.battles[0]!;
     expect(b.id).toBe("battle.test");
     expect(b.participantIds).toEqual([hero.id, slime.id]);
-    expect(b.scheduler.kind).toBe("atb");
+    expect(b.scheduler.kind).toBe(DEFAULT_BATTLE_SCHEDULER_MODE);
     expect(b.intents[hero.id]).toBe(INTENT.RANDOM_ATTACK);
 
     // Enemy was restored with knownTalentIds re-populated from its MonsterDef.
