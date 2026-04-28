@@ -8,6 +8,11 @@
 // Most definitions are plain data. TalentDef and EffectDef may hold functions
 // (execute, grantEffects, reactions) — they live in ContentDb but are NOT
 // serialized. See docs/design/skill-system.md §2.4.
+//
+// 奖励与开销的通用类型定义在 src/core/economy/types.ts：
+//   RewardBundle — 统一奖励束（保底物品 + 摇号掉落 + 货币 + 经验）
+//   CostDef      — 统一开销（货币 + 堆叠材料）
+//   LootDistributionMode — loot 分配模式（预留扩展）
 
 import type { FormulaRef } from "../infra/formula/types";
 import type { ReactionHooks } from "../combat/reaction/types";
@@ -16,6 +21,7 @@ import type { GameEventBus } from "../infra/events";
 import type { Rng } from "../infra/rng";
 import type { GameState } from "../infra/state/types";
 import type { Character, PlayerCharacter } from "../entity/actor/types";
+import type { RewardBundle, CostDef, LootDistributionMode } from "../economy/types";
 
 
 // ---------- Branded ID types ----------
@@ -151,12 +157,9 @@ export interface MonsterDef {
   baseAttrs: Partial<Record<AttrId, number>>;
   /** Talents this monster can use. First entry is the default attack. */
   talents: TalentId[];
-  /** Loot table entries. */
-  drops: { itemId: ItemId; chance: number; minQty: number; maxQty: number }[];
-  /** XP rewarded on kill (to the character / party). */
-  xpReward: number;
-  /** Currencies rewarded on kill. key = currency id (e.g. "currency.gold"). */
-  currencyReward?: Record<string, number>;
+  /** Kill rewards: drops（概率）/ items（保底）/ currencies / charXp。
+   *  注意：drops 受爆率影响；items 为保底；分配规则见 economy/loot.ts。 */
+  rewards: RewardBundle;
   /** Which primary attributes contribute to PHYS_POTENCY (→ PATK).
    *  Installed as DynamicModifierProviders in rebuildCharacterDerived.
    *  Default: [{attr: ATTR.STR, ratio: 1.0}]. */
@@ -191,14 +194,10 @@ export interface EffectDef {
    *  the EffectInstance's state to produce the modifier list. Replaces static
    *  `modifiers`. Use for level-scaled passives, stance buffs, etc. */
   computeModifiers?: (state: Record<string, unknown>) => Modifier[];
-  /** Rewards granted on apply (instant) or per period (periodic). */
-  rewards?: {
-    items?: { itemId: ItemId; qty: number }[];
-    xp?: { skillId: SkillId; amount: number }[];
-    charXp?: number;
-    /** Currencies to add to GameState.currencies on reward. key = currency id. */
-    currencies?: Record<string, number>;
-  };
+  /** Rewards granted on apply (instant) or per period (periodic).
+   *  注意：EffectDef 的 rewards 走单人发放（grantRewards），不经过多人分配。
+   *  如需多人分配，由 CombatActivity / DungeonActivity 在外层调用 distributeRewards。 */
+  rewards?: RewardBundle;
   /** Formula used to compute numeric magnitude (e.g. damage). */
   formula?: FormulaRef;
   /** Whether magnitude is damage (subtract HP) or heal (add HP). */
@@ -402,19 +401,9 @@ export interface SkillDef {
 
 export type CombatZoneWaveSelection = "random";
 
-export interface WaveRewardDropDef {
-  itemId: ItemId;
-  chance: number;
-  minQty: number;
-  maxQty: number;
-}
-
-export interface WaveRewardDef {
-  /** Loot rolled once when the player clears the wave. */
-  drops?: WaveRewardDropDef[];
-  /** Fixed currencies granted on wave clear. */
-  currencies?: Record<string, number>;
-}
+/** 波次奖励 — RewardBundle 的别名，语义完全一致。
+ *  保留独立名称以便内容文件和日志代码可读性。 */
+export type WaveRewardDef = RewardBundle;
 
 export interface WaveDef {
   /** Exact enemy lineup for this wave. */
@@ -437,6 +426,8 @@ export interface CombatZoneDef {
   maxPartySize?: number;
   /** Which skill's XP this combat zone grants on kill (e.g. "skill.swordsmanship"). */
   combatSkill?: SkillId;
+  /** loot 分配模式，默认 "random_member"。预留未来共享背包扩展。 */
+  lootDistribution?: LootDistributionMode;
 }
 
 
@@ -499,10 +490,11 @@ export interface RecipeDef {
   requiredLevel: number;
   /** Ticks to produce one unit. */
   durationTicks: number;
-  inputs: { itemId: ItemId; qty: number }[];
-  outputs: { itemId: ItemId; qty: number }[];
-  /** XP gained per production. */
-  xpReward: number;
+  /** 制作开销：货币与材料。 */
+  cost: CostDef;
+  /** 制作奖励：产物（items 保底）与技能经验（xp）。
+   *  通常 drops 为空；items 表示确定产出。 */
+  rewards: RewardBundle;
 }
 
 // ---------- ResourceNodes (life skill harvest sites) ----------

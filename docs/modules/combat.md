@@ -105,8 +105,9 @@
 - 胜负由 `tickBattle` 判断
 - `combat` 自己不直接发放奖励，只负责发出战斗相关事件
 - `Battle` 会镜像发出：`battleActionStarted`、`battleActionResolved`、`battleActorDied`、`battleEnded`
-- `kill` 事件由监听者（如 `CombatActivity`）接收，再发放逐个怪物的击杀奖励
-- 波次奖励不属于 `Battle` 本身；它由 `CombatActivity` 在 `players_won` 后统一结算
+- `kill` 事件由监听者（如 `CombatActivity`）接收，再调用 `economy.distributeRewards` 发放 `MonsterDef.rewards`
+- 波次奖励不属于 `Battle` 本身；它由 `CombatActivity` 在 `players_won` 后调用 `distributeRewards` 统一结算
+- 多人分配规则（货币 / XP 平摊，道具随机给一人，摇号 drops 每人独立摇）由 `economy` 模块集中实现，不再内联在 activity 里
 
 ## 边界
 

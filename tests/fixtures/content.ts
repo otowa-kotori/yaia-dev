@@ -251,8 +251,7 @@ export const slimeMonster: MonsterDef = {
     [ATTR.SPEED]: 20,
   },
   talents: [basicAttackTalent.id],
-  drops: [],
-  xpReward: 10,
+  rewards: { charXp: 10 },
 };
 
 export const goblinMonster: MonsterDef = {
@@ -266,8 +265,7 @@ export const goblinMonster: MonsterDef = {
     [ATTR.SPEED]: 28,
   },
   talents: [basicAttackTalent.id],
-  drops: [],
-  xpReward: 15,
+  rewards: { charXp: 15 },
 };
 
 export const dropSlimeMonster: MonsterDef = {
@@ -281,9 +279,9 @@ export const dropSlimeMonster: MonsterDef = {
     [ATTR.SPEED]: 10,
   },
   talents: [basicAttackTalent.id],
-  drops: [{ itemId: "item.kill.drop" as ItemId, chance: 1, minQty: 1, maxQty: 1 }],
-
-  xpReward: 0,
+  rewards: {
+    drops: [{ itemId: "item.kill.drop" as ItemId, chance: 1, minQty: 1, maxQty: 1 }],
+  },
 };
 
 // ---------- Common fixture skills ----------

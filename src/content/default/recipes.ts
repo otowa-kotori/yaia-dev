@@ -9,12 +9,16 @@ export const copperSwordRecipe: RecipeDef = {
   skill: smithingSkill.id,
   requiredLevel: 1,
   durationTicks: 10,
-  inputs: [
-    { itemId: copperOre.id, qty: 3 },
-    { itemId: slimeGel.id, qty: 2 },
-  ],
-  outputs: [{ itemId: copperSword.id, qty: 1 }],
-  xpReward: 8,
+  cost: {
+    items: [
+      { itemId: copperOre.id, qty: 3 },
+      { itemId: slimeGel.id, qty: 2 },
+    ],
+  },
+  rewards: {
+    items: [{ itemId: copperSword.id, qty: 1 }],
+    xp: [{ skillId: smithingSkill.id, amount: 8 }],
+  },
 };
 
 const authoredRecipes = {

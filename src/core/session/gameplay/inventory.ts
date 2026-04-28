@@ -101,10 +101,10 @@ export function createInventoryGameplay(
     recipe: RecipeDef,
   ): void {
     const draft = cloneInventory(inventory);
-    for (const input of recipe.inputs) {
+    for (const input of recipe.cost.items ?? []) {
       removeItemFromInventoryByItemId(draft, input.itemId, input.qty);
     }
-    for (const output of recipe.outputs) {
+    for (const output of recipe.rewards.items ?? []) {
       const def = getItem(output.itemId);
       if (def.stackable) {
         const result = addStack(
@@ -349,7 +349,6 @@ export function createInventoryGameplay(
 
       const hero = cc.hero;
       const recipe = getRecipe(recipeId);
-      const skillDef = getSkill(recipe.skill);
       const currentLevel = getSkillLevel(hero, recipe.skill);
       if (currentLevel < recipe.requiredLevel) {
         throw new Error(
@@ -360,13 +359,18 @@ export function createInventoryGameplay(
       const inventory = getInventoryByOwner(runtime, hero.id);
       simulateRecipeInventoryChange(hero.id, inventory, recipe);
 
-      for (const input of recipe.inputs) {
+      for (const input of recipe.cost.items ?? []) {
         removeItemFromInventoryByItemId(inventory, input.itemId, input.qty);
       }
-      for (const output of recipe.outputs) {
+      for (const output of recipe.rewards.items ?? []) {
         addItemToInventory(runtime, hero.id, output.itemId, output.qty);
       }
-      grantSkillXp(hero, skillDef, recipe.xpReward, { bus: runtime.bus });
+      if (recipe.rewards.xp?.length) {
+        for (const { skillId, amount } of recipe.rewards.xp) {
+          const rewardSkillDef = getSkill(skillId);
+          grantSkillXp(hero, rewardSkillDef, amount, { bus: runtime.bus });
+        }
+      }
 
       runtime.bus.emit("inventoryChanged", {
         charId: hero.id,

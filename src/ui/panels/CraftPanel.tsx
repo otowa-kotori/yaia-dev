@@ -54,7 +54,7 @@ export function CraftPanel({ store }: { store: GameStore }) {
         const skillLevel = hero.skills[recipe.skill]?.level ?? 1;
         const blockedByActivity = cc.isRunning();
         const blockedBySkill = skillLevel < recipe.requiredLevel;
-        const blockedByMaterials = recipe.inputs.some(
+        const blockedByMaterials = (recipe.cost.items ?? []).some(
           (input) => countItemInInventory(inventory, input.itemId) < input.qty,
         );
         const disabled = blockedByActivity || blockedBySkill || blockedByMaterials;
@@ -107,6 +107,7 @@ function RecipeCard({
 }) {
   const content = getContent();
   const skillName = content.skills[recipe.skill]?.name ?? recipe.skill;
+  const xpAmount = recipe.rewards.xp?.find((e) => e.skillId === recipe.skill)?.amount ?? 0;
 
   return (
     <Card className="p-3">
@@ -114,7 +115,7 @@ function RecipeCard({
         <div>
           <div className="text-base font-bold text-white mb-1">{recipe.name}</div>
           <div className="text-xs opacity-58">
-            {skillName} Lv {recipe.requiredLevel}+ · {recipe.durationTicks} tick · +{recipe.xpReward} XP
+            {skillName} Lv {recipe.requiredLevel}+ · {recipe.durationTicks} tick{xpAmount > 0 ? ` · +${xpAmount} XP` : ""}
           </div>
         </div>
         <button
@@ -130,7 +131,7 @@ function RecipeCard({
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5">
         <RecipeGroup title={T.materialsRequired}>
-          {recipe.inputs.map((input) => {
+          {(recipe.cost.items ?? []).map((input) => {
             const held = countItemInInventory(inventory, input.itemId);
             const ok = held >= input.qty;
             return (
@@ -145,7 +146,7 @@ function RecipeCard({
         </RecipeGroup>
 
         <RecipeGroup title={T.outputResults}>
-          {recipe.outputs.map((output) => {
+          {(recipe.rewards.items ?? []).map((output) => {
             const item = content.items[output.itemId];
             const label = item?.slot ? `${item.name}（${slotLabel(item.slot)}）` : item?.name ?? output.itemId;
             return (

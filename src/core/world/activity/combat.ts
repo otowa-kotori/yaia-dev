@@ -45,8 +45,6 @@ import {
 } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
 import { getMonster, getCombatZone } from "../../content/registry";
-import type { EffectDef, ItemId } from "../../content/types";
-
 import type { GameState } from "../../infra/state/types";
 import {
   createBattle,
@@ -59,7 +57,6 @@ import {
 
 
 import { buildBattleIntents } from "../../combat/intent";
-import { applyEffect, type EffectContext } from "../../behavior/effect";
 import {
   beginCombatWaveSearch,
   lookupWave,
@@ -77,6 +74,7 @@ import {
   ensureRecoveryEffect,
   restoreActorToFull,
 } from "./recovery";
+import { distributeRewards } from "../../economy/loot";
 
 export const ACTIVITY_COMBAT_KIND = "activity.combat";
 
@@ -404,65 +402,19 @@ function onParticipantKilled(
 
   const enemy = victim as Enemy;
   const def = getMonster(enemy.defId);
-  const xpReward = def.xpReward;
+  const bundle = def.rewards;
 
-  const hasXp = xpReward > 0;
-  const hasCurrency =
-    def.currencyReward && Object.keys(def.currencyReward).length > 0;
-  const hasDrops = def.drops.length > 0;
-  if (!hasXp && !hasCurrency && !hasDrops) return;
+  const heroes = getPartyHeroes(activity, ctx.state);
+  const living = heroes.filter((h) => h.currentHp > 0);
+  if (living.length === 0) return;
 
-  const ectx: EffectContext = {
+  distributeRewards(bundle, living, {
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
     currentTick: ctx.currentTick,
-    currencyChangeSource: "kill_reward",
-  };
-
-  // Grant kill rewards split across living party members.
-
-  // XP and currency are divided by headcount; each hero gets their share.
-  const heroes = getPartyHeroes(activity, ctx.state);
-  const living = heroes.filter((h) => h.currentHp > 0);
-  if (living.length === 0) return;
-  const share = living.length;
-
-  const splitXp = hasXp ? Math.max(1, Math.floor(xpReward / share)) : undefined;
-  const splitCurrencies = hasCurrency
-    ? Object.fromEntries(
-        Object.entries(def.currencyReward!).map(([k, v]) => [k, Math.max(1, Math.floor(v / share))]),
-      )
-    : undefined;
-
-  const splitEffect = {
-    id: `effect.runtime.kill_reward.${enemy.defId}` as never,
-    kind: "instant" as const,
-    rewards: {
-      charXp: splitXp,
-      currencies: splitCurrencies,
-    },
-  };
-
-  for (const hero of living) {
-    applyEffect(splitEffect, victim, hero, ectx);
-  }
-
-  const items: { itemId: ItemId; qty: number }[] = [];
-  for (const drop of def.drops) {
-    if (!ctx.rng.chance(drop.chance)) continue;
-    const qty = ctx.rng.int(drop.minQty, drop.maxQty);
-    if (qty > 0) items.push({ itemId: drop.itemId, qty });
-  }
-  if (items.length > 0) {
-    const lucky = ctx.rng.pick(living);
-    const itemEffect: EffectDef = {
-      id: `effect.runtime.kill_reward.items.${enemy.defId}` as never,
-      kind: "instant",
-      rewards: { items },
-    };
-    applyEffect(itemEffect, victim, lucky, ectx);
-  }
+    source: { kind: "kill", id: enemy.defId },
+  });
 }
 
 
@@ -484,49 +436,13 @@ function grantWaveRewards(
   const living = heroes.filter((h) => h.currentHp > 0);
   if (living.length === 0) return;
 
-  const ectx: EffectContext = {
+  distributeRewards(wave.rewards, living, {
     state: ctx.state,
     bus: ctx.bus,
     rng: ctx.rng,
     currentTick: ctx.currentTick,
-    currencyChangeSource: "wave_reward",
-  };
-
-  // Items: roll once, give to a random living hero.
-
-  const items: { itemId: ItemId; qty: number }[] = [];
-  for (const drop of wave.rewards.drops ?? []) {
-    if (!ctx.rng.chance(drop.chance)) continue;
-    const qty = ctx.rng.int(drop.minQty, drop.maxQty);
-    if (qty > 0) items.push({ itemId: drop.itemId, qty });
-  }
-  if (items.length > 0) {
-    const lucky = ctx.rng.pick(living);
-    const itemEffect: EffectDef = {
-      id: `effect.runtime.wave_reward.items.${session.locationId}.${activeWave.waveIndex}` as never,
-      kind: "instant",
-      rewards: { items },
-    };
-    applyEffect(itemEffect, lucky, lucky, ectx);
-  }
-
-  // Currencies: split evenly across living heroes.
-  const rewards = wave.rewards;
-  const hasCurrencies = !!rewards.currencies && Object.keys(rewards.currencies).length > 0;
-  if (hasCurrencies) {
-    const share = living.length;
-    const splitCurrencies = Object.fromEntries(
-      Object.entries(rewards.currencies!).map(([k, v]) => [k, Math.max(1, Math.floor(v / share))]),
-    );
-    const currencyEffect: EffectDef = {
-      id: `effect.runtime.wave_reward.currency.${session.locationId}.${activeWave.waveIndex}` as never,
-      kind: "instant",
-      rewards: { currencies: splitCurrencies },
-    };
-    for (const hero of living) {
-      applyEffect(currencyEffect, hero, hero, ectx);
-    }
-  }
+    source: { kind: "wave", id: activeWave.combatZoneId },
+  });
 }
 
 // ---------- Helpers ----------

@@ -8,7 +8,7 @@
 
 ## 职责
 
-- **定义运行时内容类型**：`src/core/content/types.ts` 定义 `ItemDef`、`MonsterDef`、`EffectDef`、`SkillDef`、`TalentDef`、`RecipeDef`、`ResourceNodeDef`、`UpgradeDef`、`AttrDef`、`HeroConfig`、`StartingConfig`
+- **定义运行时内容类型**：`src/core/content/types.ts` 定义 `ItemDef`、`MonsterDef`、`EffectDef`、`SkillDef`、`TalentDef`、`RecipeDef`、`ResourceNodeDef`、`UpgradeDef`、`AttrDef`、`HeroConfig`、`StartingConfig`。其中 `MonsterDef.rewards`、`RecipeDef.cost`、`RecipeDef.rewards` 等使用 `economy` 模块定义的 `RewardBundle` / `CostDef` 类型；`WaveRewardDef` 是 `RewardBundle` 的别名。
 - **维护作者层内容模块**：`src/content/default/` 按内容域拆分默认内容，例如 `items/`、`monsters/`、`heroes.ts`、`combat-zones.ts`
 - **编译作者层继承**：`src/content/compiler/inheritance.ts` 负责解析单父 `extends`、检测循环、展开抽象模板，并按“对象递归合并 / 数组整体替换”规则产出最终定义
 - **提供默认内容单例**：`DEFAULT_CONTENT` / `getDefaultContent()` / `buildDefaultContent()` 都返回同一个模块级默认内容对象，避免 UI 反复重建整包内容

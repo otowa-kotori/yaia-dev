@@ -15,8 +15,9 @@ export const monsterTemplateDrafts = {
       [ATTR.SPEED]: 40,
     },
     talents: [basicAttackTalent.id],
-    drops: [],
-    xpReward: 1,
-    currencyReward: { [CURRENCY_GOLD]: 0 },
+    rewards: {
+      charXp: 1,
+      currencies: { [CURRENCY_GOLD]: 0 },
+    },
   },
 } satisfies Record<string, AuthoringDef<MonsterDef>>;

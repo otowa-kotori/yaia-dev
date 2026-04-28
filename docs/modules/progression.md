@@ -104,6 +104,7 @@ totalTp = (level - 1) * 3
 - 提供 `getUpgradeCost`、`canAffordUpgrade`、`isUpgradeMaxed` 查询函数
 - 不负责通知和落盘；这些副作用由 store 在外层包装
 - 成本曲线走 `formula` 的 `exp_curve_v1`，modifier 堆叠走 `attribute`
+- 升级开销为动态 formula-based 成本，当前不直接走 `economy.CostDef`（formula 动态计算与 CostDef 静态结构不兼容）；但通用的可负担检查逻辑可参考 `economy.checkCost` 的模式
 
 ## 边界
 

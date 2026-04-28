@@ -337,7 +337,7 @@ describe("GameSession location flow", () => {
 
     expect(countItem(inventory, copperOre.id)).toBe(0);
     expect(countItem(inventory, slimeGel.id)).toBe(0);
-    expect(hero.skills[smithingSkill.id]?.xp).toBe(copperSwordRecipe.xpReward);
+    expect(hero.skills[smithingSkill.id]?.xp).toBe(copperSwordRecipe.rewards.xp?.[0]?.amount ?? 0);
     expect(
       inventory.slots.some(
         (slot) => slot?.kind === "gear" && slot.instance.itemId === copperSword.id,

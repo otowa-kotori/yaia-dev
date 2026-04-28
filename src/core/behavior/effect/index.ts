@@ -11,8 +11,8 @@
 // "effect:<effectId>:<sourceActorId>:<appliedAtTick>" so that on expiration we
 // can remove the right stack via removeModifiersBySource.
 
-import type { EffectDef, ItemId } from "../../content/types";
-import { getEffect, getItem, getSkill } from "../../content/registry";
+import type { EffectDef } from "../../content/types";
+import { getEffect, getSkill } from "../../content/registry";
 import { evalFormula, type FormulaContext } from "../../infra/formula";
 import type { Rng } from "../../infra/rng";
 import type { CurrencyChangeSource, GameEventBus } from "../../infra/events";
@@ -22,11 +22,7 @@ import type { Character, PlayerCharacter } from "../../entity/actor";
 import { getAttr, isPlayer, rebuildCharacterDerived } from "../../entity/actor";
 import { addModifiers, ATTR, removeModifiersBySource } from "../../entity/attribute";
 import { grantCharacterXp, grantSkillXp } from "../../growth/leveling";
-import { addStack, addGear } from "../../inventory";
-
-import { getInventoryStackLimit } from "../../inventory/stack-limit";
-import { createGearInstance } from "../../item";
-import type { PendingLootEntry } from "../../world/stage/types";
+import { grantItemToCharacter } from "../../economy/reward";
 
 export interface EffectContext {
   state: GameState;
@@ -161,7 +157,7 @@ function applyRewards(
 
   if (rewards.items?.length) {
     for (const { itemId, qty } of rewards.items) {
-      addItemToInventory(ctx, charId, itemId, qty);
+      grantItemToCharacter(charId, itemId, qty, ctx);
       ctx.bus.emit("loot", {
         charId,
         itemId,
@@ -171,7 +167,6 @@ function applyRewards(
       });
     }
   }
-
 
   if (rewards.xp?.length) {
     for (const { skillId, amount } of rewards.xp) {
@@ -204,98 +199,6 @@ function applyRewards(
       });
     }
   }
-}
-
-
-// Dispatch into the per-item-class inventory API:
-//   - stackable items merge into an existing stack or claim a new slot.
-//   - non-stackable (gear) items run through createGearInstance(qty times) so
-//     every copy gets its own instanceId + rolled affixes. The same rng used
-//     everywhere for gameplay randomness feeds the roll, keeping save-state
-//     determinism intact.
-//
-// Overflow policy: when the hero's inventory is full, excess items are routed
-// to the stage's pendingLoot queue (if the hero is in a stage). Items that
-// cannot be placed anywhere are silently dropped — this should not happen in
-// practice because a stage is always active when rewards flow.
-//
-// Policy: the per-char inventory must already exist (created on hero spawn /
-// after load). No silent fallback; missing inventory is a bug — throw.
-function addItemToInventory(
-  ctx: EffectContext,
-  charId: string,
-  itemId: ItemId,
-  qty: number,
-): void {
-  const inv = ctx.state.inventories[charId];
-  if (!inv) {
-    throw new Error(
-      `addItemToInventory: no inventory for charId "${charId}". Hero spawn should have created one.`,
-    );
-  }
-  const def = getItem(itemId);
-  if (def.stackable) {
-    const stackLimit = getInventoryStackLimit(ctx.state, charId);
-    const res = addStack(inv, itemId, qty, stackLimit);
-    if (!res.ok) {
-      pushToPendingLoot(ctx, charId, { kind: "stack", itemId, qty: res.remaining });
-    }
-    return;
-  }
-  for (let i = 0; i < qty; i++) {
-    const gear = createGearInstance(itemId, { rng: ctx.rng });
-    const res = addGear(inv, gear);
-    if (!res.ok) {
-      pushToPendingLoot(ctx, charId, { kind: "gear", instance: gear });
-    }
-  }
-}
-
-/** Route overflow items to the stage's pendingLoot for the given character.
- *  Stack entries are merged into an existing pending entry with the same itemId
- *  (pendingLoot has no stack limit — unlimited stacking).
- *  If no stage is found (shouldn't happen during normal gameplay), the item
- *  is lost — but we avoid crashing so the game loop stays alive. */
-function pushToPendingLoot(
-  ctx: EffectContext,
-  charId: string,
-  entry: PendingLootEntry,
-): void {
-  const hero = ctx.state.actors.find((a) => a.id === charId);
-  if (!hero || !isPlayer(hero)) return;
-  const stageId = hero.stageId;
-  if (!stageId) return;
-  const session = ctx.state.stages[stageId];
-  if (!session) return;
-
-
-  if (entry.kind === "stack") {
-    const existing = session.pendingLoot.find(
-      (e): e is PendingLootEntry & { kind: "stack" } =>
-        e.kind === "stack" && e.itemId === entry.itemId,
-    );
-    if (existing) {
-      existing.qty += entry.qty;
-    } else {
-      session.pendingLoot.push(entry);
-    }
-    ctx.bus.emit("pendingLootOverflowed", {
-      charId,
-      stageId,
-      itemId: entry.itemId,
-      qty: entry.qty,
-    });
-  } else {
-    session.pendingLoot.push(entry);
-    ctx.bus.emit("pendingLootOverflowed", {
-      charId,
-      stageId,
-      itemId: entry.instance.itemId,
-      qty: 1,
-    });
-  }
-
-  ctx.bus.emit("pendingLootChanged", { charId, stageId });
 }
 
 

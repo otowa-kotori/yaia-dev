@@ -14,7 +14,7 @@ import {
 } from "../items";
 
 // 早期怪物数值规则：
-// - 同级怪物的成长强于玩家“裸升级”成长，因为玩家的大头强度来自装备与技能；
+// - 同级怪物的成长强于玩家"裸升级"成长，因为玩家的大头强度来自装备与技能；
 // - SPEED 只在少数教学怪上做明显偏移，其余大多保持在 40 左右；
 // - 现阶段先只配数值，不给怪物配置主动技能机制。
 export const earlyGameMonsterDrafts = {
@@ -30,9 +30,11 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 0,
       [ATTR.SPEED]: 40,
     },
-    drops: [{ itemId: slimeGel.id, chance: 0.2, minQty: 1, maxQty: 1 }],
-    xpReward: 1,
-    currencyReward: { [CURRENCY_GOLD]: 1 },
+    rewards: {
+      drops: [{ itemId: slimeGel.id, chance: 0.2, minQty: 1, maxQty: 1 }],
+      charXp: 1,
+      currencies: { [CURRENCY_GOLD]: 1 },
+    },
   },
   "monster.slime": {
     id: "monster.slime" as MonsterId,
@@ -46,9 +48,11 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 2,
       [ATTR.SPEED]: 40,
     },
-    drops: [{ itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 }],
-    xpReward: 5,
-    currencyReward: { [CURRENCY_GOLD]: 2 },
+    rewards: {
+      drops: [{ itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 }],
+      charXp: 5,
+      currencies: { [CURRENCY_GOLD]: 2 },
+    },
   },
   "monster.wild_boar": {
     id: "monster.wild_boar" as MonsterId,
@@ -62,9 +66,11 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 4,
       [ATTR.SPEED]: 40,
     },
-    drops: [{ itemId: beastHide.id, chance: 1, minQty: 1, maxQty: 1 }],
-    xpReward: 10,
-    currencyReward: { [CURRENCY_GOLD]: 3 },
+    rewards: {
+      drops: [{ itemId: beastHide.id, chance: 1, minQty: 1, maxQty: 1 }],
+      charXp: 10,
+      currencies: { [CURRENCY_GOLD]: 3 },
+    },
   },
   "monster.horned_rabbit": {
     id: "monster.horned_rabbit" as MonsterId,
@@ -78,9 +84,11 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 0,
       [ATTR.SPEED]: 55,
     },
-    drops: [{ itemId: beastHide.id, chance: 1, minQty: 1, maxQty: 1 }],
-    xpReward: 10,
-    currencyReward: { [CURRENCY_GOLD]: 3 },
+    rewards: {
+      drops: [{ itemId: beastHide.id, chance: 1, minQty: 1, maxQty: 1 }],
+      charXp: 10,
+      currencies: { [CURRENCY_GOLD]: 3 },
+    },
   },
   "monster.big_slime": {
     id: "monster.big_slime" as MonsterId,
@@ -94,8 +102,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 5,
       [ATTR.SPEED]: 40,
     },
-    xpReward: 18,
-    currencyReward: { [CURRENCY_GOLD]: 4 },
+    rewards: {
+      charXp: 18,
+      currencies: { [CURRENCY_GOLD]: 4 },
+    },
   },
   "monster.poison_mushroom": {
     id: "monster.poison_mushroom" as MonsterId,
@@ -109,8 +119,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 4,
       [ATTR.SPEED]: 40,
     },
-    xpReward: 32,
-    currencyReward: { [CURRENCY_GOLD]: 5 },
+    rewards: {
+      charXp: 32,
+      currencies: { [CURRENCY_GOLD]: 5 },
+    },
   },
   "monster.dusk_wolf": {
     id: "monster.dusk_wolf" as MonsterId,
@@ -124,9 +136,11 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 6,
       [ATTR.SPEED]: 40,
     },
-    drops: [{ itemId: twilightEssence.id, chance: 1, minQty: 1, maxQty: 1 }],
-    xpReward: 42,
-    currencyReward: { [CURRENCY_GOLD]: 6 },
+    rewards: {
+      drops: [{ itemId: twilightEssence.id, chance: 1, minQty: 1, maxQty: 1 }],
+      charXp: 42,
+      currencies: { [CURRENCY_GOLD]: 6 },
+    },
   },
   "monster.skeleton_soldier": {
     id: "monster.skeleton_soldier" as MonsterId,
@@ -141,8 +155,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.MRES]: 0.05,
       [ATTR.SPEED]: 40,
     },
-    xpReward: 55,
-    currencyReward: { [CURRENCY_GOLD]: 7 },
+    rewards: {
+      charXp: 55,
+      currencies: { [CURRENCY_GOLD]: 7 },
+    },
   },
   "monster.dire_wolf": {
     id: "monster.dire_wolf" as MonsterId,
@@ -156,8 +172,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 8,
       [ATTR.SPEED]: 45,
     },
-    xpReward: 64,
-    currencyReward: { [CURRENCY_GOLD]: 9 },
+    rewards: {
+      charXp: 64,
+      currencies: { [CURRENCY_GOLD]: 9 },
+    },
   },
   "monster.cave_bat": {
     id: "monster.cave_bat" as MonsterId,
@@ -171,8 +189,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 6,
       [ATTR.SPEED]: 50,
     },
-    xpReward: 68,
-    currencyReward: { [CURRENCY_GOLD]: 8 },
+    rewards: {
+      charXp: 68,
+      currencies: { [CURRENCY_GOLD]: 8 },
+    },
   },
   "monster.shadow_fiend": {
     id: "monster.shadow_fiend" as MonsterId,
@@ -187,8 +207,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.MRES]: 0.55,
       [ATTR.SPEED]: 40,
     },
-    xpReward: 78,
-    currencyReward: { [CURRENCY_GOLD]: 11 },
+    rewards: {
+      charXp: 78,
+      currencies: { [CURRENCY_GOLD]: 11 },
+    },
   },
   "monster.ore_crab": {
     id: "monster.ore_crab" as MonsterId,
@@ -203,8 +225,10 @@ export const earlyGameMonsterDrafts = {
       [ATTR.MRES]: 0.15,
       [ATTR.SPEED]: 35,
     },
-    xpReward: 85,
-    currencyReward: { [CURRENCY_GOLD]: 12 },
+    rewards: {
+      charXp: 85,
+      currencies: { [CURRENCY_GOLD]: 12 },
+    },
   },
   "monster.blackfang_alpha": {
     id: "monster.blackfang_alpha" as MonsterId,
@@ -219,9 +243,11 @@ export const earlyGameMonsterDrafts = {
       [ATTR.MRES]: 0.2,
       [ATTR.SPEED]: 45,
     },
-    drops: [{ itemId: bossCore.id, chance: 1, minQty: 1, maxQty: 1 }],
-    xpReward: 120,
-    currencyReward: { [CURRENCY_GOLD]: 20 },
+    rewards: {
+      drops: [{ itemId: bossCore.id, chance: 1, minQty: 1, maxQty: 1 }],
+      charXp: 120,
+      currencies: { [CURRENCY_GOLD]: 20 },
+    },
   },
   "monster.training_dummy": {
     id: "monster.training_dummy" as MonsterId,
@@ -234,7 +260,9 @@ export const earlyGameMonsterDrafts = {
       [ATTR.PDEF]: 0,
       [ATTR.SPEED]: 40,
     },
-    xpReward: 1,
-    currencyReward: { [CURRENCY_GOLD]: 0 },
+    rewards: {
+      charXp: 1,
+      currencies: { [CURRENCY_GOLD]: 0 },
+    },
   },
 } satisfies Record<string, AuthoringDef<MonsterDef>>;
