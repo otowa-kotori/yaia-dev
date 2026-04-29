@@ -155,9 +155,12 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   // Tick-driven UI pulse: every logic tick, bump revision and let the
   // autosave throttler decide whether to persist.
+  // During catch-up, skip per-tick notify — the slice() loop does a single
+  // notify() after each batch instead, so the progress bar can actually render.
   session.engine.register({
     id: "__ui_notifier",
     tick: () => {
+      if (catchUpRunning) return;
       notify();
       schedulePersist();
     },
@@ -208,10 +211,6 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
   let hiddenAtMs: number | null = null;
   let hiddenAtTick: number | null = null;
 
-  /** How many ticks to run per animation-frame slice. 10k ≈ 16 min game-time,
-   *  typically runs in ~5-15 ms — well within a single frame budget. */
-  const SLICE_SIZE = 10_000;
-
   /** If catch-up is ≤ this many ticks, run synchronously without UI overlay.
    *  3 000 ticks = 5 min of game-time at 10 Hz — imperceptible to the player. */
   const INSTANT_THRESHOLD = 3_000;
@@ -248,7 +247,13 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       return;
     }
 
-    // Large catch-ups: chunked via rAF with progress events.
+    // Large catch-ups: chunked with progress events.
+    // Uses setTimeout(0) instead of rAF so each slice is a separate macrotask,
+    // guaranteeing the browser gets a paint opportunity between slices regardless
+    // of how long step() takes (complex save state can push a 10k-tick slice
+    // well past a 16ms frame budget, causing rAF to chain without ever painting).
+    // Within each macrotask we run as many ticks as fit within a 14ms wall-time
+    // budget, so fast environments still make good progress per slice.
     catchUpRunning = true;
     catchUpCancelRequested = false;
     let done = 0;
@@ -259,6 +264,7 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
       if (catchUpCancelRequested) {
         catchUpRunning = false;
         persistSoon();
+        notify();
         bus.emit("catchUpApplied", {
           elapsedMs,
           appliedTicks: done,
@@ -267,9 +273,18 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
         });
         return;
       }
-      const batch = Math.min(SLICE_SIZE, totalTicks - done);
-      session.engine.step(batch);
-      done += batch;
+
+      const frameStart = performance.now();
+      let batchDone = 0;
+      while (done + batchDone < totalTicks) {
+        const chunk = Math.min(500, totalTicks - done - batchDone);
+        session.engine.step(chunk);
+        batchDone += chunk;
+        if (performance.now() - frameStart >= 14) break;
+      }
+
+      done += batchDone;
+      notify();
       bus.emit("catchUpProgress", { done, total: totalTicks });
 
       if (done >= totalTicks) {
@@ -281,11 +296,11 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
           wasCapped,
         });
       } else {
-        requestAnimationFrame(slice);
+        setTimeout(slice, 0);
       }
     }
 
-    requestAnimationFrame(slice);
+    setTimeout(slice, 0);
   }
 
   /** Compute and apply catch-up ticks from a wall-clock + logic-tick baseline.

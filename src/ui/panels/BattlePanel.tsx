@@ -15,7 +15,7 @@ import {
 } from "../../core/world/activity";
 import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
-import { T, fmt } from "../text";
+import { T, fmt, fmtTicks } from "../text";
 import { PendingLootPanel } from "../components/PendingLootPanel";
 import { ActorCard } from "../components/ActorCard";
 import { Card } from "../components/Card";
@@ -416,7 +416,7 @@ function GatherPanel({
     <Card className="mt-2 p-2">
       <div className="font-semibold">{def?.name ?? activity.nodeId}</div>
       <div className="text-xs opacity-70 mt-1">
-        swings: {activity.swingsCompleted} · progress {activity.progressTicks} tick(s)
+        swings: {activity.swingsCompleted} · progress {fmtTicks(activity.progressTicks)}
       </div>
     </Card>
   );
@@ -517,7 +517,10 @@ function buildCombatPhaseProgress(
       value,
       max,
       label: T.searchProgress,
-      valueLabel: fmt(T.progressTicks, { done: value, total: max }),
+      valueLabel: fmt(T.progressSecs, {
+        done: fmtTicks(value),
+        total: fmtTicks(max),
+      }),
     };
   }
   if (activity.phase === "deathRecovering") {
@@ -527,7 +530,10 @@ function buildCombatPhaseProgress(
       value,
       max,
       label: T.respawnProgress,
-      valueLabel: fmt(T.progressTicks, { done: value, total: max }),
+      valueLabel: fmt(T.progressSecs, {
+        done: fmtTicks(value),
+        total: fmtTicks(max),
+      }),
     };
   }
   return null;

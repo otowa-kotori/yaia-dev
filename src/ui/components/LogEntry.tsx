@@ -17,7 +17,6 @@ export function LogEntry({ entry }: { entry: GameLogEntry }) {
   const catClass = CATEGORY_COLORS[entry.category] ?? "text-gray-500";
   return (
     <div className="text-[11px] leading-relaxed">
-      <span className="text-gray-600">[{entry.tick}]</span>{" "}
       <span className={catClass}>[{entry.category}]</span>{" "}
       <span className="text-gray-400">{entry.text}</span>
     </div>

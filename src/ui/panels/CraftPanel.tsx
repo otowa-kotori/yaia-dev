@@ -13,7 +13,7 @@ import type { RecipeDef } from "../../core/content/types";
 import type { Inventory, InventorySlot } from "../../core/inventory";
 import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
-import { T, slotLabel } from "../text";
+import { T, slotLabel, fmtTicks } from "../text";
 import { Card } from "../components/Card";
 
 export function CraftPanel({ store }: { store: GameStore }) {
@@ -115,7 +115,7 @@ function RecipeCard({
         <div>
           <div className="text-base font-bold text-white mb-1">{recipe.name}</div>
           <div className="text-xs opacity-58">
-            {skillName} Lv {recipe.requiredLevel}+ · {recipe.durationTicks} tick{xpAmount > 0 ? ` · +${xpAmount} XP` : ""}
+            {skillName} Lv {recipe.requiredLevel}+ · {fmtTicks(recipe.durationTicks)}{xpAmount > 0 ? ` · +${xpAmount} XP` : ""}
           </div>
         </div>
         <button

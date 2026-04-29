@@ -64,7 +64,7 @@ export const T = {
   searchingEnemies: "搜索敌人中（休整）...",
   searchProgress: "搜怪进度",
   respawnProgress: "复活进度",
-  progressTicks: "{done} / {total} tick",
+  progressSecs: "{done} / {total}",
 
   inCombat: "战斗中",
   stopped: "已停止",
@@ -248,8 +248,6 @@ export const T = {
   catchUpInProgress: "正在恢复离线进度…",
   catchUpProgressLabel: "{done} / {total}",
   catchUpCancel: "取消",
-  catchUpDone: "离线追帧完成，已补跑 {ticks} tick",
-  catchUpCancelled: "追帧已取消，已跑 {ticks} tick",
 
   // ── Debug panel ──
   debugTools: "调试工具",
@@ -359,4 +357,38 @@ export function currencyName(id: string): string {
 
 export function fmt(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? `{${key}}`));
+}
+
+// ── Time formatting ──
+// Converts a raw second count to a human-readable Chinese duration string.
+// Used wherever UI needs to show durations derived from tick counts.
+//
+//   fmtSecs(0)     → "0秒"
+//   fmtSecs(45)    → "45秒"
+//   fmtSecs(90)    → "1分30秒"
+//   fmtSecs(3600)  → "1小时0分0秒"
+//   fmtSecs(7384)  → "2小时3分4秒"
+
+export function fmtSecs(totalSeconds: number): string {
+  const s = Math.floor(totalSeconds);
+  if (s < 60) return `${s}秒`;
+  if (s < 3600) {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}分${secs}秒`;
+  }
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  return `${hours}小时${mins}分${secs}秒`;
+}
+
+// Converts a tick count to a formatted duration string.
+// LOGIC_TICKS_PER_SECOND is 10 (100 ms per tick).
+//   fmtTicks(0)   → "0秒"
+//   fmtTicks(50)  → "5秒"
+//   fmtTicks(600) → "1分0秒"
+
+export function fmtTicks(ticks: number, ticksPerSecond = 10): string {
+  return fmtSecs(ticks / ticksPerSecond);
 }

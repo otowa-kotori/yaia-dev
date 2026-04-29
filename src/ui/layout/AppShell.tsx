@@ -13,7 +13,7 @@ import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { ENABLE_DEBUG_PANEL } from "../../env";
-import { T, fmt } from "../text";
+import { T, fmt, fmtTicks } from "../text";
 import { UnlockGate } from "../components/UnlockGate";
 import { TAB_UNLOCK_IDS } from "../unlocks";
 
@@ -118,7 +118,6 @@ export function AppShell({ store }: { store: GameStore }) {
       {/* ── Main column ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <TopBar store={store} />
-        <CatchUpOverlay store={store} />
 
         <div className="flex-1 flex overflow-hidden min-w-0">
           {/* ── Content area ── */}
@@ -180,6 +179,9 @@ export function AppShell({ store }: { store: GameStore }) {
           }}
         />
       )}
+
+      {/* ── Catch-up overlay (全屏，z-50，挡住一切交互) ── */}
+      <CatchUpOverlay store={store} />
     </div>
   );
 }
@@ -242,65 +244,51 @@ function LogSidebar({ store }: { store: GameStore }) {
 }
 
 // ── Catch-up overlay ──
+// 仅在追帧进行中时显示；完成后静默消失，无任何提示。
+// fixed inset-0 确保遮挡整个界面，阻断所有交互。
 
 function CatchUpOverlay({ store }: { store: GameStore }) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<string | null>(null);
 
   useEffect(() => {
     const offProgress = store.bus.on("catchUpProgress", (p) => {
       setProgress({ done: p.done, total: p.total });
-      setResult(null);
     });
-    const offApplied = store.bus.on("catchUpApplied", (e) => {
+    const offApplied = store.bus.on("catchUpApplied", () => {
       setProgress(null);
-      if (e.appliedTicks > 0) {
-        if (e.cancelled) {
-          setResult(fmt(T.catchUpCancelled, { ticks: e.appliedTicks }));
-        } else {
-          setResult(fmt(T.catchUpDone, { ticks: e.appliedTicks }));
-        }
-        const timer = setTimeout(() => setResult(null), 4000);
-        return () => clearTimeout(timer);
-      }
     });
     return () => { offProgress(); offApplied(); };
   }, [store.bus]);
 
-  if (!progress && !result) return null;
-  const pct = progress ? progress.done / progress.total : 1;
+  if (!progress) return null;
+  const pct = progress.done / progress.total;
 
   return (
-    <div className="mx-3 mt-2 p-2 bg-blue-950/40 rounded-md border border-blue-800/40">
-      {progress && (
-        <>
-          <div className="flex justify-between text-[12px] mb-1">
-            <span className="text-blue-300">{T.catchUpInProgress}</span>
-            <span className="tabular-nums opacity-70">
-              {fmt(T.catchUpProgressLabel, { done: progress.done, total: progress.total })}
-              {" \u00b7 "}{Math.round(pct * 100)}%
-            </span>
-          </div>
-          <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 rounded-full transition-[width] duration-75 ease-linear"
-              style={{ width: `${pct * 100}%` }}
-            />
-          </div>
-          <div className="mt-1 flex justify-end">
-            <button
-              type="button"
-              onClick={() => store.cancelCatchUp()}
-              className="px-2 py-0.5 text-[11px] rounded border border-red-900/60 text-red-400 cursor-pointer hover:bg-red-950/30"
-            >
-              {T.catchUpCancel}
-            </button>
-          </div>
-        </>
-      )}
-      {!progress && result && (
-        <div className="text-[12px] text-green-400">{result}</div>
-      )}
+    <div className="fixed inset-0 z-50 bg-black/75 flex flex-col items-center justify-center">
+      <div className="w-72 sm:w-80 p-6 bg-gray-900 rounded-xl border border-blue-800/50 shadow-2xl">
+        <p className="text-sm text-blue-300 mb-3 text-center">{T.catchUpInProgress}</p>
+        <div className="h-2 bg-black/40 rounded-full overflow-hidden mb-2">
+          <div
+            className="h-full bg-blue-500 rounded-full transition-[width] duration-75 ease-linear"
+            style={{ width: `${pct * 100}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[12px] opacity-60 mb-4">
+          <span className="tabular-nums">
+            {fmt(T.catchUpProgressLabel, { done: fmtTicks(progress.done), total: fmtTicks(progress.total) })}
+          </span>
+          <span className="tabular-nums">{Math.round(pct * 100)}%</span>
+        </div>
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => store.cancelCatchUp()}
+            className="px-3 py-1 text-[12px] rounded border border-red-900/60 text-red-400 cursor-pointer hover:bg-red-950/30"
+          >
+            {T.catchUpCancel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
