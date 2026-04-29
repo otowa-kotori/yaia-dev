@@ -11,8 +11,10 @@ import {
   attrDefs,
   basicAttackTalent,
   basicStrikeEffect,
+  guaranteedHitNoCritEffect,
   makePlayer,
   makeSlime,
+  applyGuaranteedHitNoCrit,
 } from "../../fixtures/content";
 import { setContent, emptyContentDb } from "../../../src/core/content";
 import type { ContentDb } from "../../../src/core/content/types";
@@ -44,6 +46,7 @@ function knightTestContent(): ContentDb {
     attributes: attrDefs,
     effects: {
       [basicStrikeEffect.id]: basicStrikeEffect,
+      [guaranteedHitNoCritEffect.id]: guaranteedHitNoCritEffect,
       [knightFortitudeEffect.id]: knightFortitudeEffect,
       [knightRetaliationEffect.id]: knightRetaliationEffect,
       [knightWarcryEffect.id]: knightWarcryEffect,
@@ -255,6 +258,8 @@ describe("knight integration / retaliation reaction", () => {
     };
 
     const measureRetaliationDamage = (enemy: Character, knight: Character, seed: number) => {
+      applyGuaranteedHitNoCrit(knight);
+      applyGuaranteedHitNoCrit(enemy);
       const ctx: AbilityContext = {
         state: createEmptyState(seed, SAVE_VERSION),
         bus: createGameEventBus(),
@@ -301,6 +306,7 @@ describe("knight integration / basic attack reaction dispatch", () => {
   test("basic attack (effects[] fallback) triggers after_damage_taken on target", () => {
     const pc = makePlayer({ id: "hero.knight", talents: [basicAttackTalent.id as string], atk: 20 });
     pc.side = "player";
+    applyGuaranteedHitNoCrit(pc);
 
     const enemy = makeSlime("e1");
 

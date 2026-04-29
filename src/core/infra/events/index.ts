@@ -64,8 +64,8 @@ export type GameEvents = {
     | { kind: "character"; charId: string; level: number }
     | { kind: "skill"; charId: string; skillId: string; level: number };
   kill: { attackerId: string; victimId: string };
-  damage: { attackerId: string; targetId: string; amount: number };
-  heal: { sourceId: string; targetId: string; amount: number };
+  damage: { attackerId: string; targetId: string; amount: number; isMiss?: boolean; isCrit?: boolean };
+  heal: { sourceId: string; targetId: string; amount: number; isCrit?: boolean };
   loot: {
     charId: string;
     itemId: string;

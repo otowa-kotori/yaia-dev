@@ -30,6 +30,7 @@ import {
   rebuildDepGraph,
   type AttrSet,
 } from "../attribute";
+import { UNIVERSAL_SCALING } from "../attribute/scaling";
 import type {
   Character,
   Enemy,
@@ -117,9 +118,14 @@ export interface CreateEnemyOptions {
 }
 
 export function createEnemy(opts: CreateEnemyOptions): Enemy {
+  // 人怪同模：base + growth × (level - 1)，和玩家 grantCharacterXp 完全同构。
   const base: AttrSet["base"] = {};
+  const levelFactor = Math.max(0, opts.def.level - 1);
   for (const [k, v] of Object.entries(opts.def.baseAttrs)) {
-    if (typeof v === "number") base[k] = v;
+    if (typeof v === "number") {
+      const growthDelta = opts.def.growth?.[k as AttrId] ?? 0;
+      base[k] = v + growthDelta * levelFactor;
+    }
   }
   const e: Enemy = {
     id: opts.instanceId,
@@ -284,6 +290,22 @@ export function rebuildCharacterDerived(
         }],
       }, attrDefs);
     }
+  }
+
+  // 4.5) 全角色通用属性派生（CON→HP, DEX→HIT/EVA/CRIT_RATE/CRIT_RES）。
+  //      配置统一声明在 UNIVERSAL_SCALING 中，对所有 Character 无条件安装。
+  for (const entry of UNIVERSAL_SCALING) {
+    addDynamicProvider(c.attrs, {
+      sourceId: entry.sourceId,
+      targetAttrs: [entry.targetAttr],
+      dependsOn: [entry.sourceAttr],
+      compute: (get) => [{
+        stat: entry.targetAttr,
+        op: "flat" as const,
+        value: get(entry.sourceAttr) * entry.ratio,
+        sourceId: entry.sourceId,
+      }],
+    }, attrDefs);
   }
 
   // 5) Runtime talent list.

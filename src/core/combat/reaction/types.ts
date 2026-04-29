@@ -60,6 +60,20 @@ export type ReactionEvent =
       talentId: string;
       targets: Character[];
     }
+  | {
+      /** Dispatched on the attacker before the hit roll. Reactions can
+       *  override result.rate to guarantee hit (1.0) or miss (0). */
+      kind: "resolve_hit_rate";
+      target: Character;
+      result: { rate: number };
+    }
+  | {
+      /** Dispatched on the attacker before the crit roll. Reactions can
+       *  override result.rate to guarantee crit (1.0) or suppress (0). */
+      kind: "resolve_crit_rate";
+      target: Character;
+      result: { rate: number };
+    }
   // ---- broadcast: dispatch to all allies / all participants ----
   | {
       kind: "on_ally_damaged";

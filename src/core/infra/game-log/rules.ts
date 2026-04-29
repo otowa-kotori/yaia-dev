@@ -152,10 +152,16 @@ export const gameLogRules = {
     const charId =
       findPlayerCharIdForActor(ctx.state, payload.attackerId) ??
       findPlayerCharIdForActor(ctx.state, payload.targetId);
+
+    if (payload.isMiss) {
+      return entry(ctx, "battle", `${attacker} 对 ${target} 的攻击未命中。`, charId);
+    }
+
+    const prefix = payload.isCrit ? "暴击！" : "";
     return entry(
       ctx,
       "battle",
-      `${attacker} 对 ${target} 造成了 ${payload.amount} 点伤害。`,
+      `${prefix}${attacker} 对 ${target} 造成了 ${payload.amount} 点伤害。`,
       charId,
     );
   },

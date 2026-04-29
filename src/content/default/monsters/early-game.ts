@@ -13,22 +13,29 @@ import {
   wolfKingFang,
 } from "../items";
 
-// 早期怪物数值规则：
-// - 同级怪物的成长强于玩家"裸升级"成长，因为玩家的大头强度来自装备与技能；
-// - SPEED 只在少数教学怪上做明显偏移，其余大多保持在 40 左右；
-// - 现阶段先只配数值，不给怪物配置主动技能机制。
+// 早期怪物：人怪同模，属性 = baseAttrs + growth × (level - 1)。
+// 标准怪物不覆写任何属性（全部继承 monster.template.base 的基线值）。
+// 特化怪物只覆写偏离标准的维度。
 export const earlyGameMonsterDrafts = {
   "monster.green_slime": {
     id: "monster.green_slime" as MonsterId,
     extends: "monster.template.base",
     name: "绿史莱姆",
     level: 1,
+    // 教学怪：比标准弱
     baseAttrs: {
-      [ATTR.MAX_HP]: 20,
-      [ATTR.STR]: 1,
+      [ATTR.MAX_HP]: 30,
+      [ATTR.STR]: 5,
+      [ATTR.DEX]: 5,
+      [ATTR.CON]: 5,
+      [ATTR.WEAPON_ATK]: 2,
+    },
+    growth: {
+      [ATTR.MAX_HP]: 10,
+      [ATTR.STR]: 2,
+      [ATTR.DEX]: 2,
+      [ATTR.CON]: 2,
       [ATTR.WEAPON_ATK]: 1,
-      [ATTR.PDEF]: 0,
-      [ATTR.SPEED]: 40,
     },
     rewards: {
       drops: [{ itemId: slimeGel.id, chance: 0.2, minQty: 1, maxQty: 1 }],
@@ -41,13 +48,7 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "史莱姆",
     level: 3,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 80,
-      [ATTR.STR]: 5,
-      [ATTR.WEAPON_ATK]: 4,
-      [ATTR.PDEF]: 2,
-      [ATTR.SPEED]: 40,
-    },
+    // 标准怪：不覆写属性，全走基线
     rewards: {
       drops: [{ itemId: slimeGel.id, chance: 1, minQty: 1, maxQty: 1 }],
       charXp: 5,
@@ -59,13 +60,9 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "野猪",
     level: 5,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 120,
-      [ATTR.STR]: 10,
-      [ATTR.WEAPON_ATK]: 4,
-      [ATTR.PDEF]: 4,
-      [ATTR.SPEED]: 40,
-    },
+    // 攻击高
+    baseAttrs: { [ATTR.STR]: 20, [ATTR.WEAPON_ATK]: 8 },
+    growth: { [ATTR.STR]: 7 },
     rewards: {
       drops: [{ itemId: beastHide.id, chance: 1, minQty: 1, maxQty: 1 }],
       charXp: 10,
@@ -77,13 +74,9 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "角兔",
     level: 7,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 80,
-      [ATTR.STR]: 16,
-      [ATTR.WEAPON_ATK]: 4,
-      [ATTR.PDEF]: 0,
-      [ATTR.SPEED]: 55,
-    },
+    // 速度快、DEX 高，HP 偏低
+    baseAttrs: { [ATTR.SPEED]: 55, [ATTR.DEX]: 20, [ATTR.MAX_HP]: 50 },
+    growth: { [ATTR.DEX]: 6 },
     rewards: {
       drops: [{ itemId: beastHide.id, chance: 1, minQty: 1, maxQty: 1 }],
       charXp: 10,
@@ -95,14 +88,11 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "大史莱姆",
     level: 8,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 180,
-      [ATTR.STR]: 10,
-      [ATTR.WEAPON_ATK]: 6,
-      [ATTR.PDEF]: 5,
-      [ATTR.SPEED]: 40,
-    },
+    // 血量高（CON 高 + 额外 HP），攻击略强
+    baseAttrs: { [ATTR.CON]: 25, [ATTR.MAX_HP]: 120, [ATTR.STR]: 18 },
+    growth: { [ATTR.CON]: 6, [ATTR.MAX_HP]: 35 },
     rewards: {
+      drops: [{ itemId: slimeGel.id, chance: 1, minQty: 2, maxQty: 3 }],
       charXp: 18,
       currencies: { [CURRENCY_GOLD]: 4 },
     },
@@ -112,13 +102,7 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "毒蘑菇",
     level: 9,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 168,
-      [ATTR.STR]: 18,
-      [ATTR.WEAPON_ATK]: 8,
-      [ATTR.PDEF]: 4,
-      [ATTR.SPEED]: 40,
-    },
+    // 标准偏弱攻击，特色靠 DoT（未来实现）
     rewards: {
       charXp: 32,
       currencies: { [CURRENCY_GOLD]: 5 },
@@ -129,13 +113,9 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "暮色狼",
     level: 12,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 236,
-      [ATTR.STR]: 24,
-      [ATTR.WEAPON_ATK]: 11,
-      [ATTR.PDEF]: 6,
-      [ATTR.SPEED]: 40,
-    },
+    // 标准怪，稍偏攻击
+    baseAttrs: { [ATTR.STR]: 18, [ATTR.SPEED]: 45 },
+    growth: { [ATTR.STR]: 6 },
     rewards: {
       drops: [{ itemId: twilightEssence.id, chance: 1, minQty: 1, maxQty: 1 }],
       charXp: 42,
@@ -147,15 +127,11 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "骸骨兵",
     level: 15,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 310,
-      [ATTR.STR]: 26,
-      [ATTR.WEAPON_ATK]: 12,
-      [ATTR.PDEF]: 52,
-      [ATTR.MRES]: 0.05,
-      [ATTR.SPEED]: 40,
-    },
+    // 高甲特化
+    baseAttrs: { [ATTR.PDEF]: 30, [ATTR.MRES]: 0.05 },
+    growth: { [ATTR.PDEF]: 5 },
     rewards: {
+      drops: [{ itemId: boneDust.id, chance: 1, minQty: 1, maxQty: 1 }],
       charXp: 55,
       currencies: { [CURRENCY_GOLD]: 7 },
     },
@@ -165,14 +141,11 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "巨狼",
     level: 16,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 380,
-      [ATTR.STR]: 32,
-      [ATTR.WEAPON_ATK]: 14,
-      [ATTR.PDEF]: 8,
-      [ATTR.SPEED]: 45,
-    },
+    // 副本精英：全面偏强
+    baseAttrs: { [ATTR.STR]: 22, [ATTR.CON]: 20, [ATTR.MAX_HP]: 100, [ATTR.SPEED]: 45 },
+    growth: { [ATTR.STR]: 7, [ATTR.CON]: 5 },
     rewards: {
+      drops: [{ itemId: wolfKingFang.id, chance: 0.5, minQty: 1, maxQty: 1 }],
       charXp: 64,
       currencies: { [CURRENCY_GOLD]: 9 },
     },
@@ -182,14 +155,11 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "洞穴蝙蝠",
     level: 19,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 220,
-      [ATTR.STR]: 20,
-      [ATTR.WEAPON_ATK]: 11,
-      [ATTR.PDEF]: 6,
-      [ATTR.SPEED]: 50,
-    },
+    // 弱但快、DEX 高（多只群体压制）
+    baseAttrs: { [ATTR.MAX_HP]: 50, [ATTR.DEX]: 22, [ATTR.SPEED]: 50 },
+    growth: { [ATTR.DEX]: 6 },
     rewards: {
+      drops: [{ itemId: carapace.id, chance: 0.5, minQty: 1, maxQty: 1 }],
       charXp: 68,
       currencies: { [CURRENCY_GOLD]: 8 },
     },
@@ -199,15 +169,11 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "暗影魔",
     level: 22,
-    baseAttrs: {
-      [ATTR.MAX_HP]: 392,
-      [ATTR.STR]: 38,
-      [ATTR.WEAPON_ATK]: 17,
-      [ATTR.PDEF]: 10,
-      [ATTR.MRES]: 0.55,
-      [ATTR.SPEED]: 40,
-    },
+    // 高魔抗 + 高攻
+    baseAttrs: { [ATTR.MRES]: 0.55, [ATTR.STR]: 22, [ATTR.WEAPON_ATK]: 10 },
+    growth: { [ATTR.STR]: 7 },
     rewards: {
+      drops: [{ itemId: shadowCore.id, chance: 0.5, minQty: 1, maxQty: 1 }],
       charXp: 78,
       currencies: { [CURRENCY_GOLD]: 11 },
     },
@@ -217,15 +183,18 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "矿石蟹",
     level: 24,
+    // 极高甲 + 肉 + 慢
     baseAttrs: {
-      [ATTR.MAX_HP]: 540,
-      [ATTR.STR]: 30,
-      [ATTR.WEAPON_ATK]: 14,
-      [ATTR.PDEF]: 88,
-      [ATTR.MRES]: 0.15,
+      [ATTR.PDEF]: 40,
+      [ATTR.CON]: 25,
+      [ATTR.MAX_HP]: 120,
+      [ATTR.DEX]: 8,
       [ATTR.SPEED]: 35,
+      [ATTR.MRES]: 0.15,
     },
+    growth: { [ATTR.PDEF]: 6, [ATTR.CON]: 6 },
     rewards: {
+      drops: [{ itemId: carapace.id, chance: 1, minQty: 1, maxQty: 1 }],
       charXp: 85,
       currencies: { [CURRENCY_GOLD]: 12 },
     },
@@ -235,13 +204,23 @@ export const earlyGameMonsterDrafts = {
     extends: "monster.template.base",
     name: "黑牙兽王",
     level: 27,
+    // Boss：全面强化
     baseAttrs: {
-      [ATTR.MAX_HP]: 980,
-      [ATTR.STR]: 48,
-      [ATTR.WEAPON_ATK]: 20,
-      [ATTR.PDEF]: 36,
+      [ATTR.MAX_HP]: 200,
+      [ATTR.STR]: 25,
+      [ATTR.DEX]: 20,
+      [ATTR.CON]: 30,
+      [ATTR.WEAPON_ATK]: 12,
+      [ATTR.PDEF]: 15,
       [ATTR.MRES]: 0.2,
       [ATTR.SPEED]: 45,
+    },
+    growth: {
+      [ATTR.MAX_HP]: 40,
+      [ATTR.STR]: 8,
+      [ATTR.CON]: 6,
+      [ATTR.WEAPON_ATK]: 3,
+      [ATTR.PDEF]: 3,
     },
     rewards: {
       drops: [{ itemId: bossCore.id, chance: 1, minQty: 1, maxQty: 1 }],
@@ -253,13 +232,15 @@ export const earlyGameMonsterDrafts = {
     id: "monster.training_dummy" as MonsterId,
     extends: "monster.template.base",
     name: "训练木人",
+    level: 1,
     baseAttrs: {
       [ATTR.MAX_HP]: 99999,
       [ATTR.STR]: 1,
+      [ATTR.DEX]: 1,
+      [ATTR.CON]: 1,
       [ATTR.WEAPON_ATK]: 1,
-      [ATTR.PDEF]: 0,
-      [ATTR.SPEED]: 40,
     },
+    growth: {},
     rewards: {
       charXp: 1,
       currencies: { [CURRENCY_GOLD]: 0 },

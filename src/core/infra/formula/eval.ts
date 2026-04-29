@@ -75,6 +75,30 @@ export function evalFormula(ref: FormulaRef, ctx: FormulaContext): number {
       const skillMul = ref.skillMul ?? 1;
       return Math.floor(matk * skillMul * (1 - mres));
     }
+
+    case "hit_rate_v1": {
+      // hitRate = HIT / (HIT + EVA × k_hit), clamp [min, max]
+      const hit  = varOrZero(vars, "hit");
+      const eva  = varOrZero(vars, "eva");
+      const kHit = ref.k_hit ?? (1 / 3);
+      const min  = ref.clampMin ?? 0.3;
+      const max  = ref.clampMax ?? 0.95;
+      if (hit <= 0) return min;
+      const raw = hit / (hit + eva * kHit);
+      return Math.max(min, Math.min(max, raw));
+    }
+
+    case "crit_rate_v1": {
+      // critChance = CRIT_RATE / (CRIT_RATE + CRIT_RES × k_crit), clamp [min, max]
+      const critRate = varOrZero(vars, "crit_rate");
+      const critRes  = varOrZero(vars, "crit_res");
+      const kCrit = ref.k_crit ?? 4;
+      const min   = ref.clampMin ?? 0;
+      const max   = ref.clampMax ?? 0.75;
+      if (critRate <= 0) return min;
+      const raw = critRate / (critRate + critRes * kCrit);
+      return Math.max(min, Math.min(max, raw));
+    }
   }
 }
 

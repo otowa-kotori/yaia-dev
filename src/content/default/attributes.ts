@@ -3,12 +3,14 @@ import type { AttrDef } from "../../core/content";
 import { DEFAULT_CHAR_STACK_LIMIT } from "../../core/inventory";
 import { compileInheritedCollection, type AuthoringDef } from "../compiler/inheritance";
 
-// 属性分层（完整说明见 docs/design/plan-combat-damage-and-growth.md §1）：
-//   一级属性: STR / DEX / INT
+// 属性分层（完整说明见 docs/design/combat-formula.md §1）：
+//   一级属性: STR / DEX / INT / CON
 //   聚合层:   PHYS_POTENCY / MAG_POTENCY（DynamicModifierProvider 汇聚一级属性）
 //   面板层:   PATK / MATK（computeBase 派生，依赖武器值 + 聚合层）
 //   防御层:   PDEF（装备 flat）/ MRES（百分比减伤 0–0.8）
 //   武器层:   WEAPON_ATK / WEAPON_MATK（装备 flat，赤手默认 1 / 0）
+//   命中层:   HIT / EVA（DEX DynamicModifierProvider 驱动）
+//   暴击层:   CRIT_RATE / CRIT_RES（DEX DynamicModifierProvider 驱动）
 //
 // k=0.3 是 sqrt 缩放系数，决定主属性对面板攻击力的放大幅度。
 // 全部设计验证见 docs/design/combat-formula.md。
@@ -55,9 +57,9 @@ const authoredAttributes = {
     clampMin: 0,
   },
   [ATTR.STR]: { id: ATTR.STR, name: "力量", defaultBase: 5, integer: true },
-
   [ATTR.DEX]: { id: ATTR.DEX, name: "敏捷", defaultBase: 5, integer: true },
   [ATTR.INT]: { id: ATTR.INT, name: "智力", defaultBase: 5, integer: true },
+  [ATTR.CON]: { id: ATTR.CON, name: "体质", defaultBase: 5, integer: true },
   [ATTR.SPEED]: {
     id: ATTR.SPEED,
     name: "速度",
@@ -125,12 +127,35 @@ const authoredAttributes = {
     clampMin: 0,
     clampMax: 0.8,
   },
+  [ATTR.HIT]: {
+    id: ATTR.HIT,
+    name: "命中",
+    defaultBase: 0,
+    integer: true,
+    clampMin: 0,
+  },
+  [ATTR.EVA]: {
+    id: ATTR.EVA,
+    name: "闪避",
+    defaultBase: 0,
+    integer: true,
+    clampMin: 0,
+  },
   [ATTR.CRIT_RATE]: {
     id: ATTR.CRIT_RATE,
-    name: "暴击率",
+    name: "暴击",
     defaultBase: 0,
+    integer: true,
     clampMin: 0,
-    clampMax: 1,
+    // 现在是原始评级值（由 DEX 通过 UNIVERSAL_SCALING 驱动），
+    // 实际暴击概率由 crit_rate_v1 公式在结算时计算。
+  },
+  [ATTR.CRIT_RES]: {
+    id: ATTR.CRIT_RES,
+    name: "暴击抗性",
+    defaultBase: 0,
+    integer: true,
+    clampMin: 0,
   },
   [ATTR.CRIT_MULT]: {
     id: ATTR.CRIT_MULT,

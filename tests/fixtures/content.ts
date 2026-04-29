@@ -30,6 +30,7 @@ import { SAVE_VERSION } from "../../src/core/save/migrations";
 import {
   createEnemy,
   createPlayerCharacter,
+  type Character,
   type Enemy,
   type PlayerCharacter,
 } from "../../src/core/entity/actor";
@@ -118,6 +119,25 @@ export const basicStrikeEffect: EffectDef = {
   kind: "instant",
   magnitudeMode: "damage",
   formula: { kind: "phys_damage_v1" },
+};
+
+/**
+ * 测试专用 effect：安装后必中、不暴击。
+ *
+ * 通过 resolve_hit_rate / resolve_crit_rate reaction 覆写命中和暴击率。
+ * 用法：在测试中 push 到角色 activeEffects 中（remainingActions: -1）。
+ */
+export const guaranteedHitNoCritEffect: EffectDef = {
+  id: "effect.test.guaranteed_hit_no_crit" as EffectId,
+  kind: "duration",
+  reactions: {
+    resolve_hit_rate: (_owner, event, _state, _ctx) => {
+      (event as { result: { rate: number } }).result.rate = 1.0;
+    },
+    resolve_crit_rate: (_owner, event, _state, _ctx) => {
+      (event as { result: { rate: number } }).result.rate = 0;
+    },
+  },
 };
 
 export const burnDotEffect: EffectDef = {
@@ -446,6 +466,7 @@ export function loadFixtureContent(): ContentDb {
     ),
     effects: {
       [basicStrikeEffect.id]: basicStrikeEffect,
+      [guaranteedHitNoCritEffect.id]: guaranteedHitNoCritEffect,
       [burnDotEffect.id]: burnDotEffect,
       [shieldBuffEffect.id]: shieldBuffEffect,
       [phaseRecoveryEffect.id]: phaseRecoveryEffect,
@@ -557,4 +578,20 @@ export function makePlayer(overrides: {
   if (overrides.hp !== undefined) pc.currentHp = overrides.hp;
   if (overrides.mp !== undefined) pc.currentMp = overrides.mp;
   return pc;
+}
+
+/**
+ * Install the guaranteed-hit-no-crit effect on a character.
+ * Use this in tests where hit/crit randomness would make assertions flaky.
+ * Works through the reaction system (resolve_hit_rate → 1.0, resolve_crit_rate → 0).
+ */
+export function applyGuaranteedHitNoCrit(character: Character): void {
+  character.activeEffects.push({
+    effectId: guaranteedHitNoCritEffect.id as string,
+    sourceId: "test:guaranteed_hit_no_crit",
+    sourceActorId: character.id,
+    remainingActions: -1,
+    stacks: 1,
+    state: {},
+  });
 }

@@ -33,6 +33,7 @@ import type { Character, PlayerCharacter } from "../../entity/actor";
 import { isAlive, isPlayer, getAttr } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
 import { evalFormula, type FormulaContext } from "../../infra/formula";
+import type { FormulaRef } from "../../infra/formula/types";
 import { dispatchReaction, type ReactionContext, type DamageType } from "../../combat/reaction";
 import type { Battle } from "../../combat/battle/battle";
 import { applyEffect, type EffectContext } from "../effect";
@@ -44,6 +45,9 @@ export interface AbilityContext {
   currentTick: number;
   /** Battle participants — needed for CastContext.aliveEnemies/aliveAllies. */
   participants?: readonly Character[];
+  /** Reaction dispatch context. Created inside tryUseTalent after validation;
+   *  available to all downstream damage/hit/crit functions. */
+  reactionCtx?: ReactionContext;
 }
 
 export type CastFailureReason =
@@ -134,6 +138,7 @@ export function tryUseTalent(
   if (def.execute) {
     const participants = ctx.participants ?? [];
     const reactionCtx = createReactionContext(ctx, participants);
+    ctx.reactionCtx = reactionCtx;
     const execCtx = buildTalentExecutionContext(
       level,
       caster,
@@ -152,6 +157,7 @@ export function tryUseTalent(
   // (e.g. after_damage_taken for Retaliation).
   const participants = ctx.participants ?? [];
   const reactionCtx = createReactionContext(ctx, participants);
+  ctx.reactionCtx = reactionCtx;
   const effectCtx: EffectContext = {
     state: ctx.state,
     bus: ctx.bus,
@@ -168,6 +174,18 @@ export function tryUseTalent(
 
       // Dispatch before_damage_taken so reactions can modify damage.
       if (effect.magnitudeMode === "damage" && effect.formula) {
+        // Hit check — miss skips this effect entirely.
+        if (!rollHit(caster, target, ctx)) {
+          ctx.bus.emit("damage", {
+            attackerId: caster.id,
+            targetId: target.id,
+            amount: 0,
+            isMiss: true,
+            isCrit: false,
+          });
+          continue;
+        }
+
         const fctx = buildFormulaContext(caster, target);
         const rawDamage = Math.max(0, Math.floor(evalFormula(effect.formula, fctx)));
         const result = { finalDamage: rawDamage };
@@ -181,15 +199,28 @@ export function tryUseTalent(
           result,
         }, reactionCtx);
 
-        const finalDamage = Math.max(0, result.finalDamage);
+        let finalDamage = Math.max(0, result.finalDamage);
+
+        // Crit check (after armor, after before_damage_taken).
+        let isCrit = false;
+        if (finalDamage > 0) {
+          const crit = rollCrit(caster, target, ctx);
+          if (crit.isCrit) {
+            isCrit = true;
+            finalDamage = Math.floor(finalDamage * crit.mult);
+          }
+        }
+
         if (finalDamage > 0) {
           target.currentHp = Math.max(0, target.currentHp - finalDamage);
-          ctx.bus.emit("damage", {
-            attackerId: caster.id,
-            targetId: target.id,
-            amount: finalDamage,
-          });
         }
+        ctx.bus.emit("damage", {
+          attackerId: caster.id,
+          targetId: target.id,
+          amount: finalDamage,
+          isMiss: false,
+          isCrit,
+        });
 
         dispatchReaction(target, {
           kind: "after_damage_taken",
@@ -287,6 +318,86 @@ function safeGetEffect(id: string) {
 
 // ---------- TalentExecutionContext + damage pipeline ----------
 
+// ---------- Hit / Crit helpers ----------
+
+/**
+ * Roll a hit check using the hit_rate_v1 formula.
+ * Returns true if the attack hits, false if it misses.
+ * Dispatches resolve_hit_rate reaction on the attacker, allowing effects
+ * to override the rate (e.g. "guaranteed hit" buff).
+ */
+function rollHit(
+  attacker: Character,
+  defender: Character,
+  ctx: AbilityContext,
+): boolean {
+  const baseRate = evalFormula(
+    { kind: "hit_rate_v1" } as FormulaRef,
+    { vars: { hit: getAttr(attacker, ATTR.HIT), eva: getAttr(defender, ATTR.EVA) } },
+  );
+  const result = { rate: baseRate };
+  if (ctx.reactionCtx) {
+    dispatchReaction(attacker, { kind: "resolve_hit_rate", target: defender, result }, ctx.reactionCtx);
+  }
+  return ctx.rng.next() < result.rate;
+}
+
+/**
+ * Roll a crit check using the crit_rate_v1 formula.
+ * Returns { isCrit, mult } where mult is CRIT_MULT if crit, 1 otherwise.
+ * Dispatches resolve_crit_rate reaction on the attacker, allowing effects
+ * to override the rate (e.g. "guaranteed crit" buff or "suppress crit" debuff).
+ */
+function rollCrit(
+  attacker: Character,
+  defender: Character,
+  ctx: AbilityContext,
+): { isCrit: boolean; mult: number } {
+  const baseRate = evalFormula(
+    { kind: "crit_rate_v1" } as FormulaRef,
+    { vars: {
+      crit_rate: getAttr(attacker, ATTR.CRIT_RATE),
+      crit_res: getAttr(defender, ATTR.CRIT_RES),
+    }},
+  );
+  const result = { rate: baseRate };
+  if (ctx.reactionCtx) {
+    dispatchReaction(attacker, { kind: "resolve_crit_rate", target: defender, result }, ctx.reactionCtx);
+  }
+  if (ctx.rng.next() < result.rate) {
+    return { isCrit: true, mult: getAttr(attacker, ATTR.CRIT_MULT) };
+  }
+  return { isCrit: false, mult: 1 };
+}
+
+/**
+ * Heal with crit check. Healing does not check hit, but can crit.
+ * Uses the same crit_rate_v1 formula as damage.
+ */
+export function healWithCrit(
+  source: Character,
+  target: Character,
+  baseAmount: number,
+  ctx: AbilityContext,
+): number {
+  let amount = Math.max(0, Math.floor(baseAmount));
+  const { isCrit, mult } = rollCrit(source, target, ctx);
+  if (isCrit) {
+    amount = Math.floor(amount * mult);
+  }
+  const maxHp = getAttr(target, ATTR.MAX_HP);
+  const actual = Math.min(amount, maxHp - target.currentHp);
+  if (actual > 0) {
+    target.currentHp += actual;
+  }
+  ctx.bus.emit("heal", {
+    sourceId: source.id,
+    targetId: target.id,
+    amount: actual,
+    isCrit,
+  });
+  return actual;
+}
 
 function buildFormulaContext(
   source: Character,
@@ -317,12 +428,24 @@ function dealDamageWithReactions(
   ctx: AbilityContext,
   reactionCtx: ReactionContext,
 ): number {
-  // 1. Calculate raw damage via formula.
+  // 1. Hit check — miss skips all damage and reactions.
+  if (!rollHit(caster, target, ctx)) {
+    ctx.bus.emit("damage", {
+      attackerId: caster.id,
+      targetId: target.id,
+      amount: 0,
+      isMiss: true,
+      isCrit: false,
+    });
+    return 0;
+  }
+
+  // 2. Calculate raw damage via formula (includes armor reduction for physical).
   const formulaKind = damageType === "physical" ? "phys_damage_v1" : "magic_damage_v1";
   const fctx = buildFormulaContext(caster, target);
   const rawDamage = Math.max(0, Math.floor(evalFormula({ kind: formulaKind, skillMul: coefficient }, fctx)));
 
-  // 2. before_damage_taken reaction (can modify finalDamage).
+  // 3. before_damage_taken reaction (can modify finalDamage).
   const result = { finalDamage: rawDamage };
   dispatchReaction(target, {
     kind: "before_damage_taken",
@@ -332,18 +455,31 @@ function dealDamageWithReactions(
     result,
   }, reactionCtx);
 
-  // 3. Apply damage.
-  const finalDamage = Math.max(0, result.finalDamage);
+  let finalDamage = Math.max(0, result.finalDamage);
+
+  // 4. Crit check (after armor reduction, after before_damage_taken).
+  let isCrit = false;
   if (finalDamage > 0) {
-    target.currentHp = Math.max(0, target.currentHp - finalDamage);
-    ctx.bus.emit("damage", {
-      attackerId: caster.id,
-      targetId: target.id,
-      amount: finalDamage,
-    });
+    const crit = rollCrit(caster, target, ctx);
+    if (crit.isCrit) {
+      isCrit = true;
+      finalDamage = Math.floor(finalDamage * crit.mult);
+    }
   }
 
-  // 4. after_damage_taken + after_damage_dealt reactions.
+  // 5. Apply damage.
+  if (finalDamage > 0) {
+    target.currentHp = Math.max(0, target.currentHp - finalDamage);
+  }
+  ctx.bus.emit("damage", {
+    attackerId: caster.id,
+    targetId: target.id,
+    amount: finalDamage,
+    isMiss: false,
+    isCrit,
+  });
+
+  // 6. after_damage_taken + after_damage_dealt reactions.
   dispatchReaction(target, {
     kind: "after_damage_taken",
     attacker: caster,
@@ -358,7 +494,7 @@ function dealDamageWithReactions(
     damageType,
   }, reactionCtx);
 
-  // 5. on_kill if target died.
+  // 7. on_kill if target died.
   if (!isAlive(target)) {
     dispatchReaction(caster, {
       kind: "on_kill",

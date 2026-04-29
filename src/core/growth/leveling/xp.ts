@@ -21,6 +21,7 @@ import type { GameEventBus } from "../../infra/events";
 import type { PlayerCharacter } from "../../entity/actor";
 import type { SkillProgress } from "../../infra/state/types";
 import { getContent } from "../../content/registry";
+import { autoLearnTalent } from "../talent";
 
 export interface GrantXpContext {
   bus: GameEventBus;
@@ -68,6 +69,16 @@ export function grantCharacterXp(
       charId: pc.id,
       level: pc.level,
     });
+
+    // 自动学习技能：检查 HeroConfig.learnList，学习匹配当前等级的技能。
+    if (heroCfg?.learnList) {
+      const content = getContent();
+      for (const entry of heroCfg.learnList) {
+        if (entry.level === pc.level) {
+          autoLearnTalent(pc, entry.talentId, content);
+        }
+      }
+    }
   }
   return gained;
 }

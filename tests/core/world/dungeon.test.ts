@@ -8,7 +8,9 @@ import {
   testDungeon,
   testXpCurve,
   waveTrophyItem,
+  applyGuaranteedHitNoCrit,
 } from "../../fixtures/content";
+import type { PlayerCharacter } from "../../../src/core/entity/actor";
 import { countItem } from "../../../src/core/inventory";
 
 const liveSessions: GameSession[] = [];
@@ -79,6 +81,12 @@ describe("Dungeon system", () => {
 
   test("dungeon runs through all waves to completion", () => {
     const session = createSession();
+
+    // Apply guaranteed hit to heroes so combat isn't flaky
+    for (const actor of session.state.actors) {
+      if (actor.kind === "player") applyGuaranteedHitNoCrit(actor as PlayerCharacter);
+    }
+
     session.startDungeon(testDungeon.id, ["hero.1"]);
 
     const hero = session.getCharacter("hero.1").hero;

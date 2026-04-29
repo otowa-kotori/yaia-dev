@@ -10,6 +10,7 @@ import {
   makeSlime,
   makePlayer,
   shieldSelfTalent,
+  applyGuaranteedHitNoCrit,
 } from "../../fixtures/content";
 
 describe("talent: tryUseTalent", () => {
@@ -45,6 +46,7 @@ describe("talent: tryUseTalent", () => {
   test("successful basic attack deals damage", () => {
     const h = makeHarness();
     const caster = makePlayer({ id: "p", talents: [basicAttackTalent.id], atk: 10 });
+    applyGuaranteedHitNoCrit(caster);
     const target = makeSlime("m"); // hp 30, PDEF 1
     const r = tryUseTalent(caster, basicAttackTalent.id, [target], { ...h });
     expect(r.ok).toBe(true);

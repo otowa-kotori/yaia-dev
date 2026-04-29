@@ -8,7 +8,7 @@ import {
   makePlayer,
 } from "../../fixtures/content";
 import { createTalentStaticContext, emptyContentDb, setContent } from "../../../src/core/content";
-import type { ContentDb } from "../../../src/core/content/types";
+import type { ContentDb, TalentDef, TalentId } from "../../../src/core/content/types";
 import { ATTR, getAttr as getAttrFromSet } from "../../../src/core/entity/attribute";
 import {
   knightFortitude,
@@ -21,6 +21,26 @@ import {
   knightRetaliationEffect,
   knightWarcryEffect,
 } from "../../../src/content/behaviors/effects/knight";
+
+// ---------- Test-only multi-level talent defs ----------
+// The real knight talents now have maxLevel: 1, tpCost: 0, no prereqs.
+// These local copies restore the old multi-level / prereq behavior for testing
+// the allocation logic in isolation.
+
+const testFortitudeMultiLevel: TalentDef = {
+  ...knightFortitude,
+  id: "talent.test.fortitude_multi" as TalentId,
+  maxLevel: 10,
+  tpCost: 1,
+};
+
+const testRetaliationWithPrereq: TalentDef = {
+  ...knightRetaliation,
+  id: "talent.test.retaliation_prereq" as TalentId,
+  maxLevel: 10,
+  tpCost: 1,
+  prereqs: [{ talentId: "talent.knight.warcry" as TalentId, minLevel: 5 }],
+};
 
 function testContent(): ContentDb {
   const db: ContentDb = {
@@ -37,6 +57,8 @@ function testContent(): ContentDb {
       [knightFortitude.id]: knightFortitude,
       [knightWarcry.id]: knightWarcry,
       [knightRetaliation.id]: knightRetaliation,
+      [testFortitudeMultiLevel.id]: testFortitudeMultiLevel,
+      [testRetaliationWithPrereq.id]: testRetaliationWithPrereq,
     },
     starting: {
       heroes: [
@@ -45,7 +67,7 @@ function testContent(): ContentDb {
           name: "Knight",
           xpCurve: { kind: "char_xp_curve_v1", a: 8, p: 1.8, c: 8, base: 1.25, cap: 0.18, d: 0.22, e: 80, offset: 8 },
           knownTalents: [basicAttackTalent.id],
-          availableTalents: [knightPowerStrike.id, knightFortitude.id, knightWarcry.id, knightRetaliation.id],
+          availableTalents: [knightPowerStrike.id, knightFortitude.id, knightWarcry.id, knightRetaliation.id, testFortitudeMultiLevel.id, testRetaliationWithPrereq.id],
         },
       ],
       initialLocationId: "location.forest.test" as any,
@@ -93,15 +115,15 @@ describe("passive talent / Fortitude", () => {
     const baseHp = getAttrFromSet(pc.attrs, ATTR.MAX_HP, attrDefs);
     const baseRegen = getAttrFromSet(pc.attrs, ATTR.HP_REGEN, attrDefs);
 
-    allocateTalentPoint(pc, knightFortitude.id, content);
+    allocateTalentPoint(pc, testFortitudeMultiLevel.id, content);
     const hpAfterLv1 = getAttrFromSet(pc.attrs, ATTR.MAX_HP, attrDefs);
     const regenAfterLv1 = getAttrFromSet(pc.attrs, ATTR.HP_REGEN, attrDefs);
 
-    allocateTalentPoint(pc, knightFortitude.id, content);
+    allocateTalentPoint(pc, testFortitudeMultiLevel.id, content);
     const hpAfterLv2 = getAttrFromSet(pc.attrs, ATTR.MAX_HP, attrDefs);
     const regenAfterLv2 = getAttrFromSet(pc.attrs, ATTR.HP_REGEN, attrDefs);
 
-    allocateTalentPoint(pc, knightFortitude.id, content);
+    allocateTalentPoint(pc, testFortitudeMultiLevel.id, content);
     const hpAfterLv3 = getAttrFromSet(pc.attrs, ATTR.MAX_HP, attrDefs);
     const regenAfterLv3 = getAttrFromSet(pc.attrs, ATTR.HP_REGEN, attrDefs);
 
@@ -119,17 +141,17 @@ describe("passive talent / Fortitude", () => {
     pc.level = 20;
     pc.heroConfigId = "hero.knight";
 
-    allocateTalentPoint(pc, knightFortitude.id, content);
-    expect(pc.activeEffects.filter(ae => ae.sourceTalentId === (knightFortitude.id as string)).length).toBe(1);
+    allocateTalentPoint(pc, testFortitudeMultiLevel.id, content);
+    expect(pc.activeEffects.filter(ae => ae.sourceTalentId === (testFortitudeMultiLevel.id as string)).length).toBe(1);
 
-    allocateTalentPoint(pc, knightFortitude.id, content);
-    const effects = pc.activeEffects.filter(ae => ae.sourceTalentId === (knightFortitude.id as string));
+    allocateTalentPoint(pc, testFortitudeMultiLevel.id, content);
+    const effects = pc.activeEffects.filter(ae => ae.sourceTalentId === (testFortitudeMultiLevel.id as string));
     expect(effects.length).toBe(1);
     expect(effects[0]!.state.hpPct).toBeDefined();
     expect(effects[0]!.state.hpRegen).toBeDefined();
 
-    allocateTalentPoint(pc, knightFortitude.id, content);
-    const effects3 = pc.activeEffects.filter(ae => ae.sourceTalentId === (knightFortitude.id as string));
+    allocateTalentPoint(pc, testFortitudeMultiLevel.id, content);
+    const effects3 = pc.activeEffects.filter(ae => ae.sourceTalentId === (testFortitudeMultiLevel.id as string));
     expect(effects3.length).toBe(1);
     expect((effects3[0]!.state.hpPct as number)).toBeGreaterThan(effects[0]!.state.hpPct as number);
     expect((effects3[0]!.state.hpRegen as number)).toBeGreaterThan(effects[0]!.state.hpRegen as number);
@@ -148,11 +170,11 @@ describe("passive talent / Retaliation", () => {
     pc.level = 20;
     pc.heroConfigId = "hero.knight";
 
-    const withoutWarcry = allocateTalentPoint(pc, knightRetaliation.id, content);
+    const withoutWarcry = allocateTalentPoint(pc, testRetaliationWithPrereq.id, content);
     expect(withoutWarcry).toEqual({ ok: false, reason: "prereq_not_met" });
 
     pc.talentLevels[knightWarcry.id as string] = 4;
-    const warcryLv4 = allocateTalentPoint(pc, knightRetaliation.id, content);
+    const warcryLv4 = allocateTalentPoint(pc, testRetaliationWithPrereq.id, content);
     expect(warcryLv4).toEqual({ ok: false, reason: "prereq_not_met" });
   });
 
@@ -177,14 +199,14 @@ describe("passive talent / Retaliation", () => {
     pc.heroConfigId = "hero.knight";
     pc.talentLevels[knightWarcry.id as string] = 5;
 
-    allocateTalentPoint(pc, knightRetaliation.id, content);
-    const level1 = pc.activeEffects.find(ae => ae.sourceTalentId === (knightRetaliation.id as string));
+    allocateTalentPoint(pc, testRetaliationWithPrereq.id, content);
+    const level1 = pc.activeEffects.find(ae => ae.sourceTalentId === (testRetaliationWithPrereq.id as string));
     const level1Chance = level1!.state.chance as number;
     const level1Ratio = level1!.state.dmgRatio as number;
 
-    allocateTalentPoint(pc, knightRetaliation.id, content);
+    allocateTalentPoint(pc, testRetaliationWithPrereq.id, content);
 
-    const retEffects = pc.activeEffects.filter(ae => ae.sourceTalentId === (knightRetaliation.id as string));
+    const retEffects = pc.activeEffects.filter(ae => ae.sourceTalentId === (testRetaliationWithPrereq.id as string));
     expect(retEffects.length).toBe(1);
     expect((retEffects[0]!.state.chance as number)).toBe(level1Chance);
     expect((retEffects[0]!.state.dmgRatio as number)).toBeGreaterThan(level1Ratio);

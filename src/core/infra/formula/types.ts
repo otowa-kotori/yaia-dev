@@ -102,6 +102,42 @@ export interface MagicDamageV1Formula {
   skillMul?: number;
 }
 
+/**
+ * 命中率公式（对抗式评级）。
+ *
+ *   hitRate = clamp(HIT / (HIT + EVA × k_hit), clampMin, clampMax)
+ *
+ * k_hit = 1/3 时，同 DEX → 75% 命中率。
+ * 物理和魔法共用，治疗不走命中。
+ */
+export interface HitRateV1Formula {
+  kind: "hit_rate_v1";
+  /** 闪避侧系数，默认 1/3。越大 → 闪避越值钱。 */
+  k_hit?: number;
+  /** 命中率下限，默认 0.3。 */
+  clampMin?: number;
+  /** 命中率上限，默认 0.95。 */
+  clampMax?: number;
+}
+
+/**
+ * 暴击率公式（对抗式评级）。
+ *
+ *   critChance = clamp(CRIT_RATE / (CRIT_RATE + CRIT_RES × k_crit), clampMin, clampMax)
+ *
+ * k_crit = 4 时，同 DEX → 20% 暴击率。
+ * 物理和魔法共用，治疗可暴击，DoT 不暴击。
+ */
+export interface CritRateV1Formula {
+  kind: "crit_rate_v1";
+  /** 暴击抗性侧系数，默认 4。越大 → 暴击越稀缺。 */
+  k_crit?: number;
+  /** 暴击率下限，默认 0。 */
+  clampMin?: number;
+  /** 暴击率上限，默认 0.75。 */
+  clampMax?: number;
+}
+
 export type FormulaRef =
   | ExpCurveV1
   | CharXpCurveV1
@@ -110,4 +146,6 @@ export type FormulaRef =
   | PowerFormula
   | ConstantFormula
   | PhysDamageV1Formula
-  | MagicDamageV1Formula;
+  | MagicDamageV1Formula
+  | HitRateV1Formula
+  | CritRateV1Formula;

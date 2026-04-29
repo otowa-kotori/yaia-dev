@@ -155,6 +155,9 @@ export interface MonsterDef {
   level: number;
   /** Base attributes for this monster (pre-modifier). */
   baseAttrs: Partial<Record<AttrId, number>>;
+  /** Per-level attribute increment, same semantics as HeroConfig.growth.
+   *  Final base = baseAttrs + growth × (level - 1). Computed in createEnemy(). */
+  growth?: Partial<Record<AttrId, number>>;
   /** Talents this monster can use. First entry is the default attack. */
   talents: TalentId[];
   /** Kill rewards: drops（概率）/ items（保底）/ currencies / charXp。
@@ -589,6 +592,10 @@ export interface HeroConfig {
   physScaling?: { attr: AttrId; ratio: number }[];
   /** Which primary attributes contribute to MAG_POTENCY (→ MATK). */
   magScaling?: { attr: AttrId; ratio: number }[];
+  /** Level-based auto-learn list. On levelup, talents matching the character's
+   *  new level are auto-learned. Passive auto-activate; active auto-equip if
+   *  slot available. Replaces TP allocation for new characters. */
+  learnList?: { level: number; talentId: TalentId }[];
 }
 
 export interface StartingConfig {

@@ -1,8 +1,9 @@
-// Talent point allocation.
+// Talent point allocation & auto-learn.
 //
 // TP (Talent Points) are derived from character level: totalTp = (level - 1) * 3.
-// Players allocate TP into talents to raise their level. Each talent level costs
-// tpCost TP. Prerequisites (talent X at level Y) must be met before allocation.
+// New characters use HeroConfig.learnList + tpCost=0 talents, so TP is effectively
+// frozen at the configuration level — all new talents cost 0 TP. The code path is
+// preserved for legacy content and tests.
 //
 // Passive talents: when a passive talent is first learned (0→1) or upgraded,
 // the system calls grantEffects(level, owner) to install infinite-duration
@@ -129,6 +130,61 @@ export function allocateTalentPoint(
   }
 
   return { ok: true, newLevel };
+}
+
+// ---------- Auto-learn (learnList) ----------
+
+/**
+ * Auto-learn a talent for a character (from HeroConfig.learnList).
+ * Does NOT check TP budget or prerequisites — learnList controls timing.
+ *
+ * - Sets talentLevel to 1 (no-ops if already learned)
+ * - Adds to knownTalents + knownTalentIds
+ * - Passive: installs grantEffects
+ * - Active/sustain: auto-equips if slot available
+ */
+export function autoLearnTalent(
+  pc: PlayerCharacter,
+  talentId: TalentId,
+  content: ContentDb,
+): void {
+  const def = content.talents[talentId as string];
+  if (!def) throw new Error(`autoLearnTalent: unknown talent "${talentId}"`);
+
+  const currentLevel = pc.talentLevels[talentId as string] ?? 0;
+  if (currentLevel > 0) return; // already learned
+
+  pc.talentLevels[talentId as string] = 1;
+
+  // Add to knownTalents if not already present.
+  if (!pc.knownTalents.includes(talentId)) {
+    pc.knownTalents.push(talentId);
+    pc.knownTalentIds = pc.knownTalents.slice();
+  }
+
+  // Auto-equip active/sustain if slot available.
+  if (def.type === "active" || def.type === "sustain") {
+    const maxSlots = getAttrFromSet(pc.attrs, ATTR.TALENT_SLOTS, content.attributes);
+    if (pc.equippedTalents.length < maxSlots) {
+      if (!pc.equippedTalents.includes(talentId as string)) {
+        pc.equippedTalents.push(talentId as string);
+      }
+    }
+  }
+
+  // Passive/sustain: install grantEffects.
+  if (def.grantEffects && (def.type === "passive" || def.type === "sustain")) {
+    // Sustain: handle exclusiveGroup.
+    if (def.type === "sustain" && def.exclusiveGroup) {
+      const group = def.exclusiveGroup;
+      const oldTalentId = pc.activeSustains[group];
+      if (oldTalentId && oldTalentId !== (talentId as string)) {
+        removePassiveEffectsForTalent(pc, oldTalentId);
+      }
+      pc.activeSustains[group] = talentId as string;
+    }
+    installPassiveEffects(pc, def, 1);
+  }
 }
 
 // ---------- Passive effect installation ----------

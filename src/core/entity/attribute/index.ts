@@ -298,11 +298,13 @@ export function removeDynamicProvider(
 // truth for AttrDef — this is just naming.
 //
 // 属性分层：
-//   一级属性层: STR / DEX / INT
+//   一级属性层: STR / DEX / INT / CON
 //   聚合层:     PHYS_POTENCY / MAG_POTENCY（由 DynamicModifierProvider 汇聚一级属性）
 //   面板层:     PATK / MATK（由 computeBase 读取武器 + 聚合层计算）
 //   防御层:     PDEF（装备 flat）/ MRES（百分比，上限 0.8）
 //   武器层:     WEAPON_ATK / WEAPON_MATK（装备 flat，赤手默认值 1 / 0）
+//   命中层:     HIT / EVA（由 DEX DynamicModifierProvider 驱动）
+//   暴击层:     CRIT_RATE / CRIT_RES（由 DEX DynamicModifierProvider 驱动）
 //
 // ATK 和 DEF 已退役，由 PATK/MATK/PDEF/MRES 取代。
 // WIS 已退役，牧师/圣女共用 INT。
@@ -315,9 +317,9 @@ export const ATTR = {
   OUT_OF_COMBAT_HP_PCT_PER_SECOND: "attr.out_of_combat_hp_pct_per_second" as AttrId,
   OUT_OF_COMBAT_MP_PCT_PER_SECOND: "attr.out_of_combat_mp_pct_per_second" as AttrId,
   STR:     "attr.str"     as AttrId,
-
   DEX:     "attr.dex"     as AttrId,
   INT:     "attr.int"     as AttrId,
+  CON:     "attr.con"     as AttrId,
   SPEED:   "attr.speed"   as AttrId,
 
   // 武器基础值
@@ -336,7 +338,14 @@ export const ATTR = {
   PDEF: "attr.pdef" as AttrId,
   MRES: "attr.mres" as AttrId,  // 百分比减伤，0.0–0.8
 
+  // 命中 / 闪避（由 DEX 通过 UNIVERSAL_SCALING 驱动）
+  HIT: "attr.hit" as AttrId,
+  EVA: "attr.eva" as AttrId,
+
+  // 暴击（CRIT_RATE 由 DEX 驱动，是原始评级值而非概率；
+  //        CRIT_RES 是防守侧暴击抗性评级）
   CRIT_RATE:  "attr.crit_rate"  as AttrId,
+  CRIT_RES:   "attr.crit_res"   as AttrId,
   CRIT_MULT:  "attr.crit_mult"  as AttrId,
   INVENTORY_STACK_LIMIT: "attr.inventory_stack_limit" as AttrId,
 

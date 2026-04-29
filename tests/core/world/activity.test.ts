@@ -27,6 +27,7 @@ import {
   loadFixtureContent,
   makePlayer,
   waveTrophyItem,
+  applyGuaranteedHitNoCrit,
 } from "../../fixtures/content";
 
 
@@ -73,6 +74,7 @@ describe("CombatActivity + Stage integration", () => {
       speed: 20,
       maxHp: 50,
     });
+    applyGuaranteedHitNoCrit(hero);
     hero.locationId = forestLocation.id;
     hero.stageId = STAGE_ID;
     installHero(state, hero);
@@ -286,6 +288,7 @@ describe("CombatActivity + Stage integration", () => {
       speed: 10,
       maxHp: 100,
     });
+    applyGuaranteedHitNoCrit(hero);
     hero.locationId = forestLocation.id;
     hero.stageId = STAGE_ID;
     installHero(state, hero);
@@ -447,6 +450,7 @@ describe("CombatActivity + Stage integration", () => {
       speed: 999,
       maxHp: 100,
     });
+    applyGuaranteedHitNoCrit(hero);
     hero.locationId = forestLocation.id;
     hero.stageId = STAGE_ID;
     installHero(state, hero);
