@@ -363,20 +363,26 @@ export function fmt(template: string, vars: Record<string, string | number>): st
 // Converts a raw second count to a human-readable Chinese duration string.
 // Used wherever UI needs to show durations derived from tick counts.
 //
-//   fmtSecs(0)     → "0秒"
-//   fmtSecs(45)    → "45秒"
+//   fmtSecs(1.2)   → "1.2秒"
+//   fmtSecs(5)     → "5秒"
 //   fmtSecs(90)    → "1分30秒"
 //   fmtSecs(3600)  → "1小时0分0秒"
 //   fmtSecs(7384)  → "2小时3分4秒"
 
 export function fmtSecs(totalSeconds: number): string {
-  const s = Math.floor(totalSeconds);
-  if (s < 60) return `${s}秒`;
-  if (s < 3600) {
+  if (totalSeconds < 60) {
+    // Show one decimal place when there is a fractional component, e.g. 1.2秒.
+    // Suppress the decimal when the value is a whole number, e.g. 5秒 not 5.0秒.
+    const rounded = Math.round(totalSeconds * 10) / 10;
+    return rounded % 1 === 0 ? `${rounded}秒` : `${rounded.toFixed(1)}秒`;
+  }
+  if (totalSeconds < 3600) {
+    const s = Math.floor(totalSeconds);
     const mins = Math.floor(s / 60);
     const secs = s % 60;
     return `${mins}分${secs}秒`;
   }
+  const s = Math.floor(totalSeconds);
   const hours = Math.floor(s / 3600);
   const mins = Math.floor((s % 3600) / 60);
   const secs = s % 60;
