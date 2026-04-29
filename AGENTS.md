@@ -22,7 +22,8 @@ Project-specific conventions for Claude. Read before editing code.
 ## Tools
 
 - Use `fd` to find files and `rg` to search contents. Do NOT use `find` or `grep`.
-- On Windows, use pwsh7 instead of pwsh.
+- Use `bun` for Typescrit and `uv` for Python.
+- On Windows, use `pwsh7` instead of powershell.
 - To surface TypeScript diagnostics in this PowerShell workspace, run `bun run typecheck 2>&1`.
 
 ## Comments
