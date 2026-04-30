@@ -9,6 +9,7 @@ import { startingConfig } from "./heroes";
 import { items } from "./items";
 import { locations } from "./locations";
 import { monsters } from "./monsters";
+import { npcs, dialogues } from "./npcs";
 import { recipes } from "./recipes";
 import { resourceNodes } from "./resource-nodes";
 import { skills } from "./skills";
@@ -20,12 +21,14 @@ const defaultContent: ContentDb = {
   ...emptyContentDb(),
   attributes: attrDefs,
   combatZones,
+  dialogues,
   dungeons,
   effects,
   formulas,
   items,
   locations,
   monsters,
+  npcs,
   recipes,
   resourceNodes,
   unlocks,

@@ -29,11 +29,13 @@ import {
   unlockLocationTraining,
   unlockLocationTwilight,
 } from "./unlocks";
+import { npcAldric } from "./npcs";
 
 export const prairieLocation: LocationDef = {
   id: "location.prairie" as LocationId,
   name: "翠风草原",
   entries: [
+    { kind: "npc", npcId: npcAldric.id },
     { kind: "combat", combatZoneId: prairieApproach.id, label: "1-1" },
     { kind: "combat", combatZoneId: prairieCreek.id, label: "1-2" },
     { kind: "combat", combatZoneId: prairieGrove.id, label: "1-3" },

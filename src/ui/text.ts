@@ -228,6 +228,10 @@ export const T = {
   talentEquipFailed: "技能装配失败",
   talentUnequipFailed: "技能卸下失败",
 
+  // ── Dialogue ──
+  dialogueContinue: "继续",
+  dialogueClose: "关闭",
+
   // ── Settings ──
   buildInfo: "构建信息",
   releaseChannelLabel: "发布频道：",

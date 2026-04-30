@@ -463,12 +463,121 @@ export interface DungeonDef {
   maxPartySize?: number;
 }
 
+// ---------- Dialogue system ----------
+//
+// DialogueDef is a standalone content entity, not owned by NpcDef.
+// NpcDef merely holds a reference to a dialogueId.
+// The dialogue player (src/core/dialogue/) only needs the dialogueId —
+// it doesn't know or care whether it was triggered by an NPC or a quest.
+//
+// Node types:
+//   say       — one line of dialogue, then auto-advance to `next`
+//   choice    — present visible options (hidden when condition fails)
+//   condition — silent branch, tries each branch in order, falls back to `fallback`
+//   action    — execute a side-effect, then advance to `next`
+//   end       — close the dialogue
+
+export type DialogueId = string & { readonly __brand: "DialogueId" };
+export type NpcId      = string & { readonly __brand: "NpcId" };
+
+// ── Conditions ──
+// Evaluated against DialogueCtx; returning false hides/skips the branch.
+
+export type DialogueCondition =
+  | { type: "hasFlag";     flagId: string; value?: number }   // default: value > 0
+  | { type: "missingFlag"; flagId: string }                   // flags[id] is 0 / absent
+  | { type: "isUnlocked";  unlockId: UnlockId }
+  | { type: "playerLevel"; min?: number; max?: number }       // checks focused character
+  | { type: "partyAnyLevel"; min: number }                    // any party member ≥ min
+  | { type: "and";         conditions: DialogueCondition[] }
+  | { type: "or";          conditions: DialogueCondition[] };
+
+// ── Actions ──
+// Pure data; executed by the dialogue engine via session commands.
+// startQuest is a placeholder — the runtime ignores it until the quest
+// system is implemented, but content authors can already write it.
+
+export type DialogueAction =
+  | { type: "setFlag";     flagId: string; value?: number }   // default value: 1
+  | { type: "unlock";      unlockId: UnlockId }
+  | { type: "grantReward"; reward: import("../economy/types").RewardBundle }
+  | { type: "startQuest";  questId: string };                 // placeholder
+
+// ── Nodes ──
+
+export interface DialogueNodeBase {
+  id: string;
+}
+
+export interface DialogueNodeSay extends DialogueNodeBase {
+  kind: "say";
+  speaker?: string;   // display name; omit for narrator / system messages
+  text: string;
+  next: string;       // id of the next node
+}
+
+export interface DialogueChoice {
+  label: string;
+  condition?: DialogueCondition;   // hidden when condition fails
+  next: string;                    // id of the node to go to when chosen
+}
+
+export interface DialogueNodeChoice extends DialogueNodeBase {
+  kind: "choice";
+  speaker?: string;
+  text?: string;          // optional prompt above the choices
+  choices: DialogueChoice[];
+}
+
+export interface DialogueConditionBranch {
+  condition: DialogueCondition;
+  next: string;
+}
+
+export interface DialogueNodeCondition extends DialogueNodeBase {
+  kind: "condition";
+  branches: DialogueConditionBranch[];   // checked in order; first match wins
+  fallback: string;                      // taken when no branch matches
+}
+
+export interface DialogueNodeAction extends DialogueNodeBase {
+  kind: "action";
+  actions: DialogueAction[];
+  next: string;
+}
+
+export interface DialogueNodeEnd extends DialogueNodeBase {
+  kind: "end";
+}
+
+export type DialogueNode =
+  | DialogueNodeSay
+  | DialogueNodeChoice
+  | DialogueNodeCondition
+  | DialogueNodeAction
+  | DialogueNodeEnd;
+
+export interface DialogueDef {
+  id: DialogueId;
+  /** Entry point node id. */
+  entry: string;
+  nodes: Record<string, DialogueNode>;
+}
+
+export interface NpcDef {
+  id: NpcId;
+  name: string;
+  /** Dialogue opened when the player clicks this NPC. */
+  dialogueId: DialogueId;
+}
+
 // ---------- Location entries ----------
 
 export type LocationEntryDef =
-  | { kind: "combat"; combatZoneId: CombatZoneId; label?: string; unlockId?: UnlockId }
-  | { kind: "gather"; resourceNodes: ResourceNodeId[]; label?: string; unlockId?: UnlockId }
-  | { kind: "dungeon"; dungeonId: DungeonId; label?: string; unlockId?: UnlockId };
+  | { kind: "combat";   combatZoneId: CombatZoneId; label?: string; unlockId?: UnlockId }
+  | { kind: "gather";   resourceNodes: ResourceNodeId[]; label?: string; unlockId?: UnlockId }
+  | { kind: "dungeon";  dungeonId: DungeonId; label?: string; unlockId?: UnlockId }
+  | { kind: "npc";      npcId: NpcId; label?: string; unlockId?: UnlockId };
 
 /** A physical location / map area. Contains a menu of available entries
  *  the player can choose from. The actual running instance (actor spawning,
@@ -619,6 +728,8 @@ export interface ContentDb {
   attributes: Readonly<Record<string, AttrDef>>;
   resourceNodes: Readonly<Record<string, ResourceNodeDef>>;
   unlocks: Readonly<Record<string, UnlockDef>>;
+  npcs: Readonly<Record<string, NpcDef>>;
+  dialogues: Readonly<Record<string, DialogueDef>>;
   /** Formulas referenced by other content (xp curves, damage, etc). */
   formulas: Readonly<Record<string, FormulaRef>>;
   /** New-game bootstrap config. Optional so empty/test DBs still type-check;
@@ -642,6 +753,8 @@ export function emptyContentDb(): ContentDb {
     attributes: {},
     resourceNodes: {},
     unlocks: {},
+    npcs: {},
+    dialogues: {},
     formulas: {},
   };
 }

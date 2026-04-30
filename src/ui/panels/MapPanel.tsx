@@ -4,7 +4,7 @@
 // now lives as its own tab so it doesn't clutter the battle view.
 
 import { useState } from "react";
-import { getContent } from "../../core/content";
+import { getContent, getNpc } from "../../core/content";
 import type { GameStore } from "../store";
 import { useStore } from "../hooks/useStore";
 import { T, fmt } from "../text";
@@ -110,7 +110,7 @@ function EntryList({
       </div>
       <div className="flex gap-2 flex-wrap">
         {loc.entries.map((entry, i) => {
-          const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : T.entry_gather);
+          const label = entry.label ?? (entry.kind === "combat" ? T.entry_combat : entry.kind === "gather" ? T.entry_gather : entry.kind === "npc" ? getNpc(entry.npcId).name : T.entry_combat);
           const isLocked = !!entry.unlockId && !store.isUnlocked(entry.unlockId);
           return (
             <button
@@ -128,6 +128,9 @@ function EntryList({
                   }
                 } else if (entry.kind === "dungeon") {
                   setPendingEntry({ mode: "dungeon", targetId: entry.dungeonId });
+                } else if (entry.kind === "npc") {
+                  const npc = getNpc(entry.npcId);
+                  store.openDialogue(npc.dialogueId);
                 }
               }}
               className={`px-4 py-2 rounded-lg text-sm border transition-colors ${

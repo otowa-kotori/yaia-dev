@@ -32,6 +32,7 @@ import { StatsPanel } from "../panels/StatsPanel";
 import { UpgradePanel } from "../panels/UpgradePanel";
 import { SettingsPanel } from "../panels/SettingsPanel";
 import { DebugPanel } from "../panels/DebugPanel";
+import { DialogueOverlay } from "../components/DialogueOverlay";
 
 // ── Tab types ──
 
@@ -180,8 +181,11 @@ export function AppShell({ store }: { store: GameStore }) {
         />
       )}
 
-      {/* ── Catch-up overlay (全屏，z-50，挡住一切交互) ── */}
+      {/* ── Catch-up overlay (z-[70]，全屏最高优先，挡住一切交互含对话) ── */}
       <CatchUpOverlay store={store} />
+
+      {/* ── Dialogue overlay (z-[55]，覆盖 MobileNav/Drawer，低于 CatchUp) ── */}
+      <DialogueOverlay store={store} />
     </div>
   );
 }
@@ -264,7 +268,7 @@ function CatchUpOverlay({ store }: { store: GameStore }) {
   const pct = progress.done / progress.total;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-[70] bg-black/75 flex flex-col items-center justify-center">
       <div className="w-72 sm:w-80 p-6 bg-gray-900 rounded-xl border border-blue-800/50 shadow-2xl">
         <p className="text-sm text-blue-300 mb-3 text-center">{T.catchUpInProgress}</p>
         <div className="h-2 bg-black/40 rounded-full overflow-hidden mb-2">

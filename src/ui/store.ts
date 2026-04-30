@@ -6,6 +6,8 @@
 // - Autosave scheduling: 10 s throttle + immediate flush on important bus
 //   events + beforeunload.
 // - Clear-save flow.
+// - Dialogue state machine: openDialogue / advanceDialogue / closeDialogue.
+//   Dialogue has no tick involvement — it lives entirely in the UI layer.
 //
 // GameStore IS-A GameSession (type-level): `GameStore extends GameSession`.
 // Adding a new gameplay command = add a method on CharacterController; the
@@ -24,6 +26,14 @@ import {
   type SaveAdapter,
 } from "../core/save";
 import { ENABLE_DEBUG_PANEL, SAVE_KEY } from "../env";
+import { getDialogue } from "../core/content/registry";
+import {
+  buildInitialState,
+  advanceFromNode,
+  type DialoguePlayerState,
+  type DialogueCtx,
+  type DialogueActionExecutor,
+} from "../core/dialogue";
 
 const AUTOSAVE_INTERVAL_MS = 10_000;
 
@@ -53,6 +63,17 @@ export interface GameStore extends GameSession {
   debugSimulateCatchUp(hours: number): void;
   /** Cancel an in-progress catch-up (works for both real and debug). */
   cancelCatchUp(): void;
+
+  // ── Dialogue ──
+  /** Current dialogue playback state, null when no dialogue is open. */
+  dialogueState: DialoguePlayerState | null;
+  /** Open a dialogue by its content id.
+   *  Snapshots the current focused character + party as the ctx. */
+  openDialogue(dialogueId: string): void;
+  /** Advance from a say node (player pressed "continue"). */
+  advanceDialogue(nextNodeId: string): void;
+  /** Close the current dialogue unconditionally. */
+  closeDialogue(): void;
 }
 
 export interface CreateGameStoreOptions {
@@ -366,6 +387,35 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
 
   const baseDispose = session.dispose.bind(session);
 
+  // ---------- Dialogue state ----------
+  //
+  // dialogueState 是纯 UI 状态，不经过 tick 引擎。
+  // ctx 在 openDialogue 时快照，整个对话期间不刷新。
+  // dialogueState 本身挂在 store 对象上作为普通可写属性（见下方 Object.assign）。
+
+  let dialogueCtx: DialogueCtx | null = null;
+  let dialogueDef: ReturnType<typeof getDialogue> | null = null;
+
+  function buildActionExecutor(): DialogueActionExecutor {
+    return {
+      setFlag(flagId, value) {
+        session.state.flags[flagId] = value;
+      },
+      unlock(unlockId) {
+        session.unlock(unlockId, "dialogue");
+      },
+      grantReward(_action) {
+        // TODO: session 暴露 grantRewardToFocused(reward) 后在此接入。
+        // Alpha 阶段 grantReward action 不生效，但内容可以先写上占位。
+        console.warn("[dialogue] grantReward 尚未接入 session，暂时跳过。");
+      },
+      startQuest(questId) {
+        // 任务系统尚未落地 — no-op
+        console.warn("[dialogue] startQuest 占位（任务系统未实装）:", questId);
+      },
+    };
+  }
+
   const store = Object.assign(session, {
     subscribe(cb: () => void) {
       subs.add(cb);
@@ -394,6 +444,52 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
     cancelCatchUp() {
       catchUpCancelRequested = true;
     },
+
+    // ── Dialogue ──
+
+    // dialogueState 作为普通可写属性挂在 store 上。
+    // 不能用 getter 语法放在 Object.assign 的对象字面量里——
+    // Object.assign 会在调用时对 getter 求值并把结果（null）直接复制为静态属性，
+    // 之后对闭包变量的修改不会反映到该属性上。
+    // 解决方式：先把 dialogueState 初始化为 null，再由各方法直接写 store.dialogueState。
+    dialogueState: null as DialoguePlayerState | null,
+    openDialogue(dialogueId: string): void {
+      const dialogue = getDialogue(dialogueId);
+      const focusedHero = session.getFocusedCharacter().hero;
+      const party = session.listHeroes();
+      const ctx: DialogueCtx = {
+        focused: focusedHero,
+        party,
+        state: session.state,
+      };
+      const executor = buildActionExecutor();
+      const initialState = buildInitialState(dialogue, ctx, executor);
+      dialogueDef = dialogue;
+      dialogueCtx = ctx;
+      store.dialogueState = initialState;
+      notify();
+    },
+    advanceDialogue(nextNodeId: string): void {
+      if (!dialogueDef || !dialogueCtx) return;
+      const executor = buildActionExecutor();
+      const next = advanceFromNode(nextNodeId, dialogueDef, dialogueCtx, executor);
+      // 抵达 end 节点时自动关闭
+      if (next.kind === "end") {
+        dialogueDef = null;
+        dialogueCtx = null;
+        store.dialogueState = null;
+      } else {
+        store.dialogueState = next;
+      }
+      notify();
+    },
+    closeDialogue(): void {
+      dialogueDef = null;
+      dialogueCtx = null;
+      store.dialogueState = null;
+      notify();
+    },
+
     async clearSaveAndReset() {
       if (pendingSaveTimer !== null) {
         clearTimeout(pendingSaveTimer);

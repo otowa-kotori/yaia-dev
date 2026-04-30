@@ -33,6 +33,8 @@ export function patchContent(partial: Partial<ContentDb>): void {
       ...(partial.resourceNodes ?? {}),
     },
     unlocks: { ...current.unlocks, ...(partial.unlocks ?? {}) },
+    npcs: { ...current.npcs, ...(partial.npcs ?? {}) },
+    dialogues: { ...current.dialogues, ...(partial.dialogues ?? {}) },
     formulas: { ...current.formulas, ...(partial.formulas ?? {}) },
     starting: partial.starting ?? current.starting,
   };
@@ -112,6 +114,16 @@ export function getUnlock(id: string) {
 }
 export function hasUnlock(id: string): boolean {
   return !!current.unlocks[id];
+}
+export function getNpc(id: string) {
+  const v = current.npcs[id];
+  if (!v) throw new Error(`content: no npc "${id}"`);
+  return v;
+}
+export function getDialogue(id: string) {
+  const v = current.dialogues[id];
+  if (!v) throw new Error(`content: no dialogue "${id}"`);
+  return v;
 }
 
 /** Reset to empty — tests only. */
