@@ -17,8 +17,26 @@ export const T = {
   tab_xp: "经验总览",
   tab_upgrades: "全局升级",
   tab_settings: "设置",
+  tab_quests: "任务",
   tab_debug: "调试",
   tab_locked: "未解锁",
+
+  // ── Quest ──
+  quest_section_available: "可接取任务",
+  quest_section_active: "进行中",
+  quest_section_ready: "可提交",
+  quest_section_completed: "已完成",
+  quest_btn_accept: "接取",
+  quest_btn_abandon: "放弃",
+  quest_btn_turnIn: "提交",
+  quest_btn_forceComplete: "强制完成",
+  quest_status_active: "进行中",
+  quest_status_ready: "可提交",
+  quest_status_completed: "已完成",
+  quest_empty: "暂无任务",
+  quest_rewards: "奖励",
+  quest_tag_repeatable: "可重复",
+  quest_completionCount: "已完成 {n} 次",
 
 
   // ── Character bar / status ──
@@ -99,6 +117,7 @@ export const T = {
   logCategory_economy: "经济",
   logCategory_growth: "成长",
   logCategory_dungeon: "副本",
+  logCategory_quest: "任务",
   dungeonNoEnemy: "本波敌人尚未出现。",
 
   dungeonNoParty: "当前没有可展示的队伍成员。",

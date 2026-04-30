@@ -323,7 +323,139 @@ export function DebugPanel({ store }: { store: GameStore }) {
           </>
         )}
       </Card>
+
+      {/* Quest debug */}
+      <QuestDebugSection store={s} />
     </div>
+  );
+}
+
+// ---------- QuestDebugSection ----------
+
+function QuestDebugSection({ store: s }: { store: GameStore }) {
+  const content = getContent();
+  const [expandedQuest, setExpandedQuest] = useState<string | null>(null);
+
+  const available = s.getAvailableQuests();
+  const allInstances = Object.values(s.state.quests);
+  const active = allInstances.filter((q) => q.status === "active");
+  const ready = allInstances.filter((q) => q.status === "ready");
+  const completed = allInstances.filter((q) => q.status === "completed");
+
+  const btnClass =
+    "px-2 py-0.5 text-[11px] rounded border border-[#4b657c] bg-[#2a2a2a] text-white cursor-pointer hover:bg-[#333] font-[inherit]";
+
+  function questLabel(questId: string): string {
+    return content.quests[questId]?.name ?? questId;
+  }
+
+  function toggleExpand(questId: string): void {
+    setExpandedQuest(expandedQuest === questId ? null : questId);
+  }
+
+  return (
+    <Card className="p-3">
+      <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2">{T.quest_section_available}</div>
+
+      {/* Available */}
+      {available.length === 0 ? (
+        <MutedText>--</MutedText>
+      ) : (
+        <div className="flex flex-col gap-1 mb-3">
+          {available.map((qid) => (
+            <div key={qid} className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-white">{questLabel(qid)}</span>
+              <button className={btnClass} onClick={() => s.acceptQuest(qid)}>{T.quest_btn_accept}</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Active */}
+      <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2 mt-2">{T.quest_section_active}</div>
+      {active.length === 0 ? (
+        <MutedText>--</MutedText>
+      ) : (
+        <div className="flex flex-col gap-2 mb-3">
+          {active.map((inst) => {
+            const def = content.quests[inst.questId];
+            return (
+              <div key={inst.questId} className="bg-[#1a1a1a] rounded p-2 border border-[#303030]">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span
+                    className="text-xs text-white font-semibold cursor-pointer hover:underline"
+                    onClick={() => toggleExpand(inst.questId)}
+                  >
+                    {questLabel(inst.questId)}
+                  </span>
+                  <div className="flex gap-1">
+                    <button className={btnClass} onClick={() => s.abandonQuest(inst.questId)}>{T.quest_btn_abandon}</button>
+                    <button className={btnClass} onClick={() => s.debugForceCompleteQuest(inst.questId)}>{T.quest_btn_forceComplete}</button>
+                  </div>
+                </div>
+                {def && (
+                  <div className="flex flex-col gap-0.5">
+                    {def.objectives.map((obj, i) => {
+                      const target = obj.kind === "event" ? obj.targetCount : 1;
+                      const current = Math.min(inst.progress[i] ?? 0, target);
+                      return (
+                        <div key={i} className="text-[11px] opacity-70">
+                          {obj.description} ({current}/{target})
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {expandedQuest === inst.questId && (
+                  <pre className="mt-2 text-[10px] opacity-50 overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(inst, null, 2)}
+                  </pre>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Ready */}
+      {ready.length > 0 && (
+        <>
+          <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2 mt-2">{T.quest_section_ready}</div>
+          <div className="flex flex-col gap-1 mb-3">
+            {ready.map((inst) => (
+              <div key={inst.questId} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-yellow-300">{questLabel(inst.questId)}</span>
+                <button className={btnClass} onClick={() => s.turnInQuest(inst.questId)}>{T.quest_btn_turnIn}</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Completed */}
+      {completed.length > 0 && (
+        <>
+          <div className="text-[11px] opacity-55 tracking-wide uppercase mb-2 mt-2">{T.quest_section_completed}</div>
+          <div className="flex flex-col gap-0.5">
+            {completed.map((inst) => (
+              <div
+                key={inst.questId}
+                className="text-xs opacity-50 cursor-pointer hover:opacity-70"
+                onClick={() => toggleExpand(inst.questId)}
+              >
+                {questLabel(inst.questId)}
+                {inst.completionCount && inst.completionCount > 1 ? ` (×${inst.completionCount})` : ""}
+                {expandedQuest === inst.questId && (
+                  <pre className="mt-1 text-[10px] opacity-50 overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(inst, null, 2)}
+                  </pre>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
 

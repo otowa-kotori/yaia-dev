@@ -35,6 +35,7 @@ export function patchContent(partial: Partial<ContentDb>): void {
     unlocks: { ...current.unlocks, ...(partial.unlocks ?? {}) },
     npcs: { ...current.npcs, ...(partial.npcs ?? {}) },
     dialogues: { ...current.dialogues, ...(partial.dialogues ?? {}) },
+    quests: { ...current.quests, ...(partial.quests ?? {}) },
     formulas: { ...current.formulas, ...(partial.formulas ?? {}) },
     starting: partial.starting ?? current.starting,
   };
@@ -124,6 +125,14 @@ export function getDialogue(id: string) {
   const v = current.dialogues[id];
   if (!v) throw new Error(`content: no dialogue "${id}"`);
   return v;
+}
+export function getQuest(id: string) {
+  const v = current.quests[id];
+  if (!v) throw new Error(`content: no quest "${id}"`);
+  return v;
+}
+export function hasQuest(id: string): boolean {
+  return !!current.quests[id];
 }
 
 /** Reset to empty — tests only. */

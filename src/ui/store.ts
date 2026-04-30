@@ -410,8 +410,10 @@ export function createGameStore(opts: CreateGameStoreOptions): GameStore {
         console.warn("[dialogue] grantReward 尚未接入 session，暂时跳过。");
       },
       startQuest(questId) {
-        // 任务系统尚未落地 — no-op
-        console.warn("[dialogue] startQuest 占位（任务系统未实装）:", questId);
+        session.acceptQuest(questId);
+      },
+      turnInQuest(questId) {
+        session.turnInQuest(questId);
       },
     };
   }

@@ -16,6 +16,7 @@ export const GAME_LOG_CATEGORIES = [
   "growth",
   "economy",
   "dungeon",
+  "quest",
 ] as const;
 
 export type GameLogCategory = (typeof GAME_LOG_CATEGORIES)[number];

@@ -89,8 +89,8 @@ export interface DialogueActionExecutor {
   setFlag(flagId: string, value: number): void;
   unlock(unlockId: string): void;
   grantReward(reward: DialogueAction & { type: "grantReward" }): void;
-  /** 任务系统尚未落地，实现可以是 no-op。 */
   startQuest(questId: string): void;
+  turnInQuest(questId: string): void;
 }
 
 // ---------- 条件评估 ----------
@@ -147,7 +147,10 @@ function executeAction(
       executor.grantReward(action);
       break;
     case "startQuest":
-      executor.startQuest(action.questId);
+      executor.startQuest(action.questId as string);
+      break;
+    case "turnInQuest":
+      executor.turnInQuest(action.questId as string);
       break;
   }
 }

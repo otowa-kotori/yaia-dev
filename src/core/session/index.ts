@@ -41,6 +41,7 @@ import { createDungeonGameplay } from "./gameplay/dungeon";
 import { createInventoryGameplay } from "./gameplay/inventory";
 import { createPartyCombatGameplay } from "./gameplay/party-combat";
 import { createProgressionGameplay } from "./gameplay/progression";
+import { createQuestGameplay } from "./gameplay/quest";
 import { createSessionLifecycle } from "./lifecycle";
 import { createSessionRuntime } from "./runtime";
 import type {
@@ -69,6 +70,7 @@ export function createGameSession(
   const partyCombat = createPartyCombatGameplay(runtime);
   const dungeon = createDungeonGameplay(runtime);
   const progression = createProgressionGameplay(runtime);
+  const quest = createQuestGameplay(runtime);
 
   const characterCommands: CharacterCommandSet = {
     ...createCharacterGameplay(runtime, {
@@ -88,6 +90,7 @@ export function createGameSession(
     createCharacterController: createController,
     restoreDungeonParty: dungeon.restoreDungeonParty,
     unlock: progression.unlock,
+    questReeval: () => quest.tracker.reeval(),
   });
 
   function getCharacter(charId: string) {
@@ -143,6 +146,14 @@ export function createGameSession(
     unlock: progression.unlock,
     listUnlocked: progression.listUnlocked,
 
+    acceptQuest: quest.acceptQuest,
+    abandonQuest: quest.abandonQuest,
+    turnInQuest: quest.turnInQuest,
+    getAvailableQuests: quest.getAvailableQuests,
+    getActiveQuests: quest.getActiveQuests,
+    getQuestInstance: quest.getQuestInstance,
+    debugForceCompleteQuest: quest.debugForceCompleteQuest,
+
     setSpeedMultiplier(mul: number): void {
       runtime.engine.speedMultiplier = mul;
     },
@@ -161,6 +172,7 @@ export function createGameSession(
     loadFromSave: lifecycle.loadFromSave,
     resetToFresh: lifecycle.resetToFresh,
     dispose() {
+      quest.dispose();
       runtime.disposeGameLogCollector();
       runtime.stopLoop();
     },

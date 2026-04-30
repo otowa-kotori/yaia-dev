@@ -23,6 +23,7 @@ const TOP_NAV: NavItem[] = [
   { id: "talents",   label: "\u5929\u8d4b", icon: "M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z" },
   { id: "stats",     label: "\u5c5e\u6027", icon: "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v-2m0 0a4 4 0 014-4h0a4 4 0 014 4m-4-4v8m6-4h6m-3-3v6" },
   { id: "upgrades",  label: "\u5347\u7ea7", icon: "M23 6l-9.5 9.5-5-5L1 18M17 6h6V12" },
+  { id: "quests",    label: "\u4efb\u52a1", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" },
 ];
 
 const SETTINGS_NAV: NavItem = {

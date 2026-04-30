@@ -95,6 +95,9 @@ export function deserialize(raw: string, opts: DeserializeOptions): GameState {
   state.version = SAVE_VERSION;
   assertGameLogEntries(state.gameLog);
 
+  // Backfill fields added after save was created (alpha: no migrations).
+  if (!state.quests) state.quests = {};
+
   // Rebuild derived state on every character. Non-character actors pass
 
   // through untouched.

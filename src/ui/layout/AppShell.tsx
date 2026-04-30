@@ -32,13 +32,14 @@ import { StatsPanel } from "../panels/StatsPanel";
 import { UpgradePanel } from "../panels/UpgradePanel";
 import { SettingsPanel } from "../panels/SettingsPanel";
 import { DebugPanel } from "../panels/DebugPanel";
+import { QuestPanel } from "../panels/QuestPanel";
 import { DialogueOverlay } from "../components/DialogueOverlay";
 
 // ── Tab types ──
 
 export type TabId =
   | "battle" | "map" | "inventory" | "craft" | "talents"
-  | "stats" | "upgrades" | "settings" | "debug";
+  | "stats" | "upgrades" | "quests" | "settings" | "debug";
 
 // ── Drawer labels for mobile ──
 
@@ -49,6 +50,7 @@ const DRAWER_TITLES: Partial<Record<TabId, string>> = {
   talents:   T.tab_talents,
   stats:     T.tab_xp,
   upgrades:  T.tab_upgrades,
+  quests:    T.tab_quests,
   settings:  T.tab_settings,
   debug:     T.tab_debug,
 };
@@ -229,6 +231,7 @@ function TabBody({
     case "talents":   return <TalentPanel store={store} />;
     case "stats":     return <StatsPanel store={store} />;
     case "upgrades":  return <UpgradePanel store={store} />;
+    case "quests":    return <QuestPanel store={store} />;
     case "settings":  return <SettingsPanel store={store} />;
     case "debug":     return <DebugPanel store={store} />;
   }

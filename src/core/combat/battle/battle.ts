@@ -510,7 +510,11 @@ function emitDeath(battle: Battle, victim: Character, ctx: TickBattleContext) {
   // CombatActivity subscribes to 'kill' events and grants XP). Keeping this
   // out of Battle itself avoids non-serializable callbacks on the Battle
   // struct — Battle now lives in GameState and must be plain data.
-  ctx.bus.emit("kill", { attackerId: "", victimId: victim.id });
+  ctx.bus.emit("kill", {
+    attackerId: "",
+    victimId: victim.id,
+    defId: isEnemy(victim) ? victim.defId : undefined,
+  });
 }
 
 // ---------- Resolution ----------

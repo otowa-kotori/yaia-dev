@@ -44,6 +44,8 @@ interface SessionLifecycleDeps {
   createCharacterController(hero: PlayerCharacter): CharacterControllerImpl;
   restoreDungeonParty(dungeonSessionId: string, state?: GameState): void;
   unlock(unlockId: string, source?: string): boolean;
+  /** Re-evaluate quest state objectives and autoAccept after load/reset. */
+  questReeval(): void;
 }
 
 export interface SessionLifecycle {
@@ -60,6 +62,7 @@ export function createSessionLifecycle(
     createCharacterController,
     restoreDungeonParty,
     unlock,
+    questReeval,
   } = deps;
 
   function rehydrateAll(): void {
@@ -181,6 +184,7 @@ export function createSessionLifecycle(
       runtime.rng = restoreRng(loaded.rngState);
       runtime.engine.setTick(loaded.tick);
       rehydrateAll();
+      questReeval();
     },
 
     resetToFresh() {
@@ -263,6 +267,8 @@ export function createSessionLifecycle(
         if (!unlockDef.defaultUnlocked) continue;
         unlock(unlockDef.id, "starting.default");
       }
+
+      questReeval();
     },
   };
 }

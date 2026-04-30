@@ -63,6 +63,25 @@ export interface WorldActivityState {
   data: Record<string, unknown>;
 }
 
+// ---------- Quest instances ----------
+
+export type QuestStatus = "active" | "ready" | "completed";
+
+export interface QuestInstance {
+  questId: string;
+  status: QuestStatus;
+  /** Per-objective progress. Event type = cumulative count; state type = 0 | 1. */
+  progress: number[];
+  /** For scope:"character" quests, the hero whose events count. */
+  assignedCharId?: string;
+  /** Tick when the quest was accepted. */
+  acceptedAtTick: number;
+  /** Tick when the quest was completed (turned in). */
+  completedAtTick?: number;
+  /** For repeatable quests, how many times it has been completed in total. */
+  completionCount?: number;
+}
+
 // ---------- Runtime instance ids ----------
 
 export interface RuntimeIdState {
@@ -171,6 +190,8 @@ export interface GameState {
   gameLog: GameLogEntry[];
   /** Generic counters / unlock flags / quest progress. */
   flags: Record<string, number>;
+  /** Active / ready / completed quest instances, keyed by questId. */
+  quests: Record<string, QuestInstance>;
   /** Accumulated currencies (gold, gems, …). key = currency id string.
    *  Part of the per-run save; reset on clearSaveAndReset. */
   currencies: Record<string, number>;
@@ -207,6 +228,7 @@ export function createEmptyState(seed: number, version: number): GameState {
     worldActivities: [],
     gameLog: [],
     flags: {},
+    quests: {},
     currencies: {},
     worldRecord: { upgrades: {} },
     settings: { speedMultiplier: 1 },

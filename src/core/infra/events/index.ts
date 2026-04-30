@@ -63,7 +63,7 @@ export type GameEvents = {
   levelup:
     | { kind: "character"; charId: string; level: number }
     | { kind: "skill"; charId: string; skillId: string; level: number };
-  kill: { attackerId: string; victimId: string };
+  kill: { attackerId: string; victimId: string; defId?: string };
   damage: { attackerId: string; targetId: string; amount: number; isMiss?: boolean; isCrit?: boolean };
   heal: { sourceId: string; targetId: string; amount: number; isCrit?: boolean };
   loot: {
@@ -230,6 +230,12 @@ export type GameEvents = {
     stageId?: string;
   };
   gameLogAppended: { entries: GameLogEntry[] };
+  // ── Quest events ──
+  questAccepted: { questId: string; charId?: string };
+  questProgress: { questId: string; objectiveIndex: number; current: number; target: number };
+  questReady: { questId: string };
+  questCompleted: { questId: string };
+  questAbandoned: { questId: string };
   /** Emitted each slice during chunked catch-up, so UI can render a progress bar. */
   catchUpProgress: { done: number; total: number };
   /** Emitted once after catch-up completes (or is cancelled). */

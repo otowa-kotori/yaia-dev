@@ -3,7 +3,7 @@ import type { ContentDb } from "../content";
 import type { PlayerCharacter } from "../entity/actor";
 import type { GameEventBus } from "../infra/events";
 import type { Rng } from "../infra/rng";
-import type { GameState } from "../infra/state";
+import type { GameState, QuestInstance } from "../infra/state";
 import type { TickEngine } from "../infra/tick";
 import type {
   CombatActivity,
@@ -101,6 +101,22 @@ export interface GameSession {
   unlock(unlockId: string, source?: string): boolean;
   /** List all currently unlocked ids. */
   listUnlocked(): string[];
+
+  // Quest commands.
+  /** Accept a quest by id. No-op if already active. */
+  acceptQuest(questId: string): void;
+  /** Abandon an active/ready quest. */
+  abandonQuest(questId: string): void;
+  /** Turn in a quest that is in ready state (manual turn-in). */
+  turnInQuest(questId: string): void;
+  /** Get quest ids whose prerequisites are met and that can be accepted. */
+  getAvailableQuests(): string[];
+  /** Get all active/ready quest instances. */
+  getActiveQuests(): QuestInstance[];
+  /** Get a specific quest instance by id (or undefined if not started). */
+  getQuestInstance(questId: string): QuestInstance | undefined;
+  /** Debug/dev only: force-complete a quest (skip objectives and cost). */
+  debugForceCompleteQuest(questId: string): void;
 
   // Global commands.
   setSpeedMultiplier(mul: number): void;

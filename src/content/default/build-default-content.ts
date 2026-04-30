@@ -10,6 +10,7 @@ import { items } from "./items";
 import { locations } from "./locations";
 import { monsters } from "./monsters";
 import { npcs, dialogues } from "./npcs";
+import { quests } from "./quests";
 import { recipes } from "./recipes";
 import { resourceNodes } from "./resource-nodes";
 import { skills } from "./skills";
@@ -29,6 +30,7 @@ const defaultContent: ContentDb = {
   locations,
   monsters,
   npcs,
+  quests,
   recipes,
   resourceNodes,
   unlocks,

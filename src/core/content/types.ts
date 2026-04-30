@@ -42,6 +42,7 @@ export type TalentId = string & { readonly __brand: "TalentId" };
  *  for call-site clarity; safe to cast with `as CurrencyId`. */
 export type CurrencyId = string & { readonly __brand: "CurrencyId" };
 export type UnlockId = string & { readonly __brand: "UnlockId" };
+export type QuestId = string & { readonly __brand: "QuestId" };
 
 // ---------- Attribute ----------
 
@@ -493,15 +494,11 @@ export type DialogueCondition =
   | { type: "or";          conditions: DialogueCondition[] };
 
 // ── Actions ──
-// Pure data; executed by the dialogue engine via session commands.
-// startQuest is a placeholder — the runtime ignores it until the quest
-// system is implemented, but content authors can already write it.
+// Pure data; executed by the unified GameAction dispatcher.
+// DialogueAction is a type alias for backward compatibility — all action
+// types are defined in the GameAction union above.
 
-export type DialogueAction =
-  | { type: "setFlag";     flagId: string; value?: number }   // default value: 1
-  | { type: "unlock";      unlockId: UnlockId }
-  | { type: "grantReward"; reward: import("../economy/types").RewardBundle }
-  | { type: "startQuest";  questId: string };                 // placeholder
+export type DialogueAction = GameAction;
 
 // ── Nodes ──
 
@@ -672,6 +669,108 @@ export interface UnlockDef {
   defaultUnlocked?: boolean;
 }
 
+// ---------- Game Actions ----------
+//
+// Unified side-effect primitives shared by the dialogue system, quest system,
+// and any future "scripted action" consumer. Executed by a single
+// `executeGameAction` dispatcher so adding a new action type only requires
+// one code change.
+
+export type GameAction =
+  | { type: "setFlag";     flagId: string; value?: number }
+  | { type: "unlock";      unlockId: UnlockId }
+  | { type: "grantReward"; reward: RewardBundle }
+  | { type: "startQuest";  questId: QuestId }
+  | { type: "turnInQuest"; questId: QuestId };
+
+// ---------- Quest system ----------
+//
+// QuestDef is a top-level ContentDb citizen. The quest tracker is event-driven
+// (not tick-driven): it subscribes to GameEvents and advances objectives when
+// matching events fire.
+//
+// Condition types (QuestCondition) are shared between quest prerequisites and
+// state-type objectives — both are instantaneous state assertions.
+
+/** State-assertion primitive. Used for quest prerequisites and state-type
+ *  objectives. Evaluated against GameState at a point in time. */
+export type QuestCondition =
+  | { type: "questCompleted"; questId: QuestId }
+  | { type: "playerLevel";   min: number }
+  | { type: "isUnlocked";    unlockId: UnlockId }
+  | { type: "hasFlag";       flagId: string; value?: number }
+  | { type: "hasItem";       itemId: ItemId; qty: number }
+  | { type: "hasCurrency";   currencyId: string; amount: number };
+
+/** Recursive filter applied to event payloads to determine whether a
+ *  particular event occurrence counts toward an objective. */
+export type ObjectiveFilter =
+  | { field: string; op: "eq" | "neq" | "gte" | "lte"; value: unknown }
+  | { all: ObjectiveFilter[] }
+  | { any: ObjectiveFilter[] };
+
+/** Event-accumulator objective — listens for bus events and increments. */
+export interface QuestObjectiveEvent {
+  kind: "event";
+  description: string;
+  /** Which bus event to listen for. */
+  eventType: keyof import("../infra/events").GameEvents;
+  /** Payload filter. Only matching events increment the counter. */
+  filter?: ObjectiveFilter;
+  /** Payload field whose numeric value is the increment. Default: +1. */
+  incrementField?: string;
+  /** How many times (or total accumulated value) to reach. */
+  targetCount: number;
+}
+
+/** State-check objective — re-evaluates a condition whenever relevant events
+ *  fire. Progress is binary: 0 (not met) or 1 (met). */
+export interface QuestObjectiveState {
+  kind: "state";
+  description: string;
+  /** The state assertion to evaluate. */
+  check: QuestCondition;
+}
+
+export type QuestObjectiveDef = QuestObjectiveEvent | QuestObjectiveState;
+
+/** Controls how a quest transitions from "ready" to "completed". */
+export interface QuestTurnIn {
+  /** "auto" = objectives met → immediate completion.
+   *  "manual" = player must explicitly submit (via UI or dialogue action). */
+  mode: "auto" | "manual";
+  /** Items/currency consumed on turn-in (e.g. "hand over 5 copper ore"). */
+  cost?: CostDef;
+}
+
+export interface QuestDef {
+  id: QuestId;
+  name: string;
+  description: string;
+  /** Hidden quests are not shown in the available list — must be started by
+   *  dialogue, another quest's onComplete, or system trigger. */
+  hidden?: boolean;
+  /** When true, quest is automatically accepted once prerequisites are met. */
+  autoAccept?: boolean;
+  /** All conditions must be satisfied for the quest to become available. */
+  prerequisites?: QuestCondition[];
+  /** Completion objectives — ALL must be fulfilled. */
+  objectives: QuestObjectiveDef[];
+  /** Turn-in behavior. Default: { mode: "auto" }. */
+  turnIn?: QuestTurnIn;
+  /** Rewards granted on completion (after successful turn-in). */
+  rewards?: RewardBundle;
+  /** Side-effects executed after completion (unlock, start next quest, etc). */
+  onComplete?: GameAction[];
+  /** "global" (default) = any hero's events count.
+   *  "character" = only the accepting hero's events count. */
+  scope?: "global" | "character";
+  /** If set, quest can be re-accepted after completion.
+   *  `true` = immediately re-available.
+   *  `{ cooldownTicks }` = re-available after cooldown elapses. */
+  repeatable?: boolean | { cooldownTicks?: number };
+}
+
 // ---------- New game bootstrap ----------
 //
 // Configures how a brand-new save is populated: the starting PlayerCharacters
@@ -730,6 +829,7 @@ export interface ContentDb {
   unlocks: Readonly<Record<string, UnlockDef>>;
   npcs: Readonly<Record<string, NpcDef>>;
   dialogues: Readonly<Record<string, DialogueDef>>;
+  quests: Readonly<Record<string, QuestDef>>;
   /** Formulas referenced by other content (xp curves, damage, etc). */
   formulas: Readonly<Record<string, FormulaRef>>;
   /** New-game bootstrap config. Optional so empty/test DBs still type-check;
@@ -755,6 +855,7 @@ export function emptyContentDb(): ContentDb {
     unlocks: {},
     npcs: {},
     dialogues: {},
+    quests: {},
     formulas: {},
   };
 }

@@ -84,5 +84,7 @@ export function categoryLabel(category: GameLogCategory): string {
       return T.logCategory_growth;
     case "dungeon":
       return T.logCategory_dungeon;
+    case "quest":
+      return T.logCategory_quest;
   }
 }

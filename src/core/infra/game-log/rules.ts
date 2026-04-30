@@ -364,6 +364,26 @@ export const gameLogRules = {
       `已放弃副本《${dungeonName(payload.dungeonId)}》。`,
       undefined,
     ),
+  questAccepted: (
+    payload: GameEvents["questAccepted"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(ctx, "quest", `接取了任务「${questName(payload.questId)}」。`, undefined),
+  questReady: (
+    payload: GameEvents["questReady"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(ctx, "quest", `任务「${questName(payload.questId)}」可以提交了。`, undefined),
+  questCompleted: (
+    payload: GameEvents["questCompleted"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(ctx, "quest", `完成了任务「${questName(payload.questId)}」！`, undefined),
+  questAbandoned: (
+    payload: GameEvents["questAbandoned"],
+    ctx: GameLogRuleContext,
+  ) =>
+    entry(ctx, "quest", `放弃了任务「${questName(payload.questId)}」。`, undefined),
 } satisfies Partial<{
   [K in LoggedGameEventName]: (
     payload: GameEvents[K],
@@ -452,6 +472,10 @@ function skillName(id: string): string {
 
 function upgradeName(id: string): string {
   return getContent().upgrades[id]?.name ?? id;
+}
+
+function questName(id: string): string {
+  return getContent().quests[id]?.name ?? id;
 }
 
 function currencyName(id: string): string {
