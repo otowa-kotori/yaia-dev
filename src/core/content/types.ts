@@ -15,7 +15,7 @@
 //   LootDistributionMode — loot 分配模式（预留扩展）
 
 import type { FormulaRef } from "../infra/formula/types";
-import type { ReactionHooks } from "../combat/reaction/types";
+import type { PhysicalDamageDealOptions, ReactionHooks } from "../combat/reaction/types";
 import type { PriorityRule, TargetPolicy } from "../combat/intent/priority";
 import type { GameEventBus } from "../infra/events";
 import type { Rng } from "../infra/rng";
@@ -274,7 +274,11 @@ export interface TalentExecutionContext extends TalentStaticContext {
   bus: GameEventBus;
   rng: Rng;
   currentTick: number;
-  dealPhysicalDamage(target: Character, coefficient: number): number;
+  dealPhysicalDamage(
+    target: Character,
+    coefficient: number,
+    opts?: PhysicalDamageDealOptions,
+  ): number;
   dealMagicDamage(target: Character, coefficient: number): number;
   applyEffect(effectId: EffectId, target: Character, state: Record<string, unknown>): void;
   aliveEnemies(): Character[];

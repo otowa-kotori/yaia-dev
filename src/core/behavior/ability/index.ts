@@ -34,7 +34,12 @@ import { isAlive, isPlayer, getAttr } from "../../entity/actor";
 import { ATTR } from "../../entity/attribute";
 import { evalFormula, type FormulaContext } from "../../infra/formula";
 import type { FormulaRef } from "../../infra/formula/types";
-import { dispatchReaction, type ReactionContext, type DamageType } from "../../combat/reaction";
+import {
+  dispatchReaction,
+  type PhysicalDamageDealOptions,
+  type ReactionContext,
+  type DamageType,
+} from "../../combat/reaction";
 import type { Battle } from "../../combat/battle/battle";
 import { applyEffect, type EffectContext } from "../effect";
 
@@ -427,6 +432,7 @@ function dealDamageWithReactions(
   damageType: DamageType,
   ctx: AbilityContext,
   reactionCtx: ReactionContext,
+  physicalOpts?: PhysicalDamageDealOptions,
 ): number {
   // 1. Hit check — miss skips all damage and reactions.
   if (!rollHit(caster, target, ctx)) {
@@ -442,7 +448,24 @@ function dealDamageWithReactions(
 
   // 2. Calculate raw damage via formula (includes armor reduction for physical).
   const formulaKind = damageType === "physical" ? "phys_damage_v1" : "magic_damage_v1";
-  const fctx = buildFormulaContext(caster, target);
+  const baseCtx = buildFormulaContext(caster, target);
+  const vars: Record<string, number> = { ...baseCtx.vars };
+  if (damageType === "physical") {
+    // Same pattern as resolve_hit_rate / resolve_crit_rate: seed a mutable result,
+    // let attacker effects react, then feed formula vars (tests/content may use reactions).
+    const seed =
+      physicalOpts?.patkOverride !== undefined
+        ? physicalOpts.patkOverride
+        : getAttr(caster, ATTR.PATK);
+    const patkResult = { patk: seed };
+    dispatchReaction(
+      caster,
+      { kind: "resolve_physical_damage_patk", target, result: patkResult },
+      reactionCtx,
+    );
+    vars.patk = Math.max(0, patkResult.patk);
+  }
+  const fctx: FormulaContext = { vars };
   const rawDamage = Math.max(0, Math.floor(evalFormula({ kind: formulaKind, skillMul: coefficient }, fctx)));
 
   // 3. before_damage_taken reaction (can modify finalDamage).
@@ -522,8 +545,8 @@ function buildTalentExecutionContext(
     bus: ctx.bus,
     rng: ctx.rng,
     currentTick: ctx.currentTick,
-    dealPhysicalDamage(target, coefficient) {
-      return dealDamageWithReactions(caster, target, coefficient, "physical", ctx, reactionCtx);
+    dealPhysicalDamage(target, coefficient, opts) {
+      return dealDamageWithReactions(caster, target, coefficient, "physical", ctx, reactionCtx, opts);
     },
     dealMagicDamage(target, coefficient) {
       return dealDamageWithReactions(caster, target, coefficient, "magical", ctx, reactionCtx);
@@ -548,8 +571,8 @@ function createReactionContext(
   battle?: Battle,
 ): ReactionContext {
   const reactionCtx: ReactionContext = {
-    dealPhysicalDamage(source, target, coefficient) {
-      return dealDamageWithReactions(source, target, coefficient, "physical", ctx, reactionCtx);
+    dealPhysicalDamage(source, target, coefficient, opts) {
+      return dealDamageWithReactions(source, target, coefficient, "physical", ctx, reactionCtx, opts);
     },
     dealMagicDamage(source, target, coefficient) {
       return dealDamageWithReactions(source, target, coefficient, "magical", ctx, reactionCtx);

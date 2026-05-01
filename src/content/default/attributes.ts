@@ -77,7 +77,7 @@ const authoredAttributes = {
   },
   [ATTR.WEAPON_MATK]: {
     id: ATTR.WEAPON_MATK,
-    name: "武器法攻",
+    name: "武器魔攻",
     defaultBase: 0,
     integer: true,
     clampMin: 0,

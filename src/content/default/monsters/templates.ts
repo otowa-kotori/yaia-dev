@@ -1,5 +1,5 @@
-import { ATTR } from "../../../core/entity/attribute";
 import type { MonsterDef, MonsterId } from "../../../core/content";
+import { ATTR } from "../../../core/entity/attribute";
 import type { AuthoringDef } from "../../compiler/inheritance";
 import { basicAttackTalent } from "../talents";
 import { CURRENCY_GOLD } from "../currencies";
@@ -18,6 +18,7 @@ export const monsterTemplateDrafts = {
     level: 1,
     talents: [basicAttackTalent.id],
     physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
+    magScaling: [{ attr: ATTR.INT, ratio: 1.0 }],
     rewards: {
       charXp: 1,
       currencies: { [CURRENCY_GOLD]: 0 },

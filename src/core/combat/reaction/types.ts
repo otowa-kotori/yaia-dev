@@ -24,6 +24,14 @@ import type { Battle } from "../battle/battle";
 
 export type DamageType = "physical" | "magical";
 
+/**
+ * Optional inputs for one physical damage resolution through dealDamageWithReactions.
+ * patkOverride seeds result.patk before resolve_physical_damage_patk reactions run.
+ */
+export interface PhysicalDamageDealOptions {
+  patkOverride?: number;
+}
+
 // ---------- ReactionEvent ----------
 
 /**
@@ -74,6 +82,14 @@ export type ReactionEvent =
       target: Character;
       result: { rate: number };
     }
+  | {
+      /** Dispatched on the attacker after the hit check, before phys_damage_v1.
+       *  result.patk is seeded from panel PATK or from dealPhysicalDamage opts.patkOverride;
+       *  reactions may mutate result.patk (same idea as resolve_hit_rate). */
+      kind: "resolve_physical_damage_patk";
+      target: Character;
+      result: { patk: number };
+    }
   // ---- broadcast: dispatch to all allies / all participants ----
   | {
       kind: "on_ally_damaged";
@@ -112,7 +128,12 @@ export type ReactionHooks = {
  */
 export interface ReactionContext {
   /** Deal physical damage using the standard combat formula + reaction pipeline. */
-  dealPhysicalDamage(source: Character, target: Character, coefficient: number): number;
+  dealPhysicalDamage(
+    source: Character,
+    target: Character,
+    coefficient: number,
+    opts?: PhysicalDamageDealOptions,
+  ): number;
   /** Deal magical damage using the standard combat formula + reaction pipeline. */
   dealMagicDamage(source: Character, target: Character, coefficient: number): number;
   /** Deal flat damage to a target. Bypasses formulas; use for redirected/already-resolved damage. */

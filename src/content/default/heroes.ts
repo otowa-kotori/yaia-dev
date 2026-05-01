@@ -7,6 +7,7 @@ import { defaultCharXpCurve } from "./formulas";
 import {
   basicAttackTalent,
   magicBasicAttackTalent,
+  magicBladeTalent,
 } from "./talents";
 import {
   trainingSword,
@@ -34,12 +35,14 @@ const authoredHeroes = {
       [ATTR.MRES]: 0,
     },
     knownTalents: [basicAttackTalent.id],
+    physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
+    magScaling: [{ attr: ATTR.INT, ratio: 1.0 }],
   },
   "hero.satori": {
     id: "hero.satori",
     extends: "hero.template.base",
     name: "古明地觉",
-    learnList: [],
+    learnList: [{ level: 5, talentId: magicBladeTalent.id }],
     startingItems: [{ itemId: trainingSword.id, qty: 1 }],
     growth: {
       [ATTR.STR]: 10,
@@ -47,7 +50,6 @@ const authoredHeroes = {
       [ATTR.INT]: 10,
       [ATTR.CON]: 10,
     },
-    physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
   },
   "hero.remilia": {
     id: "hero.remilia",
@@ -61,7 +63,6 @@ const authoredHeroes = {
       [ATTR.INT]: 5,
       [ATTR.CON]: 9,
     },
-    physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
   },
   "hero.patchouli": {
     id: "hero.patchouli",
@@ -76,7 +77,6 @@ const authoredHeroes = {
       [ATTR.INT]: 15,
       [ATTR.CON]: 9,
     },
-    magScaling: [{ attr: ATTR.INT, ratio: 1.0 }],
   },
   [balanceFocusDummyHeroId]: {
     id: balanceFocusDummyHeroId,
@@ -90,7 +90,6 @@ const authoredHeroes = {
       [ATTR.INT]: 1,
       [ATTR.CON]: 1,
     },
-    physScaling: [{ attr: ATTR.STR, ratio: 1.0 }],
   },
 } satisfies Record<string, AuthoringDef<HeroConfig>>;
 

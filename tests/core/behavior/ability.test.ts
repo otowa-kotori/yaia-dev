@@ -157,4 +157,26 @@ describe("talent: tryUseTalent", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("wrong_target_count");
   });
+
+  test("physical patkOverride seeds phys_damage_v1 before resolve_physical_damage_patk", () => {
+    const patkOverrideTalent: TalentDef = {
+      id: "talent.test.patk_override" as TalentId,
+      name: "Patk override smoke",
+      type: "active",
+      maxLevel: 1,
+      tpCost: 0,
+      getActiveParams: () => ({ targetKind: "single_enemy" as const }),
+      execute: (ctx) => {
+        ctx.dealPhysicalDamage(ctx.targets[0]!, 1, { patkOverride: 80 });
+      },
+    };
+    const h = makeHarness();
+    patchContent({ talents: { [patkOverrideTalent.id]: patkOverrideTalent } });
+    const caster = makePlayer({ id: "p", talents: [patkOverrideTalent.id], atk: 5 });
+    applyGuaranteedHitNoCrit(caster);
+    const target = makeSlime("m"); // hp 30, PDEF 1 — PATK 5 vs 系数 1 远低于注入的 80
+    const r = tryUseTalent(caster, patkOverrideTalent.id, [target], { ...h });
+    expect(r.ok).toBe(true);
+    expect(target.currentHp).toBeLessThan(10);
+  });
 });

@@ -33,13 +33,13 @@ export const outOfCombatRecoveryEffect: EffectDef = {
     {
       stat: ATTR.OUT_OF_COMBAT_HP_PCT_PER_SECOND,
       op: "flat",
-      value: 0.02,
+      value: 0.05,
       sourceId: "",
     },
     {
       stat: ATTR.OUT_OF_COMBAT_MP_PCT_PER_SECOND,
       op: "flat",
-      value: 0.02,
+      value: 0.05,
       sourceId: "",
     },
   ],

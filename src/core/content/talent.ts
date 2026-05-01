@@ -10,6 +10,7 @@ import type { GameEventBus } from "../infra/events";
 import type { Rng } from "../infra/rng";
 import type { GameState } from "../infra/state/types";
 import type { EffectId } from "./types";
+import type { PhysicalDamageDealOptions } from "../combat/reaction/types";
 
 export const DEFAULT_TALENT_MP_COST = 0;
 export const DEFAULT_TALENT_COOLDOWN_ACTIONS = 0;
@@ -32,7 +33,11 @@ export interface CreateTalentExecutionContextArgs {
   bus: GameEventBus;
   rng: Rng;
   currentTick: number;
-  dealPhysicalDamage(target: Character, coefficient: number): number;
+  dealPhysicalDamage(
+    target: Character,
+    coefficient: number,
+    opts?: PhysicalDamageDealOptions,
+  ): number;
   dealMagicDamage(target: Character, coefficient: number): number;
   applyEffect(effectId: EffectId, target: Character, state: Record<string, unknown>): void;
   aliveEnemies(): Character[];

@@ -18,6 +18,7 @@ export {
 export {
   basicAttackTalent,
   magicBasicAttackTalent,
+  magicBladeTalent,
   knightFortitude,
   knightGuard,
   knightPowerStrike,

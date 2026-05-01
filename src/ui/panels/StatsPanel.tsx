@@ -23,6 +23,8 @@ const DISPLAY_ATTRS: Array<{ id: string; label: string }> = [
   { id: ATTR.MATK,   label: T.label_matk },
   { id: ATTR.PDEF,   label: T.label_pdef },
   { id: ATTR.MRES,   label: T.label_mres },
+  { id: ATTR.PHYS_POTENCY, label: T.label_physPotency },
+  { id: ATTR.MAG_POTENCY,  label: T.label_magPotency },
   { id: ATTR.STR,    label: T.label_str },
   { id: ATTR.DEX,    label: T.label_dex },
   { id: ATTR.INT,    label: T.label_int },

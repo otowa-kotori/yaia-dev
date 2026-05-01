@@ -1,5 +1,6 @@
 export type {
   DamageType,
+  PhysicalDamageDealOptions,
   ReactionEvent,
   ReactionHandler,
   ReactionHooks,
