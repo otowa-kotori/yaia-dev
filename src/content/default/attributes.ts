@@ -12,10 +12,11 @@ import { compileInheritedCollection, type AuthoringDef } from "../compiler/inher
 //   命中层:   HIT / EVA（DEX DynamicModifierProvider 驱动）
 //   暴击层:   CRIT_RATE / CRIT_RES（DEX DynamicModifierProvider 驱动）
 //
-// k=0.3 是 sqrt 缩放系数，决定主属性对面板攻击力的放大幅度。
+// k=0.03 是线性缩放系数，决定主属性对面板攻击力的放大幅度。
+// PATK = WEAPON_ATK × (1 + K_SCALING × PHYS_POTENCY)
 // 全部设计验证见 docs/design/combat-formula.md。
 
-const K_SCALING = 0.3;
+const K_SCALING = 0.03;
 
 const authoredAttributes = {
   [ATTR.MAX_HP]: {
@@ -100,7 +101,7 @@ const authoredAttributes = {
     integer: true,
     clampMin: 0,
     computeBase: (get) =>
-      get(ATTR.WEAPON_ATK) * (1 + K_SCALING * Math.sqrt(get(ATTR.PHYS_POTENCY))),
+      get(ATTR.WEAPON_ATK) * (1 + K_SCALING * get(ATTR.PHYS_POTENCY)),
     dependsOn: [ATTR.WEAPON_ATK, ATTR.PHYS_POTENCY],
   },
   [ATTR.MATK]: {
@@ -110,7 +111,7 @@ const authoredAttributes = {
     integer: true,
     clampMin: 0,
     computeBase: (get) =>
-      get(ATTR.WEAPON_MATK) * (1 + K_SCALING * Math.sqrt(get(ATTR.MAG_POTENCY))),
+      get(ATTR.WEAPON_MATK) * (1 + K_SCALING * get(ATTR.MAG_POTENCY)),
     dependsOn: [ATTR.WEAPON_MATK, ATTR.MAG_POTENCY],
   },
   [ATTR.PDEF]: {

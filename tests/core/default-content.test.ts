@@ -3,7 +3,6 @@ import { ATTR } from "../../src/core/entity/attribute";
 import {
   DEFAULT_CONTENT,
   buildDefaultContent,
-  copperSword,
   getDefaultContent,
   magicBasicAttackTalent,
   trainingSword,
@@ -25,12 +24,10 @@ describe("default content", () => {
   test("derived definitions are materialized before runtime consumption", () => {
     expect(trainingSword.slot).toBe("weapon");
     expect(trainingSword.stackable).toBe(false);
-    expect(copperSword.tags).toEqual(["weapon", "sword", "crafted"]);
 
-    const cleric = DEFAULT_CONTENT.starting?.heroes.find((hero) => hero.id === "hero.cleric");
-    expect(cleric?.knownTalents).toEqual([magicBasicAttackTalent.id]);
-    expect(cleric?.baseAttrs?.[ATTR.WEAPON_MATK]).toBe(1);
-    expect(cleric?.baseAttrs?.[ATTR.MRES]).toBe(0.2);
+    const patchouli = DEFAULT_CONTENT.starting?.heroes.find((hero) => hero.id === "hero.patchouli");
+    expect(patchouli?.knownTalents).toEqual([magicBasicAttackTalent.id]);
+    expect(patchouli?.baseAttrs?.[ATTR.WEAPON_MATK]).toBe(5);
   });
 });
 

@@ -26,77 +26,39 @@ export {
   knightWarcry,
 } from "./default/talents";
 export {
-  beastHide,
-  boneDust,
-  bossCore,
-  carapace,
-  copperOre,
-  copperSword,
   items,
-  shadowCore,
-  slimeGel,
-  trainingBow,
-  trainingScepter,
-  trainingStaff,
   trainingSword,
-  twilightEssence,
-  wolfKingFang,
+  trainingSpear,
+  trainingStaff,
 } from "./default/items";
 export {
-  bigSlime,
-  blackfangAlpha,
-  caveBat,
-  direWolf,
-  duskWolf,
-  greenSlime,
-  hornedRabbit,
   monsters,
-  oreCrab,
-  poisonMushroom,
-  shadowFiend,
-  skeletonSoldier,
+  tutorialSlime,
   slime,
-  trainingDummy,
   wildBoar,
+  armoredBear,
 } from "./default/monsters";
 export {
   heroConfigs,
-  clericHero,
-  knightHero,
-  mageHero,
-  rangerHero,
+  satoriHero,
+  remiliaHero,
+  patchouliHero,
   startingConfig,
 } from "./default/heroes";
-export { miningSkill, skills, smithingSkill } from "./default/skills";
-export { copperSwordRecipe, recipes } from "./default/recipes";
-export { copperVein, resourceNodes } from "./default/resource-nodes";
+export { skills } from "./default/skills";
+export { recipes } from "./default/recipes";
+export { resourceNodes } from "./default/resource-nodes";
 export {
   combatZones,
-  mineBatCrabMix,
-  mineBatShadowMix,
-  mineCaveBat,
-  mineOreCrab,
-  mineShadowFiend,
-  trainingGroundCombat,
-  twilightDuskWolf,
-  twilightPoisonMushroom,
-  twilightSkeletonSoldier,
+  stage1Tutorial,
+  stage2Normal,
+  stage3Strong,
+  stage4Hard,
 } from "./default/combat-zones";
-export { blackfangSanctumDungeon, dungeons, wolfDenDungeon } from "./default/dungeons";
+export { dungeons } from "./default/dungeons";
 export {
-  bossSanctumLocation,
-  ironMineLocation,
   locations,
   prairieLocation,
-  trainingGroundLocation,
-  twilightLocation,
 } from "./default/locations";
-export { atkUpgrade, defUpgrade, upgrades } from "./default/upgrades";
-export {
-  unlocks,
-  unlockFeatureUpgradesTab,
-  unlockLocationBossSanctum,
-  unlockLocationIronMine,
-  unlockLocationTraining,
-  unlockLocationTwilight,
-} from "./default/unlocks";
+export { upgrades } from "./default/upgrades";
+export { unlocks } from "./default/unlocks";

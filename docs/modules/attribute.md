@@ -18,11 +18,11 @@
 ## 面板攻击力公式
 
 ```
-PATK = floor(WEAPON_ATK × (1 + 0.3 × √PHYS_POTENCY))
-MATK = floor(WEAPON_MATK × (1 + 0.3 × √MAG_POTENCY))
+PATK = floor(WEAPON_ATK × (1 + 0.03 × PHYS_POTENCY))
+MATK = floor(WEAPON_MATK × (1 + 0.03 × MAG_POTENCY))
 ```
 
-`k = 0.3`，`computeBase` 由 AttrDef 配置，依赖链由 `dependsOn` 声明。
+`k = 0.03`，线性缩放。`computeBase` 由 AttrDef 配置，依赖链由 `dependsOn` 声明。
 
 ## 堆叠模型
 

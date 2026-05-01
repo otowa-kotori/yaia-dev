@@ -5,20 +5,14 @@ import { COMBAT_ZONE_ACTIVITY_RULES } from "../../src/core/world/activity/recove
 import { getAttr, isResourceNode } from "../../src/core/entity/actor";
 import { ATTR } from "../../src/core/entity/attribute";
 import { resetContent } from "../../src/core/content";
-import { addStack, countItem } from "../../src/core/inventory";
 import { SHARED_INVENTORY_KEY } from "../../src/core/infra/state";
 import { deserialize, serialize } from "../../src/core/save";
 
 import { createGameSession, type GameSession } from "../../src/core/session";
 import {
   buildDefaultContent,
-  copperOre,
-  copperSword,
-  copperSwordRecipe,
-  knightHero,
-  rangerHero,
-  slimeGel,
-  smithingSkill,
+  satoriHero,
+  remiliaHero,
   trainingSword,
 } from "../../src/content/index";
 import {
@@ -227,9 +221,9 @@ describe("GameSession location flow", () => {
   });
 
   test("fresh hero starts with starter weapon auto-equipped and can unequip/re-equip it", () => {
-    const { session, content } = createDefaultSession();
-    // 骑士开局自动装备训练木剑
-    const cc = session.getCharacter("hero.knight");
+    const { session } = createDefaultSession();
+    // 觉开局自动装备训练木剑
+    const cc = session.getCharacter("hero.satori");
     const hero = cc.hero;
     const inventory = session.state.inventories[hero.id]!;
 
@@ -260,7 +254,7 @@ describe("GameSession location flow", () => {
 
   test("can move gear between hero bag and shared inventory", () => {
     const { session } = createDefaultSession();
-    const cc = session.getCharacter("hero.knight");
+    const cc = session.getCharacter("hero.satori");
     const hero = cc.hero;
     const heroInventory = session.state.inventories[hero.id]!;
     const sharedInventory = session.state.inventories[SHARED_INVENTORY_KEY]!;
@@ -307,46 +301,6 @@ describe("GameSession location flow", () => {
     ).toBe(true);
   });
 
-  test("discardInventoryItem removes the slot contents and appends a log", () => {
-    const { session } = createDefaultSession();
-    const cc = session.getCharacter("hero.knight");
-    const hero = cc.hero;
-    const inventory = session.state.inventories[hero.id]!;
-
-    addStack(inventory, slimeGel.id, 2, 99);
-    const slotIndex = inventory.slots.findIndex(
-      (slot) => slot?.kind === "stack" && slot.itemId === slimeGel.id,
-    );
-    expect(slotIndex).toBeGreaterThanOrEqual(0);
-
-    cc.discardInventoryItem(hero.id, slotIndex);
-
-    expect(countItem(inventory, slimeGel.id)).toBe(0);
-    expect(session.state.gameLog.some((entry) => entry.text.includes("丢弃了 史莱姆胶×2"))).toBe(true);
-  });
-
-  test("craftRecipe consumes materials, grants smithing XP, and produces the crafted weapon", () => {
-
-    const { session } = createDefaultSession();
-    const cc = session.getCharacter("hero.knight");
-    const hero = cc.hero;
-
-    const inventory = session.state.inventories[hero.id]!;
-    addStack(inventory, copperOre.id, 3, 99);
-    addStack(inventory, slimeGel.id, 2, 99);
-
-    cc.craftRecipe(copperSwordRecipe.id);
-
-    expect(countItem(inventory, copperOre.id)).toBe(0);
-    expect(countItem(inventory, slimeGel.id)).toBe(0);
-    expect(hero.skills[smithingSkill.id]?.xp).toBe(copperSwordRecipe.rewards.xp?.[0]?.amount ?? 0);
-    expect(
-      inventory.slots.some(
-        (slot) => slot?.kind === "gear" && slot.instance.itemId === copperSword.id,
-      ),
-    ).toBe(true);
-  });
-
   test("purchaseUpgrade is routed through session and appends player-facing logs", () => {
     const { session } = createDefaultSession();
     session.state.currencies["currency.gold"] = 1000;
@@ -356,7 +310,7 @@ describe("GameSession location flow", () => {
     expect(session.state.worldRecord.upgrades["upgrade.combat.atk"]).toBe(1);
     expect(
       session.state.gameLog.some((entry) =>
-        entry.text.includes("购买了全局升级“") && entry.text.includes("Lv.1"),
+        entry.text.includes("购买了全局升级\u201C") && entry.text.includes("Lv.1"),
       ),
     ).toBe(true);
 
@@ -368,16 +322,18 @@ describe("GameSession location flow", () => {
   test("multiple heroes can exist and be focused independently", () => {
     const { session } = createDefaultSession();
     const heroes = session.listHeroes();
-    expect(heroes.length).toBe(4);
+    expect(heroes.length).toBe(3);
 
-    expect(session.focusedCharId).toBe("hero.knight");
-    session.setFocusedChar("hero.ranger");
-    expect(session.focusedCharId).toBe("hero.ranger");
+    expect(session.focusedCharId).toBe("hero.satori");
+    session.setFocusedChar("hero.remilia");
+    expect(session.focusedCharId).toBe("hero.remilia");
 
-    const cc1 = session.getCharacter("hero.knight");
-    const cc2 = session.getCharacter("hero.ranger");
-    expect(cc1.hero.name).toBe(knightHero.name);
-    expect(cc2.hero.name).toBe(rangerHero.name);
+    const cc1 = session.getCharacter("hero.satori");
+    const cc2 = session.getCharacter("hero.remilia");
+    expect(cc1.hero.name).toBe(satoriHero.name);
+    expect(cc2.hero.name).toBe(remiliaHero.name);
   });
 });
 
+// 把 countItem import 移到文件顶部之外会导致对旧 items 的引用；在 gather 测试中仍需要。
+import { countItem } from "../../src/core/inventory";
