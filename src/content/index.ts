@@ -28,7 +28,6 @@ export {
 export {
   items,
   trainingSword,
-  trainingSpear,
   trainingStaff,
 } from "./default/items";
 export {

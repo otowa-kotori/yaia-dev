@@ -1,0 +1,42 @@
+{
+  "seed": 42,
+  "defaults": {
+    "durationMinutes": 60
+  },
+  "heroProfiles": {
+    "satori_lv1": { "heroId": "hero.satori", "level": 1 },
+    "satori_lv2": { "heroId": "hero.satori", "level": 2 },
+    "satori_lv5": { "heroId": "hero.satori", "level": 5 },
+    "satori_lv8": { "heroId": "hero.satori", "level": 8 },
+    "remilia_lv1": { "heroId": "hero.remilia", "level": 1 },
+    "remilia_lv2": { "heroId": "hero.remilia", "level": 2 },
+    "remilia_lv5": { "heroId": "hero.remilia", "level": 5 },
+    "remilia_lv8": { "heroId": "hero.remilia", "level": 8 },
+    "patchouli_lv1": { "heroId": "hero.patchouli", "level": 1 },
+    "patchouli_lv2": { "heroId": "hero.patchouli", "level": 2 },
+    "patchouli_lv5": { "heroId": "hero.patchouli", "level": 5 },
+    "patchouli_lv8": { "heroId": "hero.patchouli", "level": 8 }
+  },
+  "scenarios": [
+    {
+      "name": "Phase0 Lv1 同级 vs 第一关（绿史莱姆 Lv1）",
+      "profiles": ["satori_lv1", "remilia_lv1", "patchouli_lv1"],
+      "combatZoneId": "combatzone.phase0.stage1"
+    },
+    {
+      "name": "Phase0 Lv2 同级 vs 第二关（史莱姆 Lv2）",
+      "profiles": ["satori_lv2", "remilia_lv2", "patchouli_lv2"],
+      "combatZoneId": "combatzone.phase0.stage2"
+    },
+    {
+      "name": "Phase0 Lv5 同级 vs 第三关（野猪 Lv5）",
+      "profiles": ["satori_lv5", "remilia_lv5", "patchouli_lv5"],
+      "combatZoneId": "combatzone.phase0.stage3"
+    },
+    {
+      "name": "Phase0 Lv8 同级 vs 第四关（铁甲熊 Lv8）",
+      "profiles": ["satori_lv8", "remilia_lv8", "patchouli_lv8"],
+      "combatZoneId": "combatzone.phase0.stage4"
+    }
+  ]
+}

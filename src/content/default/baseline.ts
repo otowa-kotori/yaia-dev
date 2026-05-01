@@ -6,20 +6,43 @@
 // baseAttrs: Lv1 时的属性值（= 成长 × 2）。
 // growth:    每级增量（和 HeroConfig.growth / MonsterDef.growth 同语义）。
 //
-// Phase 0 基线：三围成长各 10，HP 每级 50（CON×3=30 + 直接 20）。
+// Phase 0 基线：三围成长各 10；MAX_HP 成长见 BASE_GROWTH（Lv1 锚点仍遵循 base = 2×growth）。
 
 import type { AttrId } from "../../core/content/types";
 import { ATTR } from "../../core/entity/attribute";
 
+/**
+ * 作者层约定：`growth[attr]` 存在且非零时，若 `baseAttrs[attr]` 未写，则 Lv1 锚点为 `2 × growth[attr]`。
+ * 装备类、SPEED 等无成长的字段仍写在 `baseAttrs` 里。
+ */
+export function applyGrowthAnchoredBaseAttrs<
+  T extends {
+    baseAttrs?: Partial<Record<AttrId, number>>;
+    growth?: Partial<Record<AttrId, number>>;
+  },
+>(def: T): T {
+  const growth = def.growth ?? {};
+  const base: Partial<Record<AttrId, number>> = { ...(def.baseAttrs ?? {}) };
+  for (const [attrId, g] of Object.entries(growth)) {
+    if (typeof g !== "number" || g === 0) continue;
+    const aid = attrId as AttrId;
+    if (base[aid] === undefined) {
+      base[aid] = 2 * g;
+    }
+  }
+  return { ...def, baseAttrs: base };
+}
+
 /** Lv1 标准角色属性值（= 成长 × 2）。 */
 export const BASE_ATTRS: Partial<Record<AttrId, number>> = {
-  [ATTR.MAX_HP]: 100,
+  [ATTR.MAX_HP]: 30,
   [ATTR.MAX_MP]: 30,
   [ATTR.STR]:    20,
   [ATTR.DEX]:    20,
   [ATTR.INT]:    20,
   [ATTR.CON]:    20,
   [ATTR.WEAPON_ATK]: 6,
+  [ATTR.WEAPON_MATK]: 5,
   [ATTR.PDEF]:   0,
   [ATTR.MRES]:   0,
   [ATTR.SPEED]:  40,
@@ -28,7 +51,6 @@ export const BASE_ATTRS: Partial<Record<AttrId, number>> = {
 /** 每级标准成长（= 三角色平均）。 */
 export const BASE_GROWTH: Partial<Record<AttrId, number>> = {
   [ATTR.MAX_HP]: 20,
-  [ATTR.MAX_MP]: 3,
   [ATTR.STR]:    10,
   [ATTR.DEX]:    10,
   [ATTR.INT]:    10,

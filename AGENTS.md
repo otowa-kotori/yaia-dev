@@ -24,7 +24,12 @@ Project-specific conventions for Claude. Read before editing code.
 - Use `fd` to find files and `rg` to search contents. Do NOT use `find` or `grep`.
 - Use `bun` for Typescrit and `uv` for Python.
 - On Windows, use `pwsh7` instead of powershell.
-- To surface TypeScript diagnostics in this PowerShell workspace, run `bun run typecheck 2>&1`.
+- To surface TypeScript diagnostics in this PowerShell workspace, run `bun typecheck 2>&1`.
+
+## `.local`（工作区生成物）
+
+- **平衡测试示例 JSON、HTML 报告、CLI 导出的快照 JSON** 等放入 `.local/`（例如 `.local/balance-test/`）。**不要**把这些文件塞进 `.agent/skills/` 等工作区 Skill 目录：Skill 目录只保留 `SKILL.md` 这类说明。
+- `.gitignore` 已忽略 `.local` 下典型生成物（如 `*.html`、`balance-last-run.json`）；可提交的模板（如 `balance-example.json`）保留在 `.local/balance-test/` 供团队对齐路径。
 
 ## Comments
 
@@ -54,9 +59,9 @@ Project-specific conventions for Claude. Read before editing code.
 ## Tests
 
 - bun test. Put new tests under `tests/core/<module>.test.ts` mirroring source layout. Fixtures live in `tests/fixtures/`.
-- Typecheck (`bun run typecheck`) must be clean on commit.
+- Typecheck (`bun typecheck`) must be clean on commit.
 - Use `playwright-cli` to run E2E tests when you need to finally test the feature in the browser.
 
 ## Commits
 
-- Don't mention AI Agent in commit messages.
+- Don't mention AI Agent (Claude, Cursor, etc) in commit messages.

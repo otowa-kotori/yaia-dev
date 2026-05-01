@@ -1,7 +1,7 @@
 // Balance testing configuration schema, loading, and validation.
 //
 // Design: profiles and scenarios are decoupled.
-// - Profiles file (e.g. profiles/knight.json): stable hero build templates.
+// - Profiles file (e.g. profiles/phase0.json): stable hero build templates.
 // - Scenarios can come from a config file OR be built dynamically from CLI args
 //   using glob patterns on profile keys and combat zone IDs.
 //

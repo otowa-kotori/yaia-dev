@@ -13,6 +13,29 @@ import type { HeroProfile } from "./config";
 import { setupHero, findLocationForCombatZone } from "./setup";
 import { isPlayer, isEnemy } from "../../src/core/entity/actor";
 import type { CombatActivity } from "../../src/core/world/activity";
+import {
+  balanceFocusDummyHeroId,
+  heroConfigs,
+} from "../../src/content/default/heroes";
+
+/** resetToFresh 会把 focusedCharId 设为 starting.heroes[0]；前置 dummy 承接任务奖励，避免污染实测角色的 exp。 */
+function contentWithBalanceFocusDummy(content: ContentDb): ContentDb {
+  const dummy = heroConfigs[balanceFocusDummyHeroId];
+  if (!dummy) {
+    throw new Error(`balance sim: "${balanceFocusDummyHeroId}" missing from heroConfigs`);
+  }
+  const starting = content.starting;
+  if (!starting) {
+    throw new Error("balance sim: content.starting is required");
+  }
+  return {
+    ...content,
+    starting: {
+      ...starting,
+      heroes: [dummy, ...starting.heroes],
+    },
+  };
+}
 
 // ---------- Collected raw data ----------
 
@@ -61,8 +84,10 @@ export interface SimulationOptions {
 export function runSimulation(opts: SimulationOptions): SimCollector {
   const { content, profileKey, profile, combatZoneId, totalTicks, seed } = opts;
 
+  const simContent = contentWithBalanceFocusDummy(content);
+
   // 1) Create an isolated session.
-  const session = createGameSession({ content, seed });
+  const session = createGameSession({ content: simContent, seed });
   // Pause the real-time loop — we drive manually via engine.step().
   session.setSpeedMultiplier(0);
   session.resetToFresh();
@@ -74,7 +99,7 @@ export function runSimulation(opts: SimulationOptions): SimCollector {
   setupHero(session, profile);
 
   // 3) Enter location & start combat.
-  const locationId = findLocationForCombatZone(combatZoneId, content);
+  const locationId = findLocationForCombatZone(combatZoneId, simContent);
   cc.enterLocation(locationId);
   cc.startFight(combatZoneId);
 

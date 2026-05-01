@@ -10,5 +10,8 @@ bun.lockb
 .playwright-cli
 .codebuddy/plans
 external-assets/game-icons/
-balance-report.html
+
+# Local workspace artifacts (balance HTML / CLI dumps — see AGENTS.md)
+.local/**/*.html
+.local/**/balance-last-run.json
 

@@ -1,0 +1,9 @@
+{
+  "heroProfiles": {
+    "satori_lv1": { "heroId": "hero.satori", "level": 1 },
+    "satori_lv8": { "heroId": "hero.satori", "level": 8 },
+    "remilia_lv5": { "heroId": "hero.remilia", "level": 5 },
+    "patchouli_lv2": { "heroId": "hero.patchouli", "level": 2 }
+  },
+  "scenarios": []
+}

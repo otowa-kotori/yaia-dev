@@ -16,5 +16,4 @@ export const items = compileInheritedCollection<ItemDef>({
 });
 
 export const trainingSword = items["item.weapon.training_sword"]!;
-export const trainingSpear = items["item.weapon.training_spear"]!;
 export const trainingStaff = items["item.weapon.training_staff"]!;

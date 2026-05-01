@@ -1,2 +1,2 @@
 ## example
-bun run scripts/balance/cli.ts run scripts/balance/profiles/knight.json -p "*" -z "combatzone.prairie.*" -d 60 --json --html balance-report.html
+bun run scripts/balance/cli.ts run scripts/balance/profiles/phase0.json -p "*" -z "combatzone.phase0.*" -d 60 --json --html ".local/balance-test/balance-report.html"

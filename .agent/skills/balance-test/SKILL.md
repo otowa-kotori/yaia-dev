@@ -1,129 +1,101 @@
 ---
 name: balance-test
 description: |
-  Game balance testing CLI tool for simulating combat and analyzing hero/monster balance.
-  Use when: (1) user asks to test or analyze combat balance, hero performance, monster difficulty,
-  XP/gold farming efficiency, talent builds, or equipment impact; (2) user asks to run balance
-  simulations, compare builds, or check if a monster is too strong/weak; (3) user modifies
-  monster stats, talent params, damage formulas, or equipment values and wants to verify impact;
-  (4) user asks to create or update balance test profiles or scenarios.
-  Trigger keywords: balance, sim, simulate, farming, DPS, win rate, death rate, XP efficiency.
+  Game balance testing via scripts/balance/cli.ts — headless combat simulation through GameSession.
+  Use when: combat balance, hero vs zone difficulty, farming rates (XP/gold), or validating numeric/content changes.
+  Do NOT invent hero/zone/item IDs: always discover them with the CLI list command first.
+  Trigger keywords: balance, simulate, sim, DPS, win rate, farming, Phase0.
 ---
 
 # Balance Testing CLI
 
-`scripts/balance/cli.ts` — headless combat simulation driven entirely by `GameSession` API.
-No game logic is duplicated; all combat rules, rewards, and recovery phases execute as in-game.
+入口：`scripts/balance/cli.ts`。战斗、结算、回复等均走 `GameSession`，不在脚本里复制战斗公式。
 
-## File Layout
+## 与「当前版本内容」的关系
+
+- **Skill 正文不写死任何 heroId / combatZoneId / 物品 ID**。这些内容随版本会变；可靠做法是每次先用 `list` 拉当前构建下的合法 ID。
+- **示例 JSON、HTML、一次性 JSON 导出等工作区文件一律放在 `.local/balance-test/`**（勿写入 `.agent/skills/` 等工作区 Skill 目录）。仓库内可参考已提交的 `.local/balance-test/balance-example.json`；生成报告示例见下方命令。
+
+## 目录（脚本侧）
 
 ```
 scripts/balance/
-  cli.ts              Entry point (commander-based)
-  config.ts           Config types, JSON loading, glob expansion
-  setup.ts            Hero setup via GameSession API
-  simulate.ts         Drives CombatActivity lifecycle, collects event data
-  stats.ts            Computes balance metrics from raw data
-  report.ts           Terminal table + JSON output
-  profiles/           Stable hero build templates
-    knight.json       Knight profiles at various levels/builds
+  cli.ts       commander 入口
+  config.ts    配置类型、校验、glob 展开
+  setup.ts     通过 Session API 捏英雄
+  simulate.ts CombatActivity 驱动与采样
+  stats.ts     指标聚合
+  report.ts    终端表 / JSON / HTML
+  profiles/    可选：仅含 heroProfiles 的片段文件（配合 glob 模式 run）
 ```
 
-## Commands
+## 命令
 
-### list — Show available content IDs
+### list — 列出当前构建下的合法 ID（应先执行）
 
 ```bash
-bun run scripts/balance/cli.ts list              # all
+bun run scripts/balance/cli.ts list
 bun run scripts/balance/cli.ts list heroes
 bun run scripts/balance/cli.ts list zones
 bun run scripts/balance/cli.ts list items
 bun run scripts/balance/cli.ts list talents
 ```
 
-Always run `list` first to discover valid IDs before writing profiles.
-
-### quick — Single ad-hoc test
+### quick — 单次即兴测试
 
 ```bash
-bun run scripts/balance/cli.ts quick <heroId> <zoneId> [-l <level>] [--weapon <id>] [-w <waves>]
+bun run scripts/balance/cli.ts quick <heroId> <zoneId> [-l <level>] [--weapon <itemId>] [-d <分钟>]
 ```
 
-### run (glob mode) — Profiles file + globs
+### run — 片段 JSON + profile/zone glob
 
 ```bash
-bun run scripts/balance/cli.ts run <profiles.json> -p <glob> -z <glob> [-w <waves>] [--json]
+bun run scripts/balance/cli.ts run <profiles.json> -p '<glob>' -z '<glob>' [-d <分钟>] [--json] [--html <路径>]
 ```
 
-`*` matches any substring. `-p` and `-z` are repeatable.
+`-p` / `-z` 可重复；`*` 为子串通配。
+
+### run — 完整场景 JSON（profiles + scenarios）
 
 ```bash
-# All knight profiles vs all prairie zones
-bun run scripts/balance/cli.ts run scripts/balance/profiles/knight.json \
-  -p "knight_lv*" -z "combatzone.prairie.*"
-# Lv10 talent variants vs one zone
-bun run scripts/balance/cli.ts run scripts/balance/profiles/knight.json \
-  -p "knight_lv10_copper_*" -z "combatzone.twilight.2_1_mushroom"
+bun run scripts/balance/cli.ts run <config.json> [-s '<场景名称子串>'] [-d <分钟>] [--json] [--html <路径>]
 ```
 
-### run (config mode) — Full scenario file
+Phase0 同级对照示例配置（可复制后按需改 ID）：`.local/balance-test/balance-example.json`。生成 HTML / 机器可读快照示例：
 
 ```bash
-bun run scripts/balance/cli.ts run <config.json> [-s <filter>] [-w <waves>] [--json]
+bun run scripts/balance/cli.ts run ".local/balance-test/balance-example.json" -d 60 \
+  --html ".local/balance-test/balance-report.html"
+bun run scripts/balance/cli.ts run ".local/balance-test/balance-example.json" -d 60 \
+  --json > .local/balance-test/balance-last-run.json
 ```
 
-Example config at `.agent/skills/balance-test/balance-example.json`.
+## Profile 字段（片段文件或完整 config 共用）
 
-## Profile Format
+JSON 字段含义：`heroId`、`level`、`equipment`、`talents`、`equippedTalents`（见仓库示例文件）。
 
-```json
-{
-  "heroProfiles": {
-    "knight_lv5_copper": {
-      "heroId": "hero.knight",
-      "level": 5,
-      "equipment": ["item.weapon.copper_sword"],
-      "talents": { "talent.knight.power_strike": 1 },
-      "equippedTalents": ["talent.knight.power_strike"]
-    }
-  }
-}
-```
+新存档会先套用英雄的 `startingItems`；`equipment` 再追加并尝试自动装备。若场景只需要「Starter 武器 + 裸天赋」，一般不必填 `equipment` / `talents`。
 
-Fields: `heroId` (required), `level` (default 1), `equipment` (auto-equip),
-`talents` (`id -> level`, must respect prereqs), `equippedTalents` (battle slots).
+天赋是否能点取决于当前 `HeroConfig`（例如是否存在 `availableTalents` 白名单）；拿不准时用 `list talents` 对照并在小配置上试跑校验。
 
-### Knight talent prereqs
+## 输出指标（终端表 / JSON）
 
-```
-power_strike  (none)        fortitude  (none)
-rage          <- ps Lv5     guard      <- fort Lv5
-                             warcry     <- fort Lv5
-                             retaliation <- warcry Lv5
-```
+| 列 | 含义 |
+|----|------|
+| DPS | 全程有效秒伤（含休整），damage / tick |
+| Death rate | 每波死亡恢复次数期望 |
+| XP/min | 每分钟角色经验 |
+| gold/min（或 currency） | 每分钟货币收益 |
 
-TP budget: `(level - 1) * 3`.
+## 典型用法（不写死 ID）
 
-## Output Metrics
+- **验关卡数值**：`list zones` 找到目标 zone → `quick` 或 config 场景对齐等级。
+- **比构建**：同一 zone、不同 profile（装备/天赋）对比 JSON 输出。
+- **刷怪曲线**：glob 多 zone，`run profiles.json -p '前缀*' -z 'combatzone.*'`（pattern 仍以 `list` 为准）。
 
-| Column | Meaning |
-|--------|---------|
-| DPS | damage/tick in fighting phase |
-| Death rate | deathRecovering entries per wave |
-| XP/min | XP earned per simulated minute |
-| gold/min | gold per simulated minute |
+## 源码索引（按需跳转）
 
-## Typical Workflows
-
-- **Verify monster change**: edit `early-game.ts`, run `-z` on that zone vs knight levels.
-- **Compare talent builds**: Lv10 profiles with different talents vs same zone.
-- **Farming curve**: one profile vs all zones in a region (`-z "combatzone.prairie.*"`).
-- **Difficulty cliff**: win rate 100% -> 0% between adjacent zones = gap too large.
-
-## Key Source Files
-
-- Profiles: `scripts/balance/profiles/`
-- Monster defs: `src/content/default/monsters/early-game.ts`
-- Hero defs: `src/content/default/heroes.ts`
-- Combat zones: `src/content/default/combat-zones.ts`
-- Talent defs: `src/content/behaviors/talents/knight.ts`
+- 战斗区域：`src/content/default/combat-zones.ts`
+- 怪物：`src/content/default/monsters/`
+- 英雄：`src/content/default/heroes.ts`
+- Balance 脚本：`scripts/balance/*.ts`
